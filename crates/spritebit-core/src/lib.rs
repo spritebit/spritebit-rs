@@ -43,4 +43,4 @@ pub use io::{export_web, import_web, load_native, save_native, IoError};
 pub use palette::{Palette, Rgb};
 pub use project::Project;
 pub use selection::{Clip, Selection};
-pub use sprite::{Direction, Frame, Layer, Sprite, SpriteError, Tag, MAX_SIDE};
+pub use sprite::{Direction, Frame, Guides, Layer, Sprite, SpriteError, Tag, FIGURE_HEADS, MAX_SIDE};

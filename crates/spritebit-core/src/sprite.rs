@@ -62,6 +62,39 @@ pub enum SpriteError {
     BadSize { width: u32, height: u32 },
 }
 
+/// Erlaubte Einteilungen der Figur in Kopfhöhen.
+pub const FIGURE_HEADS: [u32; 5] = [2, 3, 4, 6, 8];
+
+/// Hilfslinien — nur zum Zeichnen, nie im Export.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct Guides {
+    /// Waagerechte Linien (y, auf Pixelgrenzen), aufsteigend.
+    pub h: Vec<u32>,
+    /// Senkrechte Linien (x).
+    pub v: Vec<u32>,
+    /// Figur in Kopfhöhen (0 = aus, sonst eine von [`FIGURE_HEADS`]).
+    pub heads: u32,
+    /// Ober- und Unterkante der Figur.
+    pub top: u32,
+    pub bottom: u32,
+}
+
+impl Guides {
+    /// Auf eine Fläche `w × h` begrenzen — wie `normalizeGuides` im Web.
+    pub fn normalized(&self, w: u32, h: u32) -> Guides {
+        let ints = |a: &[u32], max: u32| {
+            let mut v: Vec<u32> = a.iter().copied().filter(|&x| x <= max).collect();
+            v.sort_unstable();
+            v.dedup();
+            v
+        };
+        let heads = if FIGURE_HEADS.contains(&self.heads) { self.heads } else { 0 };
+        let top = self.top.min(h.saturating_sub(1));
+        let bottom = if self.bottom == 0 { h } else { self.bottom.min(h) }.max(top + 1);
+        Guides { h: ints(&self.h, h), v: ints(&self.v, w), heads, top, bottom }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Sprite {
     pub name: String,
@@ -77,6 +110,7 @@ pub struct Sprite {
     /// Freie Farben ohne Paletten-Platz; im Bild als `FREE_BASE + i`.
     pub free: Vec<Rgb>,
     pub tags: Vec<Tag>,
+    pub guides: Guides,
     /// Aktiver Frame und aktive Ebene.
     pub frame: usize,
     pub layer: usize,
@@ -99,6 +133,7 @@ impl Sprite {
             images: vec![Image::new(width, height)],
             free: Vec::new(),
             tags: Vec::new(),
+            guides: Guides { bottom: height, ..Guides::default() },
             frame: 0,
             layer: 0,
         })

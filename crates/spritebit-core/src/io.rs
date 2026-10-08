@@ -22,7 +22,7 @@ use serde_json::{json, Map, Value};
 use crate::image::{Image, Px, FREE_BASE, TILE};
 use crate::palette::{parse_hex, Palette, Rgb};
 use crate::project::Project;
-use crate::sprite::{Direction, Frame, Layer, Sprite, Tag, MAX_SIDE};
+use crate::sprite::{Direction, Frame, Layer, Sprite, Tag, MAX_SIDE, Guides};
 
 const MAGIC: &[u8; 10] = b"SPRITEBIT\0";
 const NATIVE_VERSION: u32 = 1;
@@ -118,6 +118,19 @@ fn parse_tags(v: Option<&Value>, frames: usize) -> Vec<Tag> {
         .collect()
 }
 
+fn guides_json(g: &Guides) -> Value {
+    json!({ "h": g.h, "v": g.v, "heads": g.heads, "top": g.top, "bottom": g.bottom })
+}
+
+fn parse_guides(v: Option<&Value>, w: u32, h: u32) -> Guides {
+    let nums = |k: &str| -> Vec<u32> {
+        v.and_then(|g| g.get(k)).and_then(Value::as_array).map(|a| a.iter().filter_map(|x| x.as_u64()).map(|x| x as u32).collect()).unwrap_or_default()
+    };
+    let num = |k: &str| v.and_then(|g| g.get(k)).and_then(Value::as_u64).map(|x| x as u32);
+    Guides { h: nums("h"), v: nums("v"), heads: num("heads").unwrap_or(0), top: num("top").unwrap_or(0), bottom: num("bottom").unwrap_or(h) }
+        .normalized(w, h)
+}
+
 fn palette_json(p: &Palette) -> Value {
     Value::Array(p.colors.iter().map(|&c| Value::String(hex(c))).collect())
 }
@@ -154,6 +167,7 @@ pub fn save_native(p: &Project) -> Vec<u8> {
             "layers": s.layers.iter().map(layer_json).collect::<Vec<_>>(),
             "free": s.free.iter().map(|&c| hex(c)).collect::<Vec<_>>(),
             "tags": s.tags.iter().map(tag_json).collect::<Vec<_>>(),
+            "guides": guides_json(&s.guides),
             "frames": s.frames.iter().map(|f| json!({ "cels": f.cels, "dur": f.duration_ms })).collect::<Vec<_>>(),
             "images": s.images.len(),
         })).collect::<Vec<_>>(),
@@ -273,6 +287,7 @@ pub fn load_native(bytes: &[u8]) -> Result<Project, IoError> {
             }
         }
         sp.tags = parse_tags(s.get("tags"), sp.frames.len());
+        sp.guides = parse_guides(s.get("guides"), sp.width, sp.height);
         sp.frame = s["frame"].as_u64().unwrap_or(0) as usize;
         sp.layer = s["layer"].as_u64().unwrap_or(0) as usize;
         clamp_cursor(&mut sp);
@@ -374,6 +389,7 @@ pub fn import_web(text: &str) -> Result<Project, IoError> {
         sp.palette = s.get("palette").and_then(Value::as_str).unwrap_or("graustufen").to_string();
         sp.fps = s.get("fps").and_then(Value::as_u64).map_or(8, |v| v.clamp(1, 60) as u32);
         sp.tags = parse_tags(s.get("tags"), sp.frames.len());
+        sp.guides = parse_guides(s.get("guides"), sp.width, sp.height);
         sp.frame = s.get("frame").and_then(Value::as_u64).unwrap_or(0) as usize;
         sp.layer = s.get("layer").and_then(Value::as_u64).unwrap_or(0) as usize;
         clamp_cursor(&mut sp);
@@ -447,6 +463,7 @@ pub fn export_web(p: &Project) -> String {
                 "name": sp.name, "palette": sp.palette, "fps": sp.fps, "frame": sp.frame, "layer": sp.layer,
                 "layers": sp.layers.iter().map(layer_json).collect::<Vec<_>>(),
                 "tags": sp.tags.iter().map(tag_json).collect::<Vec<_>>(),
+                "guides": guides_json(&sp.guides),
                 "frames": frames,
             }),
         );
@@ -487,6 +504,7 @@ mod tests {
         a.layers[1].opacity = 0.5;
         a.layers[0].continuous = true;
         a.tags.push(Tag { name: "Lauf".into(), from: 0, to: 2, color: [1, 2, 3], direction: Direction::PingPong });
+        a.guides = Guides { h: vec![3], v: vec![1, 5], heads: 6, top: 2, bottom: 7 };
         let b = Sprite::new("Zweiter", 4, 4).unwrap();
         Project { sprites: vec![a, b], palettes: vec![Palette::new("meine", vec![[9, 9, 9], [8, 8, 8], [7, 7, 7]])], current: 1 }
     }
@@ -499,6 +517,7 @@ mod tests {
             assert_eq!((x.name.as_str(), x.width, x.height, x.fps), (y.name.as_str(), y.width, y.height, y.fps));
             assert_eq!(x.layers, y.layers);
             assert_eq!(x.tags, y.tags);
+            assert_eq!(x.guides, y.guides);
             assert_eq!(x.palette, y.palette);
             for f in 0..x.frames.len() {
                 assert_eq!(x.frames[f].duration_ms, y.frames[f].duration_ms);

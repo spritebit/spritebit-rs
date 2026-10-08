@@ -10,6 +10,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod export_ui;
+mod guides_ui;
 mod i18n;
 mod icons;
 mod image_ui;
@@ -128,6 +129,7 @@ struct SpritebitApp {
     /// Farbzeile, Paletten-Bibliothek und ihre Dialoge.
     pal: palette_ui::PalState,
     preview: preview_ui::Preview,
+    guides: guides_ui::GuideState,
     export_dialog: Option<export_ui::ExportDialog>,
     /// Bereich in der Timeline (Shift-Klick) und sein Ausgangspunkt.
     cel_range: Option<spritebit_core::cels::CelRange>,
@@ -197,6 +199,7 @@ impl SpritebitApp {
             mirror_y: false,
             pal: palette_ui::PalState::default(),
             preview: preview_ui::Preview::default(),
+            guides: guides_ui::GuideState::default(),
             export_dialog: None,
             cel_range: None,
             cel_anchor: None,
@@ -661,7 +664,10 @@ impl SpritebitApp {
             panning,
             alt,
         };
-        self.use_tool(&p, ui.ctx());
+        // Im Hilfslinien-Modus gehört der Zeiger den Linien.
+        if !self.guide_pointer(pointer, pressed, released, p.over, origin, zoom) {
+            self.use_tool(&p, ui.ctx());
+        }
 
         // Sichtbarer Ausschnitt in Sprite-Pixeln.
         let (sw, sh) = (self.sprite().width, self.sprite().height);
@@ -786,6 +792,7 @@ impl SpritebitApp {
             let y = origin.y + sh as f32 * zoom / 2.0;
             painter.line_segment([Pos2::new(origin.x, y), Pos2::new(origin.x + sw as f32 * zoom, y)], axis);
         }
+        self.draw_guides(&painter, origin, zoom);
         // Form, die gerade aufgezogen wird, und der Rahmen der Auswahl.
         self.shape_preview(&painter, origin, zoom);
         self.selection_overlay(&painter, origin, zoom, (x0 as i64, y0 as i64, x1 as i64, y1 as i64));
@@ -878,6 +885,7 @@ impl eframe::App for SpritebitApp {
         let ctx = ui.ctx().clone();
         self.guard_close(&ctx);
         self.shortcuts(&ctx);
+        self.guide_keys(&ctx);
         self.selection_keys(&ctx);
         self.tool_keys(&ctx);
         self.advance_playback(&ctx);
@@ -1273,6 +1281,25 @@ mod tests {
         assert!(a.sprite().palette.starts_with("foto"));
         assert_eq!(a.project.current_palette().len(), 2);
         assert!(px(&h, 0, 0) < spritebit_core::FREE_BASE && px(&h, 0, 0) == px(&h, 1, 0));
+    }
+
+    #[test]
+    fn hilfslinie_ziehen_und_hinausziehen_loescht() {
+        let mut h = app();
+        h.get_by_label("Hilfslinien").click();
+        h.run();
+        h.get_by_label("+ Waagerecht").click();
+        h.run();
+        assert_eq!(h.state().sprite().guides.h, vec![32]);
+        assert!(h.state().guides.edit);
+        // Linie bei y = 32 auf y = 10 ziehen — gemalt wird dabei nicht.
+        drag(&mut h, (5.0, 31.6), (5.0, 9.6));
+        assert_eq!(h.state().sprite().guides.h, vec![10]);
+        assert_eq!(px(&h, 5, 20), 0, "im Modus wird nicht gemalt");
+        // Aus dem Bild ziehen löscht sie.
+        drag(&mut h, (5.0, 9.6), (5.0, -6.0));
+        assert!(h.state().sprite().guides.h.is_empty());
+        assert!(!h.state().guides.edit, "nichts mehr zu verschieben");
     }
 
     #[test]

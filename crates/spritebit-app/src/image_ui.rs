@@ -209,6 +209,7 @@ impl SpritebitApp {
         egui::CollapsingHeader::new(tr("Palette")).id_salt("p-palette").default_open(true).show(ui, |ui| self.palette_library(ui));
         egui::CollapsingHeader::new(tr("Bild")).id_salt("p-image").default_open(true).show(ui, |ui| self.image_panel(ui));
         egui::CollapsingHeader::new(tr("Aufräumen")).id_salt("p-cleanup").show(ui, |ui| self.cleanup_panel(ui));
+        egui::CollapsingHeader::new(tr("Hilfslinien")).id_salt("p-guides").show(ui, |ui| self.guides_panel(ui));
     }
 
     pub(crate) fn image_panel(&mut self, ui: &mut egui::Ui) {

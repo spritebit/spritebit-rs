@@ -399,6 +399,36 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Vorschau", "Preview", "Vorschau"),
     ("Pixelgröße", "Pixel size", "Pixelgreß"),
     ("{w} × {h} px · {scale}×", "{w} × {h} px · {scale}×", ""),
+    // ── Hilfslinien ──
+    ("Hilfslinien", "Guides", ""),
+    ("Anzeigen", "Show", "Herzagn"),
+    ("Alle Hilfslinien ein- und ausblenden (G)", "Show / hide all guides (G)", "Olle Hilfslinien herzagn oder wegtuan (G)"),
+    ("Verschieben", "Move", "Vaschiabn"),
+    ("Linien auf der Fläche ziehen — solange wird nicht gemalt (Klick daneben oder Esc beendet)", "Drag lines on the drawing area — no painting meanwhile (a click next to the lines or Esc ends it)", "Linien auf da Zeichenflächn ziagn — dawei wird ned gmoit (Klick danebn oder Esc hört auf)"),
+    ("Freie Linien", "Free lines", "Freie Linien"),
+    ("+ Waagerecht", "+ Horizontal", "+ Waagrecht"),
+    ("+ Senkrecht", "+ Vertical", ""),
+    ("Eine waagerechte Linie in die Mitte setzen", "Put a horizontal line in the middle", "A waagrechte Linie in d’Mittn setzn"),
+    ("Eine senkrechte Linie in die Mitte setzen", "Put a vertical line in the middle", "A senkrechte Linie in d’Mittn setzn"),
+    ("Alle löschen", "Delete all", "Olle weghaun"),
+    ("Figur — Kopfhöhen", "Figure — head heights", "Figur — Kopfhöhn"),
+    ("Aus", "Off", ""),
+    ("2 Köpfe — Chibi", "2 heads — chibi", "2 Köpf — Chibi"),
+    ("3 Köpfe — klein, niedlich", "3 heads — small, cute", "3 Köpf — kloa und liab"),
+    ("4 Köpfe — kompakte Spielfigur", "4 heads — compact game character", "4 Köpf — kompakte Spüfigur"),
+    ("6 Köpfe — Comic, Jugendliche", "6 heads — comic, teenager", "6 Köpf — Comic, Jugendliche"),
+    ("8 Köpfe — klassisch, heldenhaft", "8 heads — classic, heroic", "8 Köpf — klassisch, heldnhoft"),
+    ("An Figur anpassen", "Fit to figure", "An d’Figur anpassn"),
+    ("Ober- und Unterkante der Einteilung auf das Gezeichnete setzen", "Set the top and bottom of the division to what is drawn", "Obn und untn von da Einteilung aufs Gmoite setzn"),
+    ("Nur zum Zeichnen — die Linien erscheinen in keinem Export.", "Drawing aid only — the lines never show up in an export.", "Nur zum Zeichnen — d’Linien kemman in kan Export."),
+    ("Hilfslinien verschieben: Linie anfassen und ziehen, aus dem Bild ziehen löscht. Klick daneben oder Esc beendet.", "Moving guides: grab a line and drag it, dragging it out of the image deletes it. A click next to it or Esc ends this.", "Hilfslinien vaschiabn: Linie packn und ziagn, außem Buidl ziagn haut s’ weg. Klick danebn oder Esc hört auf."),
+    ("Hilfslinie entfernt.", "Guide removed.", "Hilfslinie is weg."),
+    ("Kinn", "chin", ""),
+    ("Brust", "chest", ""),
+    ("Nabel", "navel", "Nabl"),
+    ("Hüfte", "hip", "Hüftn"),
+    ("Schritt", "crotch", ""),
+    ("Knie", "knee", "Knia"),
 ];
 
 /// Fehler beim Laden in der gewählten Sprache.
@@ -445,6 +475,7 @@ mod tests {
             include_str!("image_ui.rs"),
             include_str!("sprites_ui.rs"),
             include_str!("preview_ui.rs"),
+            include_str!("guides_ui.rs"),
         ];
         let mut missing = Vec::new();
         for src in sources {
