@@ -114,6 +114,26 @@ impl Image {
         }
     }
 
+    /// Die belegten Kacheln: (Nummer, Pixel) — zum Speichern.
+    pub fn tiles(&self) -> impl Iterator<Item = (usize, &[Px])> {
+        self.tiles.iter().enumerate().filter_map(|(i, t)| t.as_ref().map(|t| (i, t.as_slice())))
+    }
+
+    /// Anzahl Kacheln insgesamt (belegt oder nicht).
+    pub fn tile_slots(&self) -> usize {
+        self.tiles.len()
+    }
+
+    /// Kachel `index` mit diesen Pixeln belegen — zum Laden. Falsche Nummer
+    /// oder Länge: `false`, nichts geändert.
+    pub fn put_tile(&mut self, index: usize, data: Vec<Px>) -> bool {
+        if index >= self.tiles.len() || data.len() != TILE_PX {
+            return false;
+        }
+        self.tiles[index] = Some(Arc::new(data));
+        true
+    }
+
     /// Wie viele Kacheln sich zwei Bilder teilen (gleicher Speicher, nicht
     /// nur gleicher Inhalt) — für Tests und Speicher-Statistik.
     pub fn shared_tiles(&self, other: &Image) -> usize {

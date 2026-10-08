@@ -8,4 +8,5 @@ publish.workspace = true
 
 [dependencies]
 eframe = "0.36.2"
+rfd = "0.17.2"
 spritebit-core = { version = "0.1.0", path = "../spritebit-core" }

@@ -10,16 +10,24 @@
 //! * [`composite`] — was man sieht, für einen Ausschnitt (auch ausgedünnt)
 //! * [`history`] — Undo/Redo, billig dank geteilter Kacheln
 //! * [`tools`] — Werkzeug-Hilfen (Linie)
+//! * [`project`] — mehrere Sprites und eigene Paletten
+//! * [`io`] — eigenes Format `.spritebit` und Projektdatei der Web-Version
+//! * [`builtin`] — die eingebauten Paletten der Web-Version
 
+pub mod builtin;
 pub mod composite;
 pub mod history;
 pub mod image;
+pub mod io;
 pub mod palette;
+pub mod project;
 pub mod sprite;
 pub mod tools;
 
 pub use composite::{render_rgba, render_rgba_step, Rect};
 pub use history::History;
 pub use image::{Image, Px, FREE_BASE, TILE};
+pub use io::{export_web, import_web, load_native, save_native, IoError};
 pub use palette::{Palette, Rgb};
+pub use project::Project;
 pub use sprite::{Direction, Frame, Layer, Sprite, SpriteError, Tag, MAX_SIDE};
