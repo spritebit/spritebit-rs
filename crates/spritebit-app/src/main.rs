@@ -9,6 +9,8 @@
 // Im Release kein Konsolenfenster neben dem Programm.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod timeline;
+
 use std::path::{Path, PathBuf};
 
 use eframe::egui::{self, Color32, Key, Modifiers, Pos2, Sense, Stroke, Vec2};
@@ -42,7 +44,7 @@ const CHECKER: [[u8; 3]; 2] = [[0x20, 0x20, 0x2c], [0x2a, 0x2a, 0x38]];
 /// nichts davon, wird sie nicht neu gerechnet.
 struct CanvasTexture {
     handle: egui::TextureHandle,
-    key: (usize, Rect, u32, usize, u64),
+    key: (usize, Rect, u32, usize, u64, bool),
 }
 
 /// Dialog „Neuer Sprite".
@@ -77,6 +79,12 @@ struct SpritebitApp {
     about_open: bool,
     /// Fehlermeldung, die als Fenster angezeigt wird.
     error: Option<String>,
+    /// Hinweis in der Statusleiste (z. B. „Ebene ist gesperrt“).
+    hint: Option<String>,
+    playing: bool,
+    /// Zeitpunkt (egui-Zeit, Sekunden), seit dem der aktuelle Frame steht.
+    frame_started: f64,
+    onion: bool,
 }
 
 impl SpritebitApp {
@@ -101,6 +109,10 @@ impl SpritebitApp {
             new_dialog: None,
             about_open: false,
             error: None,
+            hint: None,
+            playing: false,
+            frame_started: 0.0,
+            onion: false,
         }
     }
 
@@ -290,6 +302,36 @@ impl SpritebitApp {
                 i.consume_key(cmd, Key::Y),
             )
         });
+        // Timeline-Tasten nur, wenn gerade kein Eingabefeld den Fokus hat.
+        if !ctx.egui_wants_keyboard_input() {
+            let none = Modifiers::NONE;
+            let (play, prev, next, first, last) = ctx.input_mut(|i| {
+                (
+                    i.consume_key(none, Key::Enter),
+                    i.consume_key(none, Key::Comma),
+                    i.consume_key(none, Key::Period),
+                    i.consume_key(none, Key::Home),
+                    i.consume_key(none, Key::End),
+                )
+            });
+            let n = self.sprite().frames.len();
+            let f = self.sprite().frame;
+            if play {
+                self.toggle_play(ctx);
+            }
+            if prev {
+                self.project.sprite_mut().frame = (f + n - 1) % n;
+            }
+            if next {
+                self.project.sprite_mut().frame = (f + 1) % n;
+            }
+            if first {
+                self.project.sprite_mut().frame = 0;
+            }
+            if last {
+                self.project.sprite_mut().frame = n - 1;
+            }
+        }
         if save_as {
             self.save_as();
         } else if save {
@@ -432,6 +474,10 @@ impl SpritebitApp {
             let tiles: usize = sp.images.iter().map(|i| i.allocated_tiles()).sum();
             let kib = tiles * (spritebit_core::TILE * spritebit_core::TILE) as usize * 2 / 1024;
             ui.label(format!("{tiles} Kacheln · {kib} KiB"));
+            if let Some(h) = &self.hint {
+                ui.separator();
+                ui.colored_label(Color32::from_rgb(0xf2, 0x8b, 0x82), h);
+            }
         });
     }
 
@@ -478,8 +524,25 @@ impl SpritebitApp {
         };
         self.hover = pointer.filter(|p| area.contains(*p)).map(to_cell);
 
-        // Malen
-        let painting = !panning && (primary || secondary) && (resp.hovered() || resp.dragged());
+        // Malen. Beim Abspielen hält ein Klick an, statt zu malen.
+        let mut painting = !panning && (primary || secondary) && (resp.hovered() || resp.dragged());
+        if painting && self.playing {
+            self.playing = false;
+            painting = false;
+        }
+        if painting && self.stroke_last.is_none() {
+            let layer = &self.sprite().layers[self.sprite().layer];
+            self.hint = if layer.locked {
+                Some(format!("Ebene „{}“ ist gesperrt — Schloss in der Timeline.", layer.name))
+            } else if !layer.visible {
+                Some(format!("Ebene „{}“ ist ausgeblendet — Auge in der Timeline.", layer.name))
+            } else {
+                None
+            };
+            if self.hint.is_some() {
+                painting = false;
+            }
+        }
         if painting {
             if let Some(cell) = pointer.map(to_cell) {
                 if self.stroke_last.is_none() {
@@ -519,18 +582,37 @@ impl SpritebitApp {
         // Herausgezoomt: nur jedes n-te Pixel, sonst wäre die Textur größer
         // als der Bildschirm.
         let step = if zoom < 1.0 { (1.0 / zoom).floor() as u32 } else { 1 };
-        let key = (self.project.current, rect, step, self.sprite().frame, self.version);
+        let onion = self.onion && !self.playing && self.sprite().frames.len() > 1;
+        let key = (self.project.current, rect, step, self.sprite().frame, self.version, onion);
         if self.texture.as_ref().map(|t| t.key) != Some(key) {
             let palette = self.project.current_palette();
             let sp = self.sprite();
             let (mut buf, tw, th) = render_rgba_step(sp, &palette, sp.frame, rect, step);
+            // Onion Skin: Nachbar-Frames, nur ihre Form — rot davor, blau danach.
+            let n = sp.frames.len();
+            let mut neighbours: Vec<(Vec<u8>, [u8; 3])> = Vec::new();
+            if onion {
+                if sp.frame > 0 {
+                    neighbours.push((render_rgba_step(sp, &palette, sp.frame - 1, rect, step).0, [255, 96, 96]));
+                }
+                if sp.frame + 1 < n {
+                    neighbours.push((render_rgba_step(sp, &palette, sp.frame + 1, rect, step).0, [96, 156, 255]));
+                }
+            }
             // Transparente Stellen als Schachbrett, ein Feld je Sprite-Pixel.
             for ty in 0..th {
                 for tx in 0..tw {
                     let o = ((ty * tw + tx) * 4) as usize;
                     if buf[o + 3] == 0 {
                         let (x, y) = (x0 + tx * step, y0 + ty * step);
-                        let c = CHECKER[((x + y) % 2) as usize];
+                        let mut c = CHECKER[((x + y) % 2) as usize];
+                        for (nb, tint) in &neighbours {
+                            if nb[o + 3] != 0 {
+                                for (ch, t) in c.iter_mut().zip(tint) {
+                                    *ch = (*ch as f32 * 0.7 + *t as f32 * 0.3) as u8;
+                                }
+                            }
+                        }
                         buf[o..o + 3].copy_from_slice(&c);
                         buf[o + 3] = 255;
                     }
@@ -658,8 +740,10 @@ impl eframe::App for SpritebitApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.shortcuts(&ctx);
+        self.advance_playback(&ctx);
         egui::Panel::top("menu").show(ui, |ui| self.menu_bar(ui));
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
+        egui::Panel::bottom("timeline").resizable(true).default_size(150.0).show(ui, |ui| self.timeline(ui));
         egui::Panel::left("side").resizable(true).default_size(180.0).show(ui, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| self.side_panel(ui));
         });

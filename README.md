@@ -46,6 +46,8 @@ cargo build --release           # schnelle Fassung (target/release)
 | Datei → Neuer Sprite … | Größe bis 8192 × 8192 |
 | Datei → Als Web-Projekt exportieren … | Projektdatei für die Web-Version |
 | Ansicht | Einpassen, 100 %, Gitter |
+| Timeline | Zelle anklicken wählt Frame und Ebene; Auge, Schloss, Kette schalten Sichtbarkeit, Sperre, „durchgehend“ |
+| Enter / , / . / Pos1 / Ende | Abspielen, voriger, nächster, erster, letzter Frame |
 
 Die Statusleiste zeigt, wie viele Kacheln tatsächlich Speicher belegen.
 

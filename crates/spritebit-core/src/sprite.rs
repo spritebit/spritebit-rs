@@ -177,6 +177,68 @@ impl Sprite {
         at
     }
 
+    /// Frame `f` löschen. Der letzte Frame bleibt (`false`). Tags rücken
+    /// nach; ein Tag ohne Frame verschwindet.
+    pub fn delete_frame(&mut self, f: usize) -> bool {
+        if self.frames.len() <= 1 || f >= self.frames.len() {
+            return false;
+        }
+        self.frames.remove(f);
+        for t in &mut self.tags {
+            if f < t.from {
+                t.from -= 1;
+                t.to -= 1;
+            } else if f <= t.to {
+                // to < from heißt danach: der Tag ist leer.
+                t.to = t.to.wrapping_sub(1);
+            }
+        }
+        self.tags.retain(|t| t.to != usize::MAX && t.to >= t.from);
+        self.frame = self.frame.min(self.frames.len() - 1);
+        true
+    }
+
+    /// Ebene `l` löschen, in jedem Frame. Die letzte Ebene bleibt (`false`).
+    pub fn delete_layer(&mut self, l: usize) -> bool {
+        if self.layers.len() <= 1 || l >= self.layers.len() {
+            return false;
+        }
+        self.layers.remove(l);
+        for f in &mut self.frames {
+            f.cels.remove(l);
+        }
+        self.layer = self.layer.min(self.layers.len() - 1);
+        true
+    }
+
+    /// Ebene von Stelle `from` nach `to` verschieben (0 = unterste).
+    pub fn move_layer(&mut self, from: usize, to: usize) {
+        let n = self.layers.len();
+        if from >= n || to >= n || from == to {
+            return;
+        }
+        let l = self.layers.remove(from);
+        self.layers.insert(to, l);
+        for f in &mut self.frames {
+            let c = f.cels.remove(from);
+            f.cels.insert(to, c);
+        }
+        self.layer = to;
+    }
+
+    /// Wie lange Frame `f` steht, in Millisekunden.
+    pub fn frame_duration(&self, f: usize) -> u32 {
+        match self.frames.get(f).map(|fr| fr.duration_ms) {
+            Some(d) if d > 0 => d,
+            _ => 1000 / self.fps.max(1),
+        }
+    }
+
+    /// Ist die Zelle leer (kein einziger Pixel)?
+    pub fn cel_is_empty(&self, f: usize, l: usize) -> bool {
+        self.cel(f, l).is_empty()
+    }
+
     /// Frames `from..=to` zeigen auf Ebene `l` alle auf das Bild von `from`.
     pub fn link(&mut self, from: usize, to: usize, l: usize) {
         let id = self.frames[from].cels[l];
@@ -302,6 +364,51 @@ mod tests {
         assert_eq!((sp.tags[0].from, sp.tags[0].to), (3, 4));
         sp.add_frame(4, false); // am Ende des Tags
         assert_eq!((sp.tags[0].from, sp.tags[0].to), (3, 5));
+    }
+
+    #[test]
+    fn frame_loeschen_zieht_tags_nach() {
+        let mut sp = Sprite::new("a", 8, 8).unwrap();
+        for i in 0..4 {
+            sp.add_frame(i, false);
+        }
+        sp.tags.push(Tag { name: "a".into(), from: 1, to: 2, color: [0, 0, 0], direction: Direction::Forward });
+        sp.tags.push(Tag { name: "b".into(), from: 4, to: 4, color: [0, 0, 0], direction: Direction::Forward });
+        assert!(sp.delete_frame(0));
+        assert_eq!((sp.tags[0].from, sp.tags[0].to), (0, 1));
+        assert!(sp.delete_frame(3)); // der einzige Frame von b
+        assert_eq!(sp.tags.len(), 1);
+        assert_eq!(sp.frames.len(), 3);
+    }
+
+    #[test]
+    fn letzter_frame_und_letzte_ebene_bleiben() {
+        let mut sp = Sprite::new("a", 8, 8).unwrap();
+        assert!(!sp.delete_frame(0));
+        assert!(!sp.delete_layer(0));
+    }
+
+    #[test]
+    fn ebene_loeschen_und_verschieben() {
+        let mut sp = Sprite::new("a", 8, 8).unwrap();
+        sp.add_layer(1, "B");
+        sp.add_layer(2, "C");
+        sp.move_layer(0, 2);
+        let names: Vec<_> = sp.layers.iter().map(|l| l.name.as_str()).collect();
+        assert_eq!(names, ["B", "C", "Ebene 1"]);
+        assert_eq!(sp.layer, 2);
+        assert!(sp.delete_layer(1));
+        assert_eq!(sp.layers.len(), 2);
+        assert!(sp.frames.iter().all(|f| f.cels.len() == 2));
+    }
+
+    #[test]
+    fn dauer_eigene_oder_nach_fps() {
+        let mut sp = Sprite::new("a", 8, 8).unwrap();
+        sp.fps = 10;
+        assert_eq!(sp.frame_duration(0), 100);
+        sp.frames[0].duration_ms = 250;
+        assert_eq!(sp.frame_duration(0), 250);
     }
 
     #[test]
