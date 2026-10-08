@@ -10,6 +10,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod export_ui;
+mod i18n;
 mod icons;
 mod palette_ui;
 mod selection_ui;
@@ -24,8 +25,10 @@ use spritebit_core::{
     Selection, Sprite, MAX_SIDE,
 };
 use tools_ui::{Pointer, Tool};
+use crate::i18n::{tr, trf, keys};
 
 fn main() -> eframe::Result {
+    i18n::load();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("spritebit")
@@ -288,15 +291,15 @@ impl SpritebitApp {
 
     fn open_now(&mut self) {
         let Some(path) = rfd::FileDialog::new()
-            .set_title("Projekt öffnen")
-            .add_filter("spritebit-Projekt", &[EXT, "json"])
-            .add_filter("Alle Dateien", &["*"])
+            .set_title(tr("Projekt öffnen"))
+            .add_filter(tr("spritebit-Projekt"), &[EXT, "json"])
+            .add_filter(tr("Alle Dateien"), &["*"])
             .pick_file()
         else {
             return;
         };
         match std::fs::read(&path) {
-            Err(e) => self.error = Some(format!("{} konnte nicht gelesen werden: {e}", path.display())),
+            Err(e) => self.error = Some(trf("{path} konnte nicht gelesen werden: {e}", &[("path", &path.display()), ("e", &e)])),
             Ok(bytes) => {
                 // Eigenes Format erkennt man am Anfang; alles andere wird als
                 // Projektdatei der Web-Version versucht.
@@ -317,7 +320,7 @@ impl SpritebitApp {
                             self.dirty = true;
                         }
                     }
-                    Err(e) => self.error = Some(e.to_string()),
+                    Err(e) => self.error = Some(i18n::io_error(&e)),
                 }
             }
         }
@@ -333,8 +336,8 @@ impl SpritebitApp {
     fn save_as(&mut self) {
         let name = format!("{}.{EXT}", self.sprite().name);
         if let Some(path) = rfd::FileDialog::new()
-            .set_title("Projekt speichern")
-            .add_filter("spritebit-Projekt", &[EXT])
+            .set_title(tr("Projekt speichern"))
+            .add_filter(tr("spritebit-Projekt"), &[EXT])
             .set_file_name(name)
             .save_file()
         {
@@ -350,7 +353,7 @@ impl SpritebitApp {
                 self.path = Some(path.to_path_buf());
                 self.dirty = false;
             }
-            Err(e) => self.error = Some(format!("{} konnte nicht gespeichert werden: {e}", path.display())),
+            Err(e) => self.error = Some(trf("{path} konnte nicht gespeichert werden: {e}", &[("path", &path.display()), ("e", &e)])),
         }
     }
 
@@ -358,13 +361,13 @@ impl SpritebitApp {
         self.commit_float();
         let name = format!("{}.json", self.sprite().name);
         if let Some(path) = rfd::FileDialog::new()
-            .set_title("Als Web-Projekt exportieren")
-            .add_filter("Web-Projekt (JSON)", &["json"])
+            .set_title(tr("Als Web-Projekt exportieren"))
+            .add_filter(tr("Web-Projekt (JSON)"), &["json"])
             .set_file_name(name)
             .save_file()
         {
             if let Err(e) = std::fs::write(&path, export_web(&self.project)) {
-                self.error = Some(format!("{} konnte nicht geschrieben werden: {e}", path.display()));
+                self.error = Some(trf("{path} konnte nicht geschrieben werden: {e}", &[("path", &path.display()), ("e", &e)]));
             }
         }
     }
@@ -375,7 +378,7 @@ impl SpritebitApp {
             .path
             .as_ref()
             .and_then(|p| p.file_name())
-            .map_or_else(|| "Unbenannt".to_string(), |n| n.to_string_lossy().into_owned());
+            .map_or_else(|| tr("Unbenannt").to_string(), |n| n.to_string_lossy().into_owned());
         let title = format!("{}{} — spritebit", file, if self.dirty { " *" } else { "" });
         if title != self.title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
@@ -471,74 +474,83 @@ impl SpritebitApp {
     // ── Menüleiste ──────────────────────────────────────────────────
     fn menu_bar(&mut self, ui: &mut egui::Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
-            ui.menu_button("Datei", |ui| {
-                if ui.button("Neuer Sprite …").clicked() {
+            ui.menu_button(tr("Datei"), |ui| {
+                if ui.button(tr("Neuer Sprite …")).clicked() {
                     self.new_dialog = Some(NewDialog { width: self.sprite().width, height: self.sprite().height });
                 }
                 ui.separator();
-                if ui.add(egui::Button::new("Öffnen …").shortcut_text("Strg+O")).clicked() {
+                if ui.add(egui::Button::new(tr("Öffnen …")).shortcut_text(keys("Strg+O"))).clicked() {
                     self.open();
                 }
-                if ui.add(egui::Button::new("Speichern").shortcut_text("Strg+S")).clicked() {
+                if ui.add(egui::Button::new(tr("Speichern")).shortcut_text(keys("Strg+S"))).clicked() {
                     self.save();
                 }
-                if ui.add(egui::Button::new("Speichern unter …").shortcut_text("Strg+Umschalt+S")).clicked() {
+                if ui.add(egui::Button::new(tr("Speichern unter …")).shortcut_text(keys("Strg+Umschalt+S"))).clicked() {
                     self.save_as();
                 }
                 ui.separator();
-                if ui.add(egui::Button::new("Exportieren …").shortcut_text("Strg+E")).clicked() {
+                if ui.add(egui::Button::new(tr("Exportieren …")).shortcut_text(keys("Strg+E"))).clicked() {
                     self.open_export();
                 }
-                if ui.button("Als Web-Projekt exportieren …").clicked() {
+                if ui.button(tr("Als Web-Projekt exportieren …")).clicked() {
                     self.export_web();
                 }
                 ui.separator();
-                if ui.add(egui::Button::new("Beenden").shortcut_text("Alt+F4")).clicked() {
+                if ui.add(egui::Button::new(tr("Beenden")).shortcut_text(keys("Alt+F4"))).clicked() {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                 }
             });
-            ui.menu_button("Bearbeiten", |ui| {
+            ui.menu_button(tr("Bearbeiten"), |ui| {
                 let (can_undo, can_redo) = (self.history().can_undo(), self.history().can_redo());
-                if ui.add_enabled(can_undo, egui::Button::new("Rückgängig").shortcut_text("Strg+Z")).clicked() {
+                if ui.add_enabled(can_undo, egui::Button::new(tr("Rückgängig")).shortcut_text(keys("Strg+Z"))).clicked() {
                     self.undo();
                 }
-                if ui.add_enabled(can_redo, egui::Button::new("Wiederholen").shortcut_text("Strg+Y")).clicked() {
+                if ui.add_enabled(can_redo, egui::Button::new(tr("Wiederholen")).shortcut_text(keys("Strg+Y"))).clicked() {
                     self.redo();
                 }
                 ui.separator();
                 let has = self.selection.is_some();
-                if ui.add_enabled(has, egui::Button::new("Ausschneiden").shortcut_text("Strg+X")).clicked() {
+                if ui.add_enabled(has, egui::Button::new(tr("Ausschneiden")).shortcut_text(keys("Strg+X"))).clicked() {
                     self.cut_selection();
                 }
-                if ui.add_enabled(has, egui::Button::new("Kopieren").shortcut_text("Strg+C")).clicked() {
+                if ui.add_enabled(has, egui::Button::new(tr("Kopieren")).shortcut_text(keys("Strg+C"))).clicked() {
                     self.copy_selection();
                 }
                 let can_paste = self.clipboard.is_some();
-                if ui.add_enabled(can_paste, egui::Button::new("Einfügen").shortcut_text("Strg+V")).clicked() {
+                if ui.add_enabled(can_paste, egui::Button::new(tr("Einfügen")).shortcut_text(keys("Strg+V"))).clicked() {
                     self.paste_clipboard();
                 }
                 ui.separator();
-                if ui.add(egui::Button::new("Alles auswählen").shortcut_text("Strg+A")).clicked() {
+                if ui.add(egui::Button::new(tr("Alles auswählen")).shortcut_text(keys("Strg+A"))).clicked() {
                     self.select_all();
                 }
-                if ui.add_enabled(has, egui::Button::new("Auswahl aufheben").shortcut_text("Esc")).clicked() {
+                if ui.add_enabled(has, egui::Button::new(tr("Auswahl aufheben")).shortcut_text(keys("Esc"))).clicked() {
                     self.deselect();
                 }
-                if ui.add_enabled(has, egui::Button::new("Auswahl leeren").shortcut_text("Entf")).clicked() {
+                if ui.add_enabled(has, egui::Button::new(tr("Auswahl leeren")).shortcut_text(keys("Entf"))).clicked() {
                     self.delete_selection();
                 }
             });
-            ui.menu_button("Ansicht", |ui| {
-                if ui.button("Einpassen").clicked() {
+            ui.menu_button(tr("Ansicht"), |ui| {
+                if ui.button(tr("Einpassen")).clicked() {
                     self.fit_pending = true;
                 }
                 if ui.button("100 %").clicked() {
                     self.zoom = 1.0;
                 }
-                ui.checkbox(&mut self.show_grid, "Gitter");
+                ui.checkbox(&mut self.show_grid, tr("Gitter"));
+                ui.separator();
+                ui.menu_button(tr("Sprache"), |ui| {
+                    for l in i18n::Lang::ALL {
+                        if ui.radio(i18n::lang() == l, l.name()).clicked() {
+                            i18n::choose(l);
+                            ui.close();
+                        }
+                    }
+                });
             });
-            ui.menu_button("Hilfe", |ui| {
-                if ui.button("Über spritebit").clicked() {
+            ui.menu_button(tr("Hilfe"), |ui| {
+                if ui.button(tr("Über spritebit")).clicked() {
                     self.about_open = true;
                 }
             });
@@ -549,9 +561,9 @@ impl SpritebitApp {
     fn side_panel(&mut self, ui: &mut egui::Ui) {
         ui.add_space(6.0);
         ui.horizontal(|ui| {
-            ui.strong("Sprites");
+            ui.strong(tr("Sprites"));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.small_button("+").on_hover_text("Neuer Sprite").clicked() {
+                if ui.small_button("+").on_hover_text(tr("Neuer Sprite")).clicked() {
                     self.new_dialog = Some(NewDialog { width: self.sprite().width, height: self.sprite().height });
                 }
             });
@@ -568,7 +580,7 @@ impl SpritebitApp {
         }
 
         ui.add_space(10.0);
-        ui.strong("Farben");
+        ui.strong(tr("Farben"));
         ui.add_space(4.0);
         self.colors_panel(ui);
     }
@@ -587,7 +599,7 @@ impl SpritebitApp {
             ui.separator();
             let tiles: usize = sp.images.iter().map(|i| i.allocated_tiles()).sum();
             let kib = tiles * (spritebit_core::TILE * spritebit_core::TILE) as usize * 2 / 1024;
-            ui.label(format!("{tiles} Kacheln · {kib} KiB"));
+            ui.label(trf("{tiles} Kacheln · {kib} KiB", &[("tiles", &tiles), ("kib", &kib)]));
             if let Some(h) = &self.hint {
                 ui.separator();
                 ui.colored_label(Color32::from_rgb(0xf2, 0x8b, 0x82), h);
@@ -795,11 +807,11 @@ impl SpritebitApp {
         let mut create = None;
         let mut close = false;
         if let Some(d) = &mut self.new_dialog {
-            egui::Window::new("Neuer Sprite").collapsible(false).resizable(false).show(ctx, |ui| {
+            egui::Window::new(tr("Neuer Sprite")).collapsible(false).resizable(false).show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label("Breite");
+                    ui.label(tr("Breite"));
                     ui.add(egui::DragValue::new(&mut d.width).range(1..=MAX_SIDE));
-                    ui.label("Höhe");
+                    ui.label(tr("Höhe"));
                     ui.add(egui::DragValue::new(&mut d.height).range(1..=MAX_SIDE));
                 });
                 ui.horizontal(|ui| {
@@ -812,10 +824,10 @@ impl SpritebitApp {
                 });
                 ui.separator();
                 ui.horizontal(|ui| {
-                    if ui.button("Anlegen").clicked() {
+                    if ui.button(tr("Anlegen")).clicked() {
                         create = Some((d.width, d.height));
                     }
-                    if ui.button("Abbrechen").clicked() {
+                    if ui.button(tr("Abbrechen")).clicked() {
                         close = true;
                     }
                 });
@@ -829,21 +841,21 @@ impl SpritebitApp {
             self.new_dialog = None;
         }
         if self.about_open {
-            egui::Window::new("Über spritebit")
+            egui::Window::new(tr("Über spritebit"))
                 .collapsible(false)
                 .resizable(false)
                 .open(&mut self.about_open)
                 .show(ctx, |ui| {
-                    ui.label("spritebit — Pixel-Art-Editor");
+                    ui.label(tr("spritebit — Pixel-Art-Editor"));
                     ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
                     ui.label("© 2026 Marco Jan");
                 });
         }
         let mut dismiss = false;
         if let Some(msg) = &self.error {
-            egui::Window::new("Hinweis").collapsible(false).resizable(false).show(ctx, |ui| {
+            egui::Window::new(tr("Hinweis")).collapsible(false).resizable(false).show(ctx, |ui| {
                 ui.label(msg);
-                if ui.button("OK").clicked() {
+                if ui.button(tr("OK")).clicked() {
                     dismiss = true;
                 }
             });
@@ -866,16 +878,16 @@ impl SpritebitApp {
         let Some(pending) = self.unsaved_ask else { return };
         let (mut save, mut discard, mut cancel) = (false, false, false);
         egui::Modal::new(egui::Id::new("unsaved")).show(ctx, |ui| {
-            ui.heading("Ungespeicherte Änderungen");
+            ui.heading(tr("Ungespeicherte Änderungen"));
             ui.label(match pending {
-                Pending::Close => "Vor dem Beenden speichern?",
-                Pending::Open => "Vor dem Öffnen eines anderen Projekts speichern?",
+                Pending::Close => tr("Vor dem Beenden speichern?"),
+                Pending::Open => tr("Vor dem Öffnen eines anderen Projekts speichern?"),
             });
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                save = ui.button("Speichern").clicked();
-                discard = ui.button("Nicht speichern").clicked();
-                cancel = ui.button("Abbrechen").clicked();
+                save = ui.button(tr("Speichern")).clicked();
+                discard = ui.button(tr("Nicht speichern")).clicked();
+                cancel = ui.button(tr("Abbrechen")).clicked();
             });
         });
         if cancel {
@@ -1152,6 +1164,20 @@ mod tests {
         h.get_by_label("Nicht speichern").click();
         h.run();
         assert!(h.state().allow_close);
+    }
+
+    #[test]
+    fn sprache_umschalten() {
+        i18n::set_lang(i18n::Lang::En);
+        let mut h = app();
+        h.get_by_label("File");
+        h.get_by_label("Edit");
+        i18n::set_lang(i18n::Lang::At);
+        h.run();
+        h.get_by_label("Bearbeitn");
+        i18n::set_lang(i18n::Lang::De);
+        h.run();
+        h.get_by_label("Bearbeiten");
     }
 
     #[test]

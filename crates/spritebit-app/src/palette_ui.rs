@@ -13,6 +13,7 @@ use eframe::egui::{self, Color32, Sense, Stroke, Vec2};
 use spritebit_core::{builtin, palette::MAX_COLORS, selection::rgb_of, Palette, Px, Rgb, FREE_BASE};
 
 use crate::SpritebitApp;
+use crate::i18n::{tr, trf};
 
 /// Schachbrett für Transparent.
 const CHECKER: [[u8; 3]; 2] = [[0x20, 0x20, 0x2c], [0x2a, 0x2a, 0x38]];
@@ -117,14 +118,14 @@ impl SpritebitApp {
             swatch(ui, cur, 30.0, false);
             ui.vertical(|ui| {
                 let label = match (self.color, cur) {
-                    (0, _) => "Transparent".to_string(),
-                    (c, Some(rgb)) if c >= FREE_BASE => format!("Freie Farbe {}", hex(rgb)),
-                    (c, Some(rgb)) => format!("Nr. {c} · {}", hex(rgb)),
-                    (c, None) => format!("Nr. {c}"),
+                    (0, _) => tr("Transparent").to_string(),
+                    (c, Some(rgb)) if c >= FREE_BASE => trf("Freie Farbe {hex}", &[("hex", &hex(rgb))]),
+                    (c, Some(rgb)) => trf("Nr. {c} · {hex}", &[("c", &c), ("hex", &hex(rgb))]),
+                    (c, None) => trf("Nr. {c}", &[("c", &c)]),
                 };
                 ui.label(label);
                 let mut rgb = cur.unwrap_or([0, 0, 0]);
-                if egui::color_picker::color_edit_button_srgb(ui, &mut rgb).on_hover_text("Freie Farbe wählen").changed() {
+                if egui::color_picker::color_edit_button_srgb(ui, &mut rgb).on_hover_text(tr("Freie Farbe wählen")).changed() {
                     self.set_rgb(rgb);
                 }
             });
@@ -162,7 +163,7 @@ impl SpritebitApp {
                     self.color = i;
                 }
                 resp.on_hover_text(match palette.get(i) {
-                    None => "0 · Transparent (Radierer)".to_string(),
+                    None => tr("0 · Transparent (Radierer)").to_string(),
                     Some(c) => format!("{i} · {}", hex(c)),
                 });
             }
@@ -170,17 +171,17 @@ impl SpritebitApp {
 
         // Bearbeiten: Farbe der Palette ändern, Farben dazu/weg
         ui.add_space(4.0);
-        ui.checkbox(&mut self.palette_edit, "Palette bearbeiten");
+        ui.checkbox(&mut self.palette_edit, tr("Palette bearbeiten"));
         if self.palette_edit {
             let builtin_now = builtin::builtin(&palette.name).is_some()
                 && !self.project.palettes.iter().any(|p| p.name == palette.name);
             if builtin_now {
-                ui.weak("Eingebaute Palette — Änderungen gehen in eine Kopie.");
+                ui.weak(tr("Eingebaute Palette — Änderungen gehen in eine Kopie."));
             }
             if (1..=palette.len() as Px).contains(&self.color) {
                 let mut rgb = palette.get(self.color).unwrap_or([0, 0, 0]);
                 ui.horizontal(|ui| {
-                    ui.label(format!("Farbe {}", self.color));
+                    ui.label(trf("Farbe {n}", &[("n", &self.color)]));
                     if egui::color_picker::color_edit_button_srgb(ui, &mut rgb).changed() {
                         let i = self.own_palette();
                         self.project.palettes[i].colors[self.color as usize - 1] = rgb;
@@ -189,14 +190,14 @@ impl SpritebitApp {
                 });
             }
             ui.horizontal(|ui| {
-                if ui.add_enabled(palette.len() < MAX_COLORS, egui::Button::new("+ Farbe")).clicked() {
+                if ui.add_enabled(palette.len() < MAX_COLORS, egui::Button::new(tr("+ Farbe"))).clicked() {
                     let i = self.own_palette();
                     let last = self.project.palettes[i].colors.last().copied().unwrap_or([0, 0, 0]);
                     self.project.palettes[i].colors.push(last);
                     self.color = self.project.palettes[i].colors.len() as Px;
                     self.changed();
                 }
-                if ui.add_enabled(palette.len() > 1, egui::Button::new("− Letzte")).clicked() {
+                if ui.add_enabled(palette.len() > 1, egui::Button::new(tr("− Letzte"))).clicked() {
                     let i = self.own_palette();
                     self.project.palettes[i].colors.pop();
                     self.clamp_color();
@@ -204,6 +205,6 @@ impl SpritebitApp {
                 }
             });
         }
-        ui.weak(format!("Palette: {}", palette.name));
+        ui.weak(trf("Palette: {name}", &[("name", &palette.name)]));
     }
 }

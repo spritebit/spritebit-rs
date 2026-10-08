@@ -10,6 +10,7 @@ use spritebit_core::tools::{self, Span};
 use spritebit_core::Px;
 
 use crate::{icons, SpritebitApp};
+use crate::i18n::{tr, trf};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Tool {
@@ -47,19 +48,19 @@ impl Tool {
 
     fn label(self) -> &'static str {
         match self {
-            Tool::Pan => "Hand",
-            Tool::Pencil => "Stift",
-            Tool::Brush => "Pinsel",
-            Tool::Spray => "Spray",
-            Tool::Fill => "Füllen",
-            Tool::Eraser => "Radierer",
-            Tool::Line => "Linie",
-            Tool::Rect => "Rechteck",
-            Tool::Ellipse => "Ellipse",
-            Tool::Select => "Auswahl",
-            Tool::Lasso => "Lasso",
-            Tool::Magic => "Farbwahl",
-            Tool::Wand => "Zauberstab",
+            Tool::Pan => tr("Hand"),
+            Tool::Pencil => tr("Stift"),
+            Tool::Brush => tr("Pinsel"),
+            Tool::Spray => tr("Spray"),
+            Tool::Fill => tr("Füllen"),
+            Tool::Eraser => tr("Radierer"),
+            Tool::Line => tr("Linie"),
+            Tool::Rect => tr("Rechteck"),
+            Tool::Ellipse => tr("Ellipse"),
+            Tool::Select => tr("Auswahl"),
+            Tool::Lasso => tr("Lasso"),
+            Tool::Magic => tr("Farbwahl"),
+            Tool::Wand => tr("Zauberstab"),
         }
     }
 
@@ -140,7 +141,7 @@ impl SpritebitApp {
             }
             ui.separator();
             if self.tool.sized() {
-                ui.label("Größe");
+                ui.label(tr("Größe"));
                 for n in 1..=9u32 {
                     if ui.selectable_label(self.size == n, n.to_string()).clicked() {
                         self.size = n;
@@ -148,16 +149,16 @@ impl SpritebitApp {
                 }
             }
             if matches!(self.tool, Tool::Rect | Tool::Ellipse) {
-                ui.checkbox(&mut self.filled, "Gefüllt");
+                ui.checkbox(&mut self.filled, tr("Gefüllt"));
             }
             ui.separator();
             let c = ui.visuals().text_color();
             let mx = egui::Button::selectable(self.mirror_x, icons::image(icons::MIRROR_X, c));
-            if ui.add(mx).on_hover_text("Symmetrie: links ↔ rechts").clicked() {
+            if ui.add(mx).on_hover_text(tr("Symmetrie: links ↔ rechts")).clicked() {
                 self.mirror_x = !self.mirror_x;
             }
             let my = egui::Button::selectable(self.mirror_y, icons::image(icons::MIRROR_Y, c));
-            if ui.add(my).on_hover_text("Symmetrie: oben ↔ unten").clicked() {
+            if ui.add(my).on_hover_text(tr("Symmetrie: oben ↔ unten")).clicked() {
                 self.mirror_y = !self.mirror_y;
             }
             self.selection_bar(ui);
@@ -180,9 +181,9 @@ impl SpritebitApp {
     pub(crate) fn layer_ok(&mut self) -> bool {
         let layer = &self.sprite().layers[self.sprite().layer];
         self.hint = if layer.locked {
-            Some(format!("Ebene „{}“ ist gesperrt — Schloss in der Timeline.", layer.name))
+            Some(trf("Ebene „{name}“ ist gesperrt — Schloss in der Timeline.", &[("name", &layer.name)]))
         } else if !layer.visible {
-            Some(format!("Ebene „{}“ ist ausgeblendet — Auge in der Timeline.", layer.name))
+            Some(trf("Ebene „{name}“ ist ausgeblendet — Auge in der Timeline.", &[("name", &layer.name)]))
         } else {
             None
         };

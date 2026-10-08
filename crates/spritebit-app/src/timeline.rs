@@ -19,6 +19,7 @@ use spritebit_core::cels::{self, CelRange};
 use spritebit_core::sprite::{Direction, Tag};
 
 use crate::{icons, SpritebitApp};
+use crate::i18n::{tr, trf};
 
 const LAYER_W: f32 = 170.0;
 const TAG_H: f32 = 16.0;
@@ -66,74 +67,74 @@ impl SpritebitApp {
         let n = self.project.sprite().frames.len();
         let cur = self.project.sprite().frame;
         ui.horizontal_wrapped(|ui| {
-            if icons::button(ui, icons::FIRST, "Erster Frame (Pos1)", true).clicked() {
+            if icons::button(ui, icons::FIRST, tr("Erster Frame (Pos1)"), true).clicked() {
                 self.go_frame(0);
             }
-            if icons::button(ui, icons::PREV, "Voriger Frame (,)", true).clicked() {
+            if icons::button(ui, icons::PREV, tr("Voriger Frame (,)"), true).clicked() {
                 self.go_frame((cur + n - 1) % n);
             }
             let play = if self.playing { icons::PAUSE } else { icons::PLAY };
-            if icons::button(ui, play, "Abspielen / Anhalten (Enter)", n > 1).clicked() {
+            if icons::button(ui, play, tr("Abspielen / Anhalten (Enter)"), n > 1).clicked() {
                 self.toggle_play(ui.ctx());
             }
-            if icons::button(ui, icons::NEXT, "Nächster Frame (.)", true).clicked() {
+            if icons::button(ui, icons::NEXT, tr("Nächster Frame (.)"), true).clicked() {
                 self.go_frame((cur + 1) % n);
             }
-            if icons::button(ui, icons::LAST, "Letzter Frame (Ende)", true).clicked() {
+            if icons::button(ui, icons::LAST, tr("Letzter Frame (Ende)"), true).clicked() {
                 self.go_frame(n - 1);
             }
             ui.separator();
-            ui.weak("Frame");
-            if icons::button(ui, icons::PLUS, "Leerer Frame dahinter", true).clicked() {
+            ui.weak(tr("Frame"));
+            if icons::button(ui, icons::PLUS, tr("Leerer Frame dahinter"), true).clicked() {
                 self.edit_sprite(|s| {
                     let f = s.frame;
                     s.add_frame(f, false);
                 });
             }
-            if icons::button(ui, icons::COPY, "Frame duplizieren", true).clicked() {
+            if icons::button(ui, icons::COPY, tr("Frame duplizieren"), true).clicked() {
                 self.edit_sprite(|s| {
                     let f = s.frame;
                     s.add_frame(f, true);
                 });
             }
-            if icons::button(ui, icons::TRASH, "Frame löschen", n > 1).clicked() {
+            if icons::button(ui, icons::TRASH, tr("Frame löschen"), n > 1).clicked() {
                 self.edit_sprite(|s| {
                     let f = s.frame;
                     s.delete_frame(f);
                 });
             }
             ui.separator();
-            ui.weak("Ebene");
+            ui.weak(tr("Ebene"));
             let (nl, l) = (self.project.sprite().layers.len(), self.project.sprite().layer);
-            if icons::button(ui, icons::PLUS, "Neue Ebene über der aktiven", true).clicked() {
+            if icons::button(ui, icons::PLUS, tr("Neue Ebene über der aktiven"), true).clicked() {
                 self.edit_sprite(|s| {
-                    let name = format!("Ebene {}", s.layers.len() + 1);
+                    let name = trf("Ebene {n}", &[("n", &(s.layers.len() + 1))]);
                     let at = s.layer + 1;
                     s.add_layer(at, name);
                 });
             }
-            if ui.add_enabled(l + 1 < nl, egui::Button::new("▲")).on_hover_text("Ebene nach oben").clicked() {
+            if icons::button(ui, icons::UP, tr("Ebene nach oben"), l + 1 < nl).clicked() {
                 self.edit_sprite(|s| s.move_layer(l, l + 1));
             }
-            if ui.add_enabled(l > 0, egui::Button::new("▼")).on_hover_text("Ebene nach unten").clicked() {
+            if icons::button(ui, icons::DOWN, tr("Ebene nach unten"), l > 0).clicked() {
                 self.edit_sprite(|s| s.move_layer(l, l - 1));
             }
-            if icons::button(ui, icons::TRASH, "Ebene löschen", nl > 1).clicked() {
+            if icons::button(ui, icons::TRASH, tr("Ebene löschen"), nl > 1).clicked() {
                 self.edit_sprite(|s| {
                     let l = s.layer;
                     s.delete_layer(l);
                 });
             }
             ui.separator();
-            ui.weak("Zellen");
+            ui.weak(tr("Zellen"));
             let r = self.cur_range();
             let sp = self.project.sprite();
             let linked = (r.l0..=r.l1).any(|l| (r.f0..=r.f1).any(|f| sp.is_linked(f, l)));
             let can_link = r.f1 > r.f0 || sp.frame > 0;
-            if icons::button(ui, icons::COPY, "Zellen kopieren (Bereich per Shift-Klick)", true).clicked() {
+            if icons::button(ui, icons::COPY, tr("Zellen kopieren (Bereich per Shift-Klick)"), true).clicked() {
                 self.cel_clip = Some(cels::copy(self.project.sprite(), r));
             }
-            if icons::button(ui, icons::PASTE, "Zellen an der aktiven Zelle einfügen", self.cel_clip.is_some()).clicked() {
+            if icons::button(ui, icons::PASTE, tr("Zellen an der aktiven Zelle einfügen"), self.cel_clip.is_some()).clicked() {
                 if let Some(clip) = self.cel_clip.clone() {
                     let mut used = None;
                     self.edit_sprite(|s| {
@@ -143,26 +144,26 @@ impl SpritebitApp {
                     match used {
                         Some(u) if u.size() > 1 => self.cel_range = Some(u),
                         Some(_) => self.cel_range = None,
-                        None => self.hint = Some("Hier passt nichts hin — die Zellen haben eine andere Größe.".into()),
+                        None => self.hint = Some(tr("Hier passt nichts hin — die Zellen haben eine andere Größe.").into()),
                     }
                 }
             }
-            if icons::button(ui, icons::ERASER, "Zellen leeren", true).clicked() {
+            if icons::button(ui, icons::ERASER, tr("Zellen leeren"), true).clicked() {
                 self.edit_sprite(|s| cels::clear(s, r));
             }
-            if icons::button(ui, icons::LINK, "Verknüpfen — die Frames teilen sich je Ebene ein Bild (ohne Bereich: mit dem Frame davor)", can_link).clicked() {
+            if icons::button(ui, icons::LINK, tr("Verknüpfen — die Frames teilen sich je Ebene ein Bild (ohne Bereich: mit dem Frame davor)"), can_link).clicked() {
                 let r = if r.f1 > r.f0 { r } else { CelRange { f0: r.f0 - 1, ..r } };
                 self.edit_sprite(|s| {
                     cels::link(s, r);
                 });
             }
-            if icons::button(ui, icons::UNLINK, "Lösen — jede Zelle bekommt ihr eigenes Bild", linked).clicked() {
+            if icons::button(ui, icons::UNLINK, tr("Lösen — jede Zelle bekommt ihr eigenes Bild"), linked).clicked() {
                 self.edit_sprite(|s| {
                     cels::unlink(s, r);
                 });
             }
             ui.separator();
-            if icons::button(ui, icons::TAG, "Tag anlegen — benennt den Bereich bzw. den Frame, z. B. „Laufen“", true).clicked() {
+            if icons::button(ui, icons::TAG, tr("Tag anlegen — benennt den Bereich bzw. den Frame, z. B. „Laufen“"), true).clicked() {
                 let k = self.project.sprite().tags.len();
                 self.edit_sprite(|s| {
                     s.tags.push(Tag {
@@ -176,22 +177,22 @@ impl SpritebitApp {
                 self.tag_edit = Some(k);
             }
             let onion_btn = egui::Button::selectable(self.onion, icons::image(icons::ONION, ui.visuals().text_color()));
-            if ui.add(onion_btn).on_hover_text("Onion Skin — voriger (rot) und nächster Frame (blau) scheinen durch").clicked() {
+            if ui.add(onion_btn).on_hover_text(tr("Onion Skin — voriger (rot) und nächster Frame (blau) scheinen durch")).clicked() {
                 self.onion = !self.onion;
                 self.version = self.version.wrapping_add(1);
             }
             ui.separator();
             let mut fps = self.project.sprite().fps;
-            ui.label("FPS");
+            ui.label(tr("FPS"));
             if ui.add(egui::DragValue::new(&mut fps).range(1..=60)).changed() {
                 self.project.sprite_mut().fps = fps;
                 self.dirty = true;
             }
             let mut dur = self.project.sprite().frames[cur].duration_ms;
-            ui.label("Dauer");
+            ui.label(tr("Dauer"));
             if ui
                 .add(egui::DragValue::new(&mut dur).range(0..=10_000).suffix(" ms"))
-                .on_hover_text("0 = nach FPS")
+                .on_hover_text(tr("0 = nach FPS"))
                 .changed()
             {
                 self.project.sprite_mut().frames[cur].duration_ms = dur;
@@ -344,15 +345,15 @@ impl SpritebitApp {
         let mut done = None;
         let mut cancel = false;
         if let Some((l, name)) = &mut self.rename_layer {
-            egui::Window::new("Ebene umbenennen").collapsible(false).resizable(false).show(ctx, |ui| {
+            egui::Window::new(tr("Ebene umbenennen")).collapsible(false).resizable(false).show(ctx, |ui| {
                 let r = ui.text_edit_singleline(name);
                 r.request_focus();
                 let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
                 ui.horizontal(|ui| {
-                    if ui.button("OK").clicked() || enter {
+                    if ui.button(tr("OK")).clicked() || enter {
                         done = Some((*l, name.trim().to_string()));
                     }
-                    if ui.button("Abbrechen").clicked() {
+                    if ui.button(tr("Abbrechen")).clicked() {
                         cancel = true;
                     }
                 });
@@ -377,10 +378,10 @@ impl SpritebitApp {
         };
         let before = t.clone();
         let (mut close, mut delete, mut play) = (false, false, false);
-        egui::Window::new("Tag").collapsible(false).resizable(false).show(ctx, |ui| {
+        egui::Window::new(tr("Tag")).collapsible(false).resizable(false).show(ctx, |ui| {
             ui.text_edit_singleline(&mut t.name);
             ui.horizontal(|ui| {
-                ui.label("Frames");
+                ui.label(tr("Frames"));
                 let (mut a, mut b) = (t.from + 1, t.to + 1);
                 ui.add(egui::DragValue::new(&mut a).range(1..=n));
                 ui.label("–");
@@ -389,28 +390,28 @@ impl SpritebitApp {
                 t.to = a.max(b) - 1;
             });
             ui.horizontal(|ui| {
-                ui.label("Richtung");
+                ui.label(tr("Richtung"));
                 egui::ComboBox::from_id_salt("tag-dir")
                     .selected_text(match t.direction {
-                        Direction::Forward => "Vorwärts",
-                        Direction::Reverse => "Rückwärts",
-                        Direction::PingPong => "Ping-Pong",
+                        Direction::Forward => tr("Vorwärts"),
+                        Direction::Reverse => tr("Rückwärts"),
+                        Direction::PingPong => tr("Ping-Pong"),
                     })
                     .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut t.direction, Direction::Forward, "Vorwärts");
-                        ui.selectable_value(&mut t.direction, Direction::Reverse, "Rückwärts");
-                        ui.selectable_value(&mut t.direction, Direction::PingPong, "Ping-Pong");
+                        ui.selectable_value(&mut t.direction, Direction::Forward, tr("Vorwärts"));
+                        ui.selectable_value(&mut t.direction, Direction::Reverse, tr("Rückwärts"));
+                        ui.selectable_value(&mut t.direction, Direction::PingPong, tr("Ping-Pong"));
                     });
             });
             ui.horizontal(|ui| {
-                ui.label("Farbe");
+                ui.label(tr("Farbe"));
                 egui::color_picker::color_edit_button_srgb(ui, &mut t.color);
             });
             ui.separator();
             ui.horizontal(|ui| {
-                play = ui.button("Abspielen").clicked();
-                delete = ui.button("Löschen").clicked();
-                close = ui.button("Fertig").clicked();
+                play = ui.button(tr("Abspielen")).clicked();
+                delete = ui.button(tr("Löschen")).clicked();
+                close = ui.button(tr("Fertig")).clicked();
             });
         });
         if delete {

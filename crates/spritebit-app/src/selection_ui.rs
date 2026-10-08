@@ -11,6 +11,7 @@ use spritebit_core::selection::{self, Clip, Selection};
 
 use crate::tools_ui::{Pointer, Tool};
 use crate::SpritebitApp;
+use crate::i18n::{tr, keys};
 
 /// Schwebender Inhalt: Pixel und wo ihre linke obere Ecke gerade liegt.
 pub(crate) struct Float {
@@ -293,7 +294,7 @@ impl SpritebitApp {
     /// Knöpfe neben den Werkzeugen, solange es eine Auswahl gibt.
     pub(crate) fn selection_bar(&mut self, ui: &mut egui::Ui) {
         if matches!(self.tool, Tool::Magic | Tool::Wand) {
-            ui.label("Toleranz");
+            ui.label(tr("Toleranz"));
             let mut pct = (self.tolerance * 100.0).round() as u32;
             if ui.add(egui::Slider::new(&mut pct, 0..=100).suffix(" %")).changed() {
                 self.tolerance = pct as f64 / 100.0;
@@ -302,22 +303,22 @@ impl SpritebitApp {
         if self.selection.is_some() || self.clipboard.is_some() {
             ui.separator();
             let has = self.selection.is_some();
-            if ui.add_enabled(has, egui::Button::new("Ausschneiden")).on_hover_text("Strg+X").clicked() {
+            if ui.add_enabled(has, egui::Button::new(tr("Ausschneiden"))).on_hover_text(keys("Strg+X")).clicked() {
                 self.cut_selection();
             }
-            if ui.add_enabled(has, egui::Button::new("Kopieren")).on_hover_text("Strg+C").clicked() {
+            if ui.add_enabled(has, egui::Button::new(tr("Kopieren"))).on_hover_text(keys("Strg+C")).clicked() {
                 self.copy_selection();
             }
-            if ui.add_enabled(self.clipboard.is_some(), egui::Button::new("Einfügen")).on_hover_text("Strg+V").clicked() {
+            if ui.add_enabled(self.clipboard.is_some(), egui::Button::new(tr("Einfügen"))).on_hover_text(keys("Strg+V")).clicked() {
                 self.paste_clipboard();
             }
-            if ui.add_enabled(has, egui::Button::new("Füllen")).on_hover_text("Auswahl mit der aktuellen Farbe füllen").clicked() {
+            if ui.add_enabled(has, egui::Button::new(tr("Füllen"))).on_hover_text(tr("Auswahl mit der aktuellen Farbe füllen")).clicked() {
                 self.fill_selection();
             }
-            if ui.add_enabled(has, egui::Button::new("Leeren")).on_hover_text("Entf").clicked() {
+            if ui.add_enabled(has, egui::Button::new(tr("Leeren"))).on_hover_text(keys("Entf")).clicked() {
                 self.delete_selection();
             }
-            if ui.add_enabled(has, egui::Button::new("Aufheben")).on_hover_text("Esc").clicked() {
+            if ui.add_enabled(has, egui::Button::new(tr("Aufheben"))).on_hover_text(keys("Esc")).clicked() {
                 self.deselect();
             }
         }

@@ -33,7 +33,7 @@ cargo run -p spritebit-app      # Programm starten
 cargo build --release           # schnelle Fassung (target/release)
 ```
 
-## Bedienung (erste Fassung)
+## Bedienung
 
 | | |
 |---|---|
@@ -51,6 +51,14 @@ cargo build --release           # schnelle Fassung (target/release)
 | Ansicht | Einpassen, 100 %, Gitter |
 | Timeline | Zelle anklicken wählt Frame und Ebene; Auge, Schloss, Kette schalten Sichtbarkeit, Sperre, „durchgehend“ |
 | Enter / , / . / Pos1 / Ende | Abspielen, voriger, nächster, erster, letzter Frame |
+| Alt+Klick | Pipette: nimmt die Farbe unter dem Mauszeiger |
+| Symmetrie-Knöpfe (Werkzeugleiste) | spiegelt Striche, Formen, Spray und Füllen an der Mitte |
+| Farben (links) | Farbwähler für freie Farben, Palette wählen, „Palette bearbeiten“ (eingebaute → Kopie) |
+| Shift-Klick in der Timeline | Zellen-Bereich: kopieren, einfügen, leeren, verknüpfen, lösen |
+| Tag-Knopf / Klick auf einen Tag | Tag anlegen bzw. bearbeiten (Bereich, Richtung, Farbe) |
+| Doppelklick auf einen Ebenen-Namen | umbenennen; Pfeile verschieben die Ebene |
+| Strg+E | Export: PNG (Frame oder alle), GIF (ganz oder je Tag), Spritesheet + JSON-Atlas |
+| Ansicht → Sprache | Deutsch, English, Österreichisch (wird gemerkt) |
 
 Die Statusleiste zeigt, wie viele Kacheln tatsächlich Speicher belegen.
 
