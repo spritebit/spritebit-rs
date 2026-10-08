@@ -136,6 +136,17 @@ struct SpritebitApp {
     rename_layer: Option<(usize, String)>,
     /// Stelle in der Runde eines Tags beim Abspielen (Ping-Pong).
     play_step: usize,
+    /// Rückfrage wegen ungespeicherter Änderungen — und was danach kommt.
+    unsaved_ask: Option<Pending>,
+    /// Schließen ist bestätigt (nach Speichern oder Verwerfen).
+    allow_close: bool,
+}
+
+/// Was nach der Rückfrage „Ungespeicherte Änderungen" passieren soll.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Pending {
+    Close,
+    Open,
 }
 
 impl SpritebitApp {
@@ -187,6 +198,8 @@ impl SpritebitApp {
             tag_edit: None,
             rename_layer: None,
             play_step: 0,
+            unsaved_ask: None,
+            allow_close: false,
             rng: spritebit_core::tools::Rng::new(
                 std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64),
             ),
@@ -264,7 +277,16 @@ impl SpritebitApp {
         self.version = self.version.wrapping_add(1);
     }
 
+    /// Öffnen — bei ungespeicherten Änderungen erst nachfragen.
     fn open(&mut self) {
+        if self.dirty {
+            self.unsaved_ask = Some(Pending::Open);
+        } else {
+            self.open_now();
+        }
+    }
+
+    fn open_now(&mut self) {
         let Some(path) = rfd::FileDialog::new()
             .set_title("Projekt öffnen")
             .add_filter("spritebit-Projekt", &[EXT, "json"])
@@ -471,7 +493,7 @@ impl SpritebitApp {
                     self.export_web();
                 }
                 ui.separator();
-                if ui.button("Beenden").clicked() {
+                if ui.add(egui::Button::new("Beenden").shortcut_text("Alt+F4")).clicked() {
                     ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                 }
             });
@@ -829,12 +851,62 @@ impl SpritebitApp {
         if dismiss {
             self.error = None;
         }
+        self.unsaved_dialog(ctx);
+    }
+
+    /// Fenster schließen abfangen, solange etwas ungespeichert ist.
+    fn guard_close(&mut self, ctx: &egui::Context) {
+        if ctx.input(|i| i.viewport().close_requested()) && self.dirty && !self.allow_close {
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.unsaved_ask = Some(Pending::Close);
+        }
+    }
+
+    fn unsaved_dialog(&mut self, ctx: &egui::Context) {
+        let Some(pending) = self.unsaved_ask else { return };
+        let (mut save, mut discard, mut cancel) = (false, false, false);
+        egui::Modal::new(egui::Id::new("unsaved")).show(ctx, |ui| {
+            ui.heading("Ungespeicherte Änderungen");
+            ui.label(match pending {
+                Pending::Close => "Vor dem Beenden speichern?",
+                Pending::Open => "Vor dem Öffnen eines anderen Projekts speichern?",
+            });
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                save = ui.button("Speichern").clicked();
+                discard = ui.button("Nicht speichern").clicked();
+                cancel = ui.button("Abbrechen").clicked();
+            });
+        });
+        if cancel {
+            self.unsaved_ask = None;
+            return;
+        }
+        if save {
+            self.save();
+            if self.dirty {
+                // Speichern abgebrochen oder fehlgeschlagen: nichts verwerfen.
+                self.unsaved_ask = None;
+                return;
+            }
+        }
+        if save || discard {
+            self.unsaved_ask = None;
+            match pending {
+                Pending::Close => {
+                    self.allow_close = true;
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+                Pending::Open => self.open_now(),
+            }
+        }
     }
 }
 
 impl eframe::App for SpritebitApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        self.guard_close(&ctx);
         self.shortcuts(&ctx);
         self.selection_keys(&ctx);
         self.tool_keys(&ctx);
@@ -1063,6 +1135,23 @@ mod tests {
         assert!(h.state().color >= spritebit_core::FREE_BASE);
         h.state_mut().set_rgb([0xff, 0xff, 0xff]);
         assert_eq!(h.state().color, 1, "Palettenfarbe wird erkannt");
+    }
+
+    #[test]
+    fn rueckfrage_bei_ungespeichertem() {
+        let mut h = app();
+        h.state_mut().dirty = true;
+        h.state_mut().unsaved_ask = Some(Pending::Close);
+        h.run();
+        h.get_by_label("Abbrechen").click();
+        h.run();
+        assert!(h.state().unsaved_ask.is_none());
+        assert!(!h.state().allow_close, "Abbrechen schließt nicht");
+        h.state_mut().unsaved_ask = Some(Pending::Close);
+        h.run();
+        h.get_by_label("Nicht speichern").click();
+        h.run();
+        assert!(h.state().allow_close);
     }
 
     #[test]
