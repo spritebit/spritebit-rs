@@ -9,6 +9,7 @@
 // Im Release kein Konsolenfenster neben dem Programm.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod export_ui;
 mod icons;
 mod palette_ui;
 mod selection_ui;
@@ -124,6 +125,7 @@ struct SpritebitApp {
     mirror_x: bool,
     mirror_y: bool,
     palette_edit: bool,
+    export_dialog: Option<export_ui::ExportDialog>,
 }
 
 impl SpritebitApp {
@@ -168,6 +170,7 @@ impl SpritebitApp {
             mirror_x: false,
             mirror_y: false,
             palette_edit: false,
+            export_dialog: None,
             rng: spritebit_core::tools::Rng::new(
                 std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64),
             ),
@@ -365,6 +368,9 @@ impl SpritebitApp {
         let cmd = Modifiers::COMMAND;
         let cmd_shift = Modifiers::COMMAND | Modifiers::SHIFT;
         // Die längeren Kürzel zuerst: Strg+Umschalt+S darf nicht als Strg+S gelten.
+        if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::E)) {
+            self.open_export();
+        }
         let (save_as, save, open, redo2, undo, redo) = ctx.input_mut(|i| {
             (
                 i.consume_key(cmd_shift, Key::S),
@@ -442,6 +448,9 @@ impl SpritebitApp {
                     self.save_as();
                 }
                 ui.separator();
+                if ui.add(egui::Button::new("Exportieren …").shortcut_text("Strg+E")).clicked() {
+                    self.open_export();
+                }
                 if ui.button("Als Web-Projekt exportieren …").clicked() {
                     self.export_web();
                 }
@@ -823,6 +832,7 @@ impl eframe::App for SpritebitApp {
         });
         egui::CentralPanel::default().show(ui, |ui| self.canvas(ui));
         self.dialogs(&ctx);
+        self.export_window(&ctx);
         self.sync_title(&ctx);
     }
 }
