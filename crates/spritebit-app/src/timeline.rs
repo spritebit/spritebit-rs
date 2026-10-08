@@ -103,6 +103,17 @@ impl SpritebitApp {
                     s.delete_frame(f);
                 });
             }
+            if icons::button(ui, icons::LEFT, tr("Frame nach links"), cur > 0).clicked() {
+                self.edit_sprite(|s| s.move_frame(cur, cur - 1));
+            }
+            if icons::button(ui, icons::RIGHT, tr("Frame nach rechts"), cur + 1 < n).clicked() {
+                self.edit_sprite(|s| s.move_frame(cur, cur + 1));
+            }
+            // Sprungfeld: Nummer eintippen (1-basiert wie die Kopfzeile).
+            let mut go = cur + 1;
+            if ui.add(egui::DragValue::new(&mut go).range(1..=n)).on_hover_text(tr("Zu Frame springen")).changed() {
+                self.go_frame(go - 1);
+            }
             ui.separator();
             ui.weak(tr("Ebene"));
             let (nl, l) = (self.project.sprite().layers.len(), self.project.sprite().layer);
@@ -118,6 +129,29 @@ impl SpritebitApp {
             }
             if icons::button(ui, icons::DOWN, tr("Ebene nach unten"), l > 0).clicked() {
                 self.edit_sprite(|s| s.move_layer(l, l - 1));
+            }
+            if icons::button(ui, icons::COPY, tr("Ebene verdoppeln"), true).clicked() {
+                let name = trf("{name} Kopie", &[("name", &self.project.sprite().layers[l].name)]);
+                self.edit_sprite(|s| s.duplicate_layer(name));
+            }
+            if icons::button(ui, icons::MERGE_DOWN, tr("Nach unten zusammenlegen — in jedem Frame"), l > 0).clicked() {
+                let pal = self.project.current_palette();
+                self.edit_sprite(|s| {
+                    s.merge_down(&pal);
+                });
+            }
+            // Aktive Ebene frisch lesen — Verdoppeln/Zusammenlegen eben hat sie verschoben.
+            let la = self.project.sprite().layer;
+            let mut op = self.project.sprite().layers[la].opacity * 100.0;
+            let r = ui
+                .add(egui::DragValue::new(&mut op).range(0.0..=100.0).speed(1.0).suffix(" %").max_decimals(0))
+                .on_hover_text(tr("Deckkraft der aktiven Ebene"));
+            if r.drag_started() || (r.changed() && !r.dragged()) {
+                self.edit_sprite(|_| {});
+            }
+            if r.changed() {
+                self.project.sprite_mut().layers[la].opacity = (op / 100.0).clamp(0.0, 1.0);
+                self.changed();
             }
             if icons::button(ui, icons::TRASH, tr("Ebene löschen"), nl > 1).clicked() {
                 self.edit_sprite(|s| {

@@ -15,6 +15,7 @@ mod icons;
 mod image_ui;
 mod palette_ui;
 mod selection_ui;
+mod sprites_ui;
 mod timeline;
 mod tools_ui;
 
@@ -23,7 +24,7 @@ use std::path::{Path, PathBuf};
 use eframe::egui::{self, Color32, Key, Modifiers, Pos2, Sense, Stroke, Vec2};
 use spritebit_core::{
     export_web, import_web, load_native, render_rgba_step, save_native, selection, Clip, History, Project, Px, Rect,
-    Selection, Sprite, MAX_SIDE,
+    Selection, Sprite,
 };
 use tools_ui::{Pointer, Tool};
 use crate::i18n::{tr, trf, keys};
@@ -67,11 +68,6 @@ struct CanvasTexture {
 }
 
 /// Dialog „Neuer Sprite".
-struct NewDialog {
-    width: u32,
-    height: u32,
-}
-
 struct SpritebitApp {
     project: Project,
     /// Undo je Sprite, gleiche Reihenfolge wie `project.sprites`.
@@ -94,7 +90,7 @@ struct SpritebitApp {
     /// Letzte Pixel-Position eines laufenden Strichs.
     stroke_last: Option<(i64, i64)>,
     hover: Option<(i64, i64)>,
-    new_dialog: Option<NewDialog>,
+    sprite_dialog: Option<sprites_ui::SpriteDialog>,
     about_open: bool,
     /// Fehlermeldung, die als Fenster angezeigt wird.
     error: Option<String>,
@@ -174,7 +170,7 @@ impl SpritebitApp {
             version: 0,
             stroke_last: None,
             hover: None,
-            new_dialog: None,
+            sprite_dialog: None,
             about_open: false,
             error: None,
             hint: None,
@@ -262,16 +258,6 @@ impl SpritebitApp {
             self.stroke_last = None;
             self.fit_pending = true;
             self.version = self.version.wrapping_add(1);
-        }
-    }
-
-    fn add_sprite(&mut self, width: u32, height: u32) {
-        let name = self.project.fresh_name();
-        if let Ok(sp) = Sprite::new(name, width, height) {
-            self.project.sprites.push(sp);
-            self.histories.push(History::default());
-            self.select_sprite(self.project.sprites.len() - 1);
-            self.dirty = true;
         }
     }
 
@@ -483,7 +469,7 @@ impl SpritebitApp {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button(tr("Datei"), |ui| {
                 if ui.button(tr("Neuer Sprite …")).clicked() {
-                    self.new_dialog = Some(NewDialog { width: self.sprite().width, height: self.sprite().height });
+                    self.open_new_sprite();
                 }
                 ui.separator();
                 if ui.add(egui::Button::new(tr("Öffnen …")).shortcut_text(keys("Strg+O"))).clicked() {
@@ -501,6 +487,10 @@ impl SpritebitApp {
                 }
                 if ui.button(tr("Als Web-Projekt exportieren …")).clicked() {
                     self.export_web();
+                }
+                ui.separator();
+                if ui.button(tr("Alles zurücksetzen …")).clicked() {
+                    self.sprite_dialog = Some(sprites_ui::SpriteDialog::Reset);
                 }
                 ui.separator();
                 if ui.add(egui::Button::new(tr("Beenden")).shortcut_text(keys("Alt+F4"))).clicked() {
@@ -571,20 +561,11 @@ impl SpritebitApp {
             ui.strong(tr("Sprites"));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.small_button("+").on_hover_text(tr("Neuer Sprite")).clicked() {
-                    self.new_dialog = Some(NewDialog { width: self.sprite().width, height: self.sprite().height });
+                    self.open_new_sprite();
                 }
             });
         });
-        let mut pick = None;
-        for (i, sp) in self.project.sprites.iter().enumerate() {
-            let label = format!("{}  ·  {}×{}", sp.name, sp.width, sp.height);
-            if ui.selectable_label(i == self.project.current, label).clicked() {
-                pick = Some(i);
-            }
-        }
-        if let Some(i) = pick {
-            self.select_sprite(i);
-        }
+        self.sprite_list(ui);
 
         ui.add_space(10.0);
         ui.strong(tr("Farben"));
@@ -811,42 +792,7 @@ impl SpritebitApp {
 
     // ── Dialoge ─────────────────────────────────────────────────────
     fn dialogs(&mut self, ctx: &egui::Context) {
-        let mut create = None;
-        let mut close = false;
-        if let Some(d) = &mut self.new_dialog {
-            egui::Window::new(tr("Neuer Sprite")).collapsible(false).resizable(false).show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(tr("Breite"));
-                    ui.add(egui::DragValue::new(&mut d.width).range(1..=MAX_SIDE));
-                    ui.label(tr("Höhe"));
-                    ui.add(egui::DragValue::new(&mut d.height).range(1..=MAX_SIDE));
-                });
-                ui.horizontal(|ui| {
-                    for s in [32, 64, 256, 1024, 4096, 8192] {
-                        if ui.button(format!("{s}")).clicked() {
-                            d.width = s;
-                            d.height = s;
-                        }
-                    }
-                });
-                ui.separator();
-                ui.horizontal(|ui| {
-                    if ui.button(tr("Anlegen")).clicked() {
-                        create = Some((d.width, d.height));
-                    }
-                    if ui.button(tr("Abbrechen")).clicked() {
-                        close = true;
-                    }
-                });
-            });
-        }
-        if let Some((w, h)) = create {
-            self.add_sprite(w, h);
-            close = true;
-        }
-        if close {
-            self.new_dialog = None;
-        }
+        self.sprite_dialogs(ctx);
         if self.about_open {
             egui::Window::new(tr("Über spritebit"))
                 .collapsible(false)
@@ -1229,6 +1175,44 @@ mod tests {
         assert_eq!(h.state().sprite().width, 64);
         let n = h.state_mut().clean_for_test_outline();
         assert_eq!(n, 4);
+    }
+
+    #[test]
+    fn sprite_anlegen_duplizieren_loeschen() {
+        let mut h = app();
+        h.state_mut().open_new_sprite();
+        if let Some(sprites_ui::SpriteDialog::New { name, palette, w, h: hh }) = &mut h.state_mut().sprite_dialog {
+            *name = "Held".into();
+            *palette = "pico8".into();
+            *w = 16;
+            *hh = 8;
+        }
+        h.run();
+        h.get_by_label("Erstellen").click();
+        h.run();
+        let a = h.state();
+        assert_eq!(a.project.sprites.len(), 2);
+        assert_eq!((a.sprite().name.as_str(), a.sprite().palette.as_str(), a.sprite().width), ("Held", "pico8", 16));
+        h.state_mut().sprite_dialog = Some(sprites_ui::SpriteDialog::Delete { i: 0 });
+        h.run();
+        h.get_by_label("Löschen").click();
+        h.run();
+        assert_eq!(h.state().project.sprites.len(), 1);
+        assert_eq!(h.state().sprite().name, "Held", "der verbleibende ist aktiv");
+    }
+
+    #[test]
+    fn ebene_zusammenlegen_ueber_knopf() {
+        let mut h = app();
+        h.state_mut().project.sprite_mut().active().set(1, 1, 5);
+        h.get_by_label("Neue Ebene über der aktiven").click();
+        h.run();
+        h.state_mut().project.sprite_mut().active().set(2, 2, 3);
+        h.get_by_label("Nach unten zusammenlegen — in jedem Frame").click();
+        h.run();
+        let sp = h.state().sprite();
+        assert_eq!(sp.layers.len(), 1);
+        assert_eq!((sp.cel(0, 0).get(1, 1), sp.cel(0, 0).get(2, 2)), (5, 3));
     }
 
     #[test]

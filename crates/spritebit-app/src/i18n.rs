@@ -322,6 +322,33 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Outline-Farbe", "Outline color", "Farb vo da Umrandung"),
     ("Outline gezeichnet — {n} Pixel.", "Outline drawn — {n} pixels.", "Umrandung zeichnet — {n} Pixel."),
     ("Keine Outline nötig — Sprite leer?", "No outline needed — is the sprite empty?", "Ka Umrandung nötig — is da Sprite laar?"),
+    // ── Sprites, Ebenen, Frames ──
+    ("Alle Sprites und eigenen Paletten dieses Projekts werden verworfen.", "All sprites and custom palettes of this project will be discarded.", "Olle Sprites und eignen Palettn vo dem Projekt kemman weg."),
+    ("Alles zurücksetzen …", "Reset everything …", "Ois zrucksetzn …"),
+    ("Alles zurücksetzen?", "Reset everything?", "Ois zrucksetzn?"),
+    ("Zurücksetzen", "Reset", "Zrucksetzn"),
+    ("Anker", "Anchor", ""),
+    ("Das lässt sich nicht rückgängig machen.", "This cannot be undone.", "Des geht nimma zruck."),
+    ("Deckkraft der aktiven Ebene", "Opacity of the active layer", "Deckkraft vo da aktivn Ebene"),
+    ("Die Leinwand wird nur größer oder kleiner — die Pixel behalten ihre Größe.", "Only the canvas grows or shrinks — the pixels keep their size.", "Nur d’Leinwaund wird größer oder klana — de Pixel bleibn, wia s’ san."),
+    ("Duplizieren", "Duplicate", "Verdoppln"),
+    ("Ebene verdoppeln", "Duplicate layer", "Ebene verdoppln"),
+    ("Erstellen", "Create", "Mochn"),
+    ("Farbpalette", "Color palette", "Farbpalettn"),
+    ("Frame nach links", "Move frame left", "Frame noch links"),
+    ("Frame nach rechts", "Move frame right", "Frame noch rechts"),
+    ("Größe ändern …", "Resize …", "Greß ändern …"),
+    ("Leinwand ändern", "Change canvas", "Leinwaund ändern"),
+    ("Löschen …", "Delete …", "Weghaun …"),
+    ("Nach unten zusammenlegen — in jedem Frame", "Merge down — in every frame", "Noch untn zammlegn — in jedem Frame"),
+    ("Name", "Name", "Nom"),
+    ("Rechtsklick: umbenennen, duplizieren, Größe, löschen", "Right-click: rename, duplicate, size, delete", "Rechtsklick: umtaufn, verdoppln, Greß, weghaun"),
+    ("Sprite umbenennen", "Rename sprite", "Sprite umtaufn"),
+    ("Sprite „{name}“ löschen?", "Delete sprite “{name}”?", "Sprite „{name}“ weghaun?"),
+    ("Umbenennen …", "Rename …", "Umtaufn …"),
+    ("Zu Frame springen", "Jump to frame", "Zu an Frame hupfn"),
+    ("{name} Kopie", "{name} copy", ""),
+    ("Ändern", "Change", ""),
 ];
 
 /// Fehler beim Laden in der gewählten Sprache.
@@ -366,6 +393,7 @@ mod tests {
             include_str!("palette_ui.rs"),
             include_str!("export_ui.rs"),
             include_str!("image_ui.rs"),
+            include_str!("sprites_ui.rs"),
         ];
         let mut missing = Vec::new();
         for src in sources {
