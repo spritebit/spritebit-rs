@@ -1,15 +1,20 @@
 //! spritebit — Desktop-App (egui/eframe).
 //!
-//! Erste Fassung: Menüleiste, Farbleiste, Zeichenfläche mit Zoom und
-//! Verschieben, Stift und Radierer, Undo. Gezeichnet wird immer nur der
-//! sichtbare Ausschnitt (`spritebit_core::render_rgba_step`) — die Fläche
-//! darf darum bis 8192×8192 groß sein.
+//! Menüleiste, Sprite-Liste und Farben links, Zeichenfläche mit Zoom und
+//! Verschieben, Stift und Radierer, Undo je Sprite, Speichern und Öffnen
+//! (eigenes Format und Projektdatei der Web-Version). Gezeichnet wird immer
+//! nur der sichtbare Ausschnitt (`spritebit_core::render_rgba_step`) — die
+//! Fläche darf darum bis 8192×8192 groß sein.
 
 // Im Release kein Konsolenfenster neben dem Programm.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::path::{Path, PathBuf};
+
 use eframe::egui::{self, Color32, Key, Modifiers, Pos2, Sense, Stroke, Vec2};
-use spritebit_core::{render_rgba_step, tools, History, Palette, Rect, Sprite, MAX_SIDE};
+use spritebit_core::{
+    export_web, import_web, load_native, render_rgba_step, save_native, tools, History, Project, Rect, Sprite, MAX_SIDE,
+};
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -27,6 +32,8 @@ const ZOOM_MIN: f32 = 0.05;
 const ZOOM_MAX: f32 = 64.0;
 /// Ab dieser Zoomstufe werden Gitterlinien gezeichnet.
 const GRID_FROM: f32 = 8.0;
+/// Dateiendung des eigenen Formats.
+const EXT: &str = "spritebit";
 
 /// Schachbrett für transparente Stellen (dunkel, wie in der Web-Version).
 const CHECKER: [[u8; 3]; 2] = [[0x20, 0x20, 0x2c], [0x2a, 0x2a, 0x38]];
@@ -35,7 +42,7 @@ const CHECKER: [[u8; 3]; 2] = [[0x20, 0x20, 0x2c], [0x2a, 0x2a, 0x38]];
 /// nichts davon, wird sie nicht neu gerechnet.
 struct CanvasTexture {
     handle: egui::TextureHandle,
-    key: (Rect, u32, usize, u64),
+    key: (usize, Rect, u32, usize, u64),
 }
 
 /// Dialog „Neuer Sprite".
@@ -45,9 +52,14 @@ struct NewDialog {
 }
 
 struct SpritebitApp {
-    sprite: Sprite,
-    palette: Palette,
-    history: History,
+    project: Project,
+    /// Undo je Sprite, gleiche Reihenfolge wie `project.sprites`.
+    histories: Vec<History>,
+    /// Wohin „Speichern" schreibt — `None`, solange nie gespeichert.
+    path: Option<PathBuf>,
+    dirty: bool,
+    /// Zuletzt in die Titelleiste geschriebener Titel.
+    title: String,
     /// Aktuelle Farbe (Palette-Nummer, 0 = Radierer).
     color: u16,
     zoom: f32,
@@ -63,14 +75,20 @@ struct SpritebitApp {
     hover: Option<(i64, i64)>,
     new_dialog: Option<NewDialog>,
     about_open: bool,
+    /// Fehlermeldung, die als Fenster angezeigt wird.
+    error: Option<String>,
 }
 
 impl SpritebitApp {
     fn new() -> Self {
+        let project = Project::default();
+        let histories = project.sprites.iter().map(|_| History::default()).collect();
         SpritebitApp {
-            sprite: Sprite::new("Sprite 1", 64, 64).expect("gültige Größe"),
-            palette: Palette::grayscale(),
-            history: History::default(),
+            project,
+            histories,
+            path: None,
+            dirty: false,
+            title: String::new(),
             color: 5,
             zoom: 8.0,
             pan: Vec2::ZERO,
@@ -82,37 +100,167 @@ impl SpritebitApp {
             hover: None,
             new_dialog: None,
             about_open: false,
+            error: None,
         }
     }
 
+    fn sprite(&self) -> &Sprite {
+        self.project.sprite()
+    }
+
+    fn history(&mut self) -> &mut History {
+        &mut self.histories[self.project.current]
+    }
+
+    /// Bild hat sich geändert: Textur neu rechnen, als ungespeichert merken.
     fn changed(&mut self) {
         self.version = self.version.wrapping_add(1);
+        self.dirty = true;
     }
 
     fn undo(&mut self) {
-        if self.history.undo(&mut self.sprite) {
+        let cur = self.project.current;
+        if self.histories[cur].undo(&mut self.project.sprites[cur]) {
             self.changed();
         }
     }
 
     fn redo(&mut self) {
-        if self.history.redo(&mut self.sprite) {
+        let cur = self.project.current;
+        if self.histories[cur].redo(&mut self.project.sprites[cur]) {
             self.changed();
         }
     }
 
-    fn new_sprite(&mut self, width: u32, height: u32) {
-        if let Ok(sp) = Sprite::new("Sprite 1", width, height) {
-            self.sprite = sp;
-            self.history.clear();
+    fn select_sprite(&mut self, i: usize) {
+        if i < self.project.sprites.len() && i != self.project.current {
+            self.project.current = i;
+            self.stroke_last = None;
             self.fit_pending = true;
-            self.changed();
+            self.version = self.version.wrapping_add(1);
         }
     }
 
+    fn add_sprite(&mut self, width: u32, height: u32) {
+        let name = self.project.fresh_name();
+        if let Ok(sp) = Sprite::new(name, width, height) {
+            self.project.sprites.push(sp);
+            self.histories.push(History::default());
+            self.select_sprite(self.project.sprites.len() - 1);
+            self.dirty = true;
+        }
+    }
+
+    // ── Datei ───────────────────────────────────────────────────────
+    fn replace_project(&mut self, project: Project, path: Option<PathBuf>) {
+        self.histories = project.sprites.iter().map(|_| History::default()).collect();
+        self.project = project;
+        self.path = path;
+        self.dirty = false;
+        self.stroke_last = None;
+        self.fit_pending = true;
+        self.version = self.version.wrapping_add(1);
+    }
+
+    fn open(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .set_title("Projekt öffnen")
+            .add_filter("spritebit-Projekt", &[EXT, "json"])
+            .add_filter("Alle Dateien", &["*"])
+            .pick_file()
+        else {
+            return;
+        };
+        match std::fs::read(&path) {
+            Err(e) => self.error = Some(format!("{} konnte nicht gelesen werden: {e}", path.display())),
+            Ok(bytes) => {
+                // Eigenes Format erkennt man am Anfang; alles andere wird als
+                // Projektdatei der Web-Version versucht.
+                let result = if bytes.starts_with(b"SPRITEBIT\0") {
+                    load_native(&bytes).map(|p| (p, Some(path.clone())))
+                } else {
+                    // Aus einer Web-Datei wird beim Speichern eine .spritebit-Datei.
+                    std::str::from_utf8(&bytes)
+                        .map_err(|_| spritebit_core::IoError::NotAProject("kein Text".into()))
+                        .and_then(import_web)
+                        .map(|p| (p, None))
+                };
+                match result {
+                    Ok((p, keep_path)) => {
+                        self.replace_project(p, keep_path);
+                        if self.path.is_none() {
+                            // Web-Projekt: ungespeichert, damit „Speichern" nach dem Ziel fragt.
+                            self.dirty = true;
+                        }
+                    }
+                    Err(e) => self.error = Some(e.to_string()),
+                }
+            }
+        }
+    }
+
+    fn save(&mut self) {
+        match self.path.clone() {
+            Some(path) => self.write_native(&path),
+            None => self.save_as(),
+        }
+    }
+
+    fn save_as(&mut self) {
+        let name = format!("{}.{EXT}", self.sprite().name);
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title("Projekt speichern")
+            .add_filter("spritebit-Projekt", &[EXT])
+            .set_file_name(name)
+            .save_file()
+        {
+            let path = if path.extension().is_none() { path.with_extension(EXT) } else { path };
+            self.write_native(&path);
+        }
+    }
+
+    fn write_native(&mut self, path: &Path) {
+        match std::fs::write(path, save_native(&self.project)) {
+            Ok(()) => {
+                self.path = Some(path.to_path_buf());
+                self.dirty = false;
+            }
+            Err(e) => self.error = Some(format!("{} konnte nicht gespeichert werden: {e}", path.display())),
+        }
+    }
+
+    fn export_web(&mut self) {
+        let name = format!("{}.json", self.sprite().name);
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title("Als Web-Projekt exportieren")
+            .add_filter("Web-Projekt (JSON)", &["json"])
+            .set_file_name(name)
+            .save_file()
+        {
+            if let Err(e) = std::fs::write(&path, export_web(&self.project)) {
+                self.error = Some(format!("{} konnte nicht geschrieben werden: {e}", path.display()));
+            }
+        }
+    }
+
+    /// Titelleiste: Dateiname und ein Sternchen bei ungespeicherten Änderungen.
+    fn sync_title(&mut self, ctx: &egui::Context) {
+        let file = self
+            .path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .map_or_else(|| "Unbenannt".to_string(), |n| n.to_string_lossy().into_owned());
+        let title = format!("{}{} — spritebit", file, if self.dirty { " *" } else { "" });
+        if title != self.title {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+            self.title = title;
+        }
+    }
+
+    // ── Ansicht ─────────────────────────────────────────────────────
     /// Ganze Fläche einpassen und mittig stellen.
     fn fit(&mut self, area: egui::Rect) {
-        let (w, h) = (self.sprite.width as f32, self.sprite.height as f32);
+        let (w, h) = (self.sprite().width as f32, self.sprite().height as f32);
         let z = (area.width() / w).min(area.height() / h) * 0.9;
         self.zoom = z.clamp(ZOOM_MIN, ZOOM_MAX);
         self.pan = (area.size() - Vec2::new(w, h) * self.zoom) / 2.0;
@@ -129,13 +277,27 @@ impl SpritebitApp {
 
     // ── Tastenkürzel ────────────────────────────────────────────────
     fn shortcuts(&mut self, ctx: &egui::Context) {
-        let (undo, redo, redo2) = ctx.input_mut(|i| {
+        let cmd = Modifiers::COMMAND;
+        let cmd_shift = Modifiers::COMMAND | Modifiers::SHIFT;
+        // Die längeren Kürzel zuerst: Strg+Umschalt+S darf nicht als Strg+S gelten.
+        let (save_as, save, open, redo2, undo, redo) = ctx.input_mut(|i| {
             (
-                i.consume_key(Modifiers::COMMAND, Key::Z),
-                i.consume_key(Modifiers::COMMAND, Key::Y),
-                i.consume_key(Modifiers::COMMAND | Modifiers::SHIFT, Key::Z),
+                i.consume_key(cmd_shift, Key::S),
+                i.consume_key(cmd, Key::S),
+                i.consume_key(cmd, Key::O),
+                i.consume_key(cmd_shift, Key::Z),
+                i.consume_key(cmd, Key::Z),
+                i.consume_key(cmd, Key::Y),
             )
         });
+        if save_as {
+            self.save_as();
+        } else if save {
+            self.save();
+        }
+        if open {
+            self.open();
+        }
         if undo {
             self.undo();
         }
@@ -149,7 +311,21 @@ impl SpritebitApp {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("Datei", |ui| {
                 if ui.button("Neuer Sprite …").clicked() {
-                    self.new_dialog = Some(NewDialog { width: self.sprite.width, height: self.sprite.height });
+                    self.new_dialog = Some(NewDialog { width: self.sprite().width, height: self.sprite().height });
+                }
+                ui.separator();
+                if ui.add(egui::Button::new("Öffnen …").shortcut_text("Strg+O")).clicked() {
+                    self.open();
+                }
+                if ui.add(egui::Button::new("Speichern").shortcut_text("Strg+S")).clicked() {
+                    self.save();
+                }
+                if ui.add(egui::Button::new("Speichern unter …").shortcut_text("Strg+Umschalt+S")).clicked() {
+                    self.save_as();
+                }
+                ui.separator();
+                if ui.button("Als Web-Projekt exportieren …").clicked() {
+                    self.export_web();
                 }
                 ui.separator();
                 if ui.button("Beenden").clicked() {
@@ -157,16 +333,11 @@ impl SpritebitApp {
                 }
             });
             ui.menu_button("Bearbeiten", |ui| {
-                if ui
-                    .add_enabled(self.history.can_undo(), egui::Button::new("Rückgängig").shortcut_text("Strg+Z"))
-                    .clicked()
-                {
+                let (can_undo, can_redo) = (self.history().can_undo(), self.history().can_redo());
+                if ui.add_enabled(can_undo, egui::Button::new("Rückgängig").shortcut_text("Strg+Z")).clicked() {
                     self.undo();
                 }
-                if ui
-                    .add_enabled(self.history.can_redo(), egui::Button::new("Wiederholen").shortcut_text("Strg+Y"))
-                    .clicked()
-                {
+                if ui.add_enabled(can_redo, egui::Button::new("Wiederholen").shortcut_text("Strg+Y")).clicked() {
                     self.redo();
                 }
             });
@@ -187,43 +358,69 @@ impl SpritebitApp {
         });
     }
 
-    // ── Farbleiste ──────────────────────────────────────────────────
-    fn palette_panel(&mut self, ui: &mut egui::Ui) {
+    // ── Linke Leiste: Sprites und Farben ────────────────────────────
+    fn side_panel(&mut self, ui: &mut egui::Ui) {
         ui.add_space(6.0);
-        ui.label("Farben");
-        ui.add_space(4.0);
-        let size = Vec2::splat(26.0);
-        for i in 0..=self.palette.len() as u16 {
-            let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
-            let p = ui.painter();
-            match self.palette.get(i) {
-                Some([r, g, b]) => {
-                    p.rect_filled(rect, 3.0, Color32::from_rgb(r, g, b));
+        ui.horizontal(|ui| {
+            ui.strong("Sprites");
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.small_button("+").on_hover_text("Neuer Sprite").clicked() {
+                    self.new_dialog = Some(NewDialog { width: self.sprite().width, height: self.sprite().height });
                 }
-                None => {
-                    // Transparent: kleines Schachbrett.
-                    let half = rect.size() / 2.0;
-                    for (qx, qy) in [(0u8, 0u8), (1, 0), (0, 1), (1, 1)] {
-                        let [r, g, b] = CHECKER[((qx + qy) % 2) as usize];
-                        let min = rect.min + Vec2::new(qx as f32 * half.x, qy as f32 * half.y);
-                        p.rect_filled(egui::Rect::from_min_size(min, half), 0.0, Color32::from_rgb(r, g, b));
+            });
+        });
+        let mut pick = None;
+        for (i, sp) in self.project.sprites.iter().enumerate() {
+            let label = format!("{}  ·  {}×{}", sp.name, sp.width, sp.height);
+            if ui.selectable_label(i == self.project.current, label).clicked() {
+                pick = Some(i);
+            }
+        }
+        if let Some(i) = pick {
+            self.select_sprite(i);
+        }
+
+        ui.add_space(10.0);
+        ui.strong("Farben");
+        ui.add_space(4.0);
+        let palette = self.project.current_palette();
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = Vec2::splat(4.0);
+            let size = Vec2::splat(24.0);
+            for i in 0..=palette.len() as u16 {
+                let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+                let p = ui.painter();
+                match palette.get(i) {
+                    Some([r, g, b]) => {
+                        p.rect_filled(rect, 3.0, Color32::from_rgb(r, g, b));
+                    }
+                    None => {
+                        // Transparent: kleines Schachbrett.
+                        let half = rect.size() / 2.0;
+                        for (qx, qy) in [(0u8, 0u8), (1, 0), (0, 1), (1, 1)] {
+                            let [r, g, b] = CHECKER[((qx + qy) % 2) as usize];
+                            let min = rect.min + Vec2::new(qx as f32 * half.x, qy as f32 * half.y);
+                            p.rect_filled(egui::Rect::from_min_size(min, half), 0.0, Color32::from_rgb(r, g, b));
+                        }
                     }
                 }
+                if self.color == i {
+                    p.rect_stroke(rect.expand(2.0), 4.0, Stroke::new(2.0, Color32::WHITE), egui::StrokeKind::Outside);
+                }
+                if resp.clicked() {
+                    self.color = i;
+                }
+                resp.on_hover_text(if i == 0 { "0 · Transparent (Radierer)".to_string() } else { format!("Farbe {i}") });
             }
-            if self.color == i {
-                p.rect_stroke(rect.expand(2.0), 4.0, Stroke::new(2.0, Color32::WHITE), egui::StrokeKind::Outside);
-            }
-            if resp.clicked() {
-                self.color = i;
-            }
-            resp.on_hover_text(if i == 0 { "0 · Transparent (Radierer)".to_string() } else { format!("Farbe {i}") });
-        }
+        });
+        ui.add_space(4.0);
+        ui.weak(format!("Palette: {}", palette.name));
     }
 
     // ── Statusleiste ────────────────────────────────────────────────
     fn status_bar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            let sp = &self.sprite;
+            let sp = self.sprite();
             ui.label(format!("{} × {} px", sp.width, sp.height));
             ui.separator();
             ui.label(format!("Zoom {:.0} %", self.zoom * 100.0));
@@ -286,12 +483,14 @@ impl SpritebitApp {
         if painting {
             if let Some(cell) = pointer.map(to_cell) {
                 if self.stroke_last.is_none() {
-                    self.history.record(&self.sprite);
+                    let cur = self.project.current;
+                    self.histories[cur].record(&self.project.sprites[cur]);
                 }
                 let from = self.stroke_last.unwrap_or(cell);
                 let value = if secondary { 0 } else { self.color };
-                let (w, h) = (self.sprite.width as i64, self.sprite.height as i64);
-                let img = self.sprite.active();
+                let sp = self.project.sprite_mut();
+                let (w, h) = (sp.width as i64, sp.height as i64);
+                let img = sp.active();
                 for (x, y) in tools::line(from.0, from.1, cell.0, cell.1) {
                     if x >= 0 && y >= 0 && x < w && y < h {
                         img.set(x as u32, y as u32, value);
@@ -305,7 +504,7 @@ impl SpritebitApp {
         }
 
         // Sichtbarer Ausschnitt in Sprite-Pixeln.
-        let (sw, sh) = (self.sprite.width, self.sprite.height);
+        let (sw, sh) = (self.sprite().width, self.sprite().height);
         let lo = (area.min - origin) / zoom;
         let hi = (area.max - origin) / zoom;
         let x0 = lo.x.floor().clamp(0.0, sw as f32) as u32;
@@ -320,9 +519,11 @@ impl SpritebitApp {
         // Herausgezoomt: nur jedes n-te Pixel, sonst wäre die Textur größer
         // als der Bildschirm.
         let step = if zoom < 1.0 { (1.0 / zoom).floor() as u32 } else { 1 };
-        let key = (rect, step, self.sprite.frame, self.version);
+        let key = (self.project.current, rect, step, self.sprite().frame, self.version);
         if self.texture.as_ref().map(|t| t.key) != Some(key) {
-            let (mut buf, tw, th) = render_rgba_step(&self.sprite, &self.palette, self.sprite.frame, rect, step);
+            let palette = self.project.current_palette();
+            let sp = self.sprite();
+            let (mut buf, tw, th) = render_rgba_step(sp, &palette, sp.frame, rect, step);
             // Transparente Stellen als Schachbrett, ein Feld je Sprite-Pixel.
             for ty in 0..th {
                 for tx in 0..tw {
@@ -389,6 +590,7 @@ impl SpritebitApp {
         painter.rect_stroke(border, 0.0, Stroke::new(1.0, Color32::from_gray(70)), egui::StrokeKind::Outside);
     }
 
+    // ── Dialoge ─────────────────────────────────────────────────────
     fn dialogs(&mut self, ctx: &egui::Context) {
         let mut create = None;
         let mut close = false;
@@ -420,7 +622,7 @@ impl SpritebitApp {
             });
         }
         if let Some((w, h)) = create {
-            self.new_sprite(w, h);
+            self.add_sprite(w, h);
             close = true;
         }
         if close {
@@ -437,6 +639,18 @@ impl SpritebitApp {
                     ui.label("© 2026 Marco Jan");
                 });
         }
+        let mut dismiss = false;
+        if let Some(msg) = &self.error {
+            egui::Window::new("Hinweis").collapsible(false).resizable(false).show(ctx, |ui| {
+                ui.label(msg);
+                if ui.button("OK").clicked() {
+                    dismiss = true;
+                }
+            });
+        }
+        if dismiss {
+            self.error = None;
+        }
     }
 }
 
@@ -446,10 +660,11 @@ impl eframe::App for SpritebitApp {
         self.shortcuts(&ctx);
         egui::Panel::top("menu").show(ui, |ui| self.menu_bar(ui));
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
-        egui::Panel::left("palette").resizable(false).exact_size(52.0).show(ui, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| self.palette_panel(ui));
+        egui::Panel::left("side").resizable(true).default_size(180.0).show(ui, |ui| {
+            egui::ScrollArea::vertical().show(ui, |ui| self.side_panel(ui));
         });
         egui::CentralPanel::default().show(ui, |ui| self.canvas(ui));
         self.dialogs(&ctx);
+        self.sync_title(&ctx);
     }
 }

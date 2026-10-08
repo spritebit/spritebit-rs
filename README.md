@@ -41,8 +41,19 @@ cargo build --release           # schnelle Fassung (target/release)
 | Rechte Maustaste | radieren |
 | Mausrad / Strg+Mausrad | zoomen um den Mauszeiger |
 | Mittlere Taste oder Leertaste + Ziehen | Fläche verschieben |
-| Strg+Z / Strg+Y | Rückgängig / Wiederholen |
+| Strg+Z / Strg+Y | Rückgängig / Wiederholen (je Sprite) |
+| Strg+O / Strg+S / Strg+Umschalt+S | Öffnen / Speichern / Speichern unter |
 | Datei → Neuer Sprite … | Größe bis 8192 × 8192 |
+| Datei → Als Web-Projekt exportieren … | Projektdatei für die Web-Version |
 | Ansicht | Einpassen, 100 %, Gitter |
 
 Die Statusleiste zeigt, wie viele Kacheln tatsächlich Speicher belegen.
+
+## Dateiformate
+
+* **`.spritebit`** — eigenes Format: Kopf als JSON, danach nur die bemalten
+  Kacheln, alles zlib-komprimiert. Eine große, kaum bemalte Fläche bleibt klein.
+* **Web-Projekt (`.json`)** — die Projektdatei der Web-Version (Schema 2) lässt
+  sich öffnen und exportieren. `crates/spritebit-core/tests/fixtures/web-projekt.json`
+  wurde mit den Funktionen der Web-Version erzeugt; der Test dazu fällt auf, wenn
+  sich eines der Formate verschiebt.
