@@ -119,6 +119,8 @@ pub(crate) struct Pointer {
     pub pressed: bool,
     pub released: bool,
     pub panning: bool,
+    /// Alt gedrückt: Pipette statt Malen.
+    pub alt: bool,
 }
 
 impl SpritebitApp {
@@ -147,6 +149,16 @@ impl SpritebitApp {
             }
             if matches!(self.tool, Tool::Rect | Tool::Ellipse) {
                 ui.checkbox(&mut self.filled, "Gefüllt");
+            }
+            ui.separator();
+            let c = ui.visuals().text_color();
+            let mx = egui::Button::selectable(self.mirror_x, icons::image(icons::MIRROR_X, c));
+            if ui.add(mx).on_hover_text("Symmetrie: links ↔ rechts").clicked() {
+                self.mirror_x = !self.mirror_x;
+            }
+            let my = egui::Button::selectable(self.mirror_y, icons::image(icons::MIRROR_Y, c));
+            if ui.add(my).on_hover_text("Symmetrie: oben ↔ unten").clicked() {
+                self.mirror_y = !self.mirror_y;
             }
             self.selection_bar(ui);
         });
@@ -190,6 +202,14 @@ impl SpritebitApp {
             self.shape_start = None;
             return;
         }
+        // Alt+Klick: Pipette — mit jedem Malwerkzeug.
+        if p.alt && p.pressed && p.over {
+            if let Some(c) = p.cell {
+                self.pick_color(c.0, c.1);
+            }
+            self.blocked = true;
+            return;
+        }
         if self.is_select_tool() {
             if p.pressed && p.over && self.playing {
                 self.playing = false;
@@ -216,8 +236,7 @@ impl SpritebitApp {
             if let (Some(start), Some(end)) = (self.shape_start.take(), self.shape_end.take()) {
                 self.record();
                 let (spans, value) = (self.shape_spans(start, end), self.shape_value);
-                tools::fill_spans(self.project.sprite_mut().active(), spans, value);
-                self.changed();
+                self.paint(spans, value);
             }
             self.stroke_last = None;
             self.blocked = false;
@@ -259,7 +278,11 @@ impl SpritebitApp {
         match self.tool {
             Tool::Fill => {
                 self.record();
-                let n = tools::flood_fill(self.project.sprite_mut().active(), cell.0, cell.1, value);
+                // Mit Symmetrie auch an den gespiegelten Stellen füllen.
+                let (w, h) = (self.sprite().width, self.sprite().height);
+                let points = tools::mirror_spans(vec![(cell.1, cell.0, cell.0)], w, h, self.mirror_x, self.mirror_y);
+                let img = self.project.sprite_mut().active();
+                let n: usize = points.iter().map(|&(y, x, _)| tools::flood_fill(img, x, y, value)).sum();
                 if n > 0 {
                     self.changed();
                 }
@@ -286,10 +309,18 @@ impl SpritebitApp {
     fn stroke(&mut self, a: (i64, i64), b: (i64, i64), erase: bool) {
         let value = self.value(erase);
         let size = if self.tool == Tool::Pencil { 1 } else { self.size };
-        let img = self.project.sprite_mut().active();
-        for (x, y) in tools::line(a.0, a.1, b.0, b.1) {
-            tools::fill_spans(img, tools::stamp(x, y, size).spans(), value);
-        }
+        let spans: Vec<Span> = tools::line(a.0, a.1, b.0, b.1)
+            .into_iter()
+            .flat_map(|(x, y)| tools::stamp(x, y, size).spans())
+            .collect();
+        self.paint(spans, value);
+    }
+
+    /// Abschnitte malen — mit Symmetrie auch gespiegelt.
+    fn paint(&mut self, spans: Vec<Span>, value: Px) {
+        let (w, h) = (self.sprite().width, self.sprite().height);
+        let spans = tools::mirror_spans(spans, w, h, self.mirror_x, self.mirror_y);
+        tools::fill_spans(self.project.sprite_mut().active(), spans, value);
         self.changed();
     }
 
@@ -298,9 +329,7 @@ impl SpritebitApp {
         let r = self.size as f64 * 1.5 + 1.0;
         let count = (self.size as usize).max(1) * 2;
         let pts = tools::spray(cell.0, cell.1, r, count, &mut self.rng);
-        let img = self.project.sprite_mut().active();
-        tools::fill_spans(img, pts.into_iter().map(|(x, y)| (y, x, x)), value);
-        self.changed();
+        self.paint(pts.into_iter().map(|(x, y)| (y, x, x)).collect(), value);
     }
 
     fn shape_spans(&self, a: (i64, i64), b: (i64, i64)) -> Vec<Span> {

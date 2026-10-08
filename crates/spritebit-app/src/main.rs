@@ -10,6 +10,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod icons;
+mod palette_ui;
 mod selection_ui;
 mod timeline;
 mod tools_ui;
@@ -119,6 +120,10 @@ struct SpritebitApp {
     clipboard: Option<Clip>,
     /// Toleranz von Farbwahl und Zauberstab, 0.0–1.0.
     tolerance: f64,
+    /// Symmetrie: an der senkrechten (x) bzw. waagerechten (y) Mitte spiegeln.
+    mirror_x: bool,
+    mirror_y: bool,
+    palette_edit: bool,
 }
 
 impl SpritebitApp {
@@ -160,6 +165,9 @@ impl SpritebitApp {
             sel_drag: None,
             clipboard: None,
             tolerance: 0.25,
+            mirror_x: false,
+            mirror_y: false,
+            palette_edit: false,
             rng: spritebit_core::tools::Rng::new(
                 std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64),
             ),
@@ -208,6 +216,7 @@ impl SpritebitApp {
         if i < self.project.sprites.len() && i != self.project.current {
             self.deselect();
             self.project.current = i;
+            self.clamp_color();
             self.stroke_last = None;
             self.fit_pending = true;
             self.version = self.version.wrapping_add(1);
@@ -514,38 +523,7 @@ impl SpritebitApp {
         ui.add_space(10.0);
         ui.strong("Farben");
         ui.add_space(4.0);
-        let palette = self.project.current_palette();
-        ui.horizontal_wrapped(|ui| {
-            ui.spacing_mut().item_spacing = Vec2::splat(4.0);
-            let size = Vec2::splat(24.0);
-            for i in 0..=palette.len() as u16 {
-                let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
-                let p = ui.painter();
-                match palette.get(i) {
-                    Some([r, g, b]) => {
-                        p.rect_filled(rect, 3.0, Color32::from_rgb(r, g, b));
-                    }
-                    None => {
-                        // Transparent: kleines Schachbrett.
-                        let half = rect.size() / 2.0;
-                        for (qx, qy) in [(0u8, 0u8), (1, 0), (0, 1), (1, 1)] {
-                            let [r, g, b] = CHECKER[((qx + qy) % 2) as usize];
-                            let min = rect.min + Vec2::new(qx as f32 * half.x, qy as f32 * half.y);
-                            p.rect_filled(egui::Rect::from_min_size(min, half), 0.0, Color32::from_rgb(r, g, b));
-                        }
-                    }
-                }
-                if self.color == i {
-                    p.rect_stroke(rect.expand(2.0), 4.0, Stroke::new(2.0, Color32::WHITE), egui::StrokeKind::Outside);
-                }
-                if resp.clicked() {
-                    self.color = i;
-                }
-                resp.on_hover_text(if i == 0 { "0 · Transparent (Radierer)".to_string() } else { format!("Farbe {i}") });
-            }
-        });
-        ui.add_space(4.0);
-        ui.weak(format!("Palette: {}", palette.name));
+        self.colors_panel(ui);
     }
 
     // ── Statusleiste ────────────────────────────────────────────────
@@ -594,10 +572,11 @@ impl SpritebitApp {
                 i.pointer.delta(),
             )
         });
-        let (pressed, released) = ui.input(|i| {
+        let (pressed, released, alt) = ui.input(|i| {
             (
                 i.pointer.primary_pressed() || i.pointer.secondary_pressed(),
                 i.pointer.primary_released() || i.pointer.secondary_released(),
+                i.modifiers.alt,
             )
         });
         if let Some(at) = pointer.filter(|p| area.contains(*p)) {
@@ -629,6 +608,7 @@ impl SpritebitApp {
             pressed,
             released,
             panning,
+            alt,
         };
         self.use_tool(&p, ui.ctx());
 
@@ -744,6 +724,16 @@ impl SpritebitApp {
                     line,
                 );
             }
+        }
+        // Symmetrie-Achsen
+        let axis = Stroke::new(1.0, Color32::from_rgba_unmultiplied(108, 158, 248, 160));
+        if self.mirror_x {
+            let x = origin.x + sw as f32 * zoom / 2.0;
+            painter.line_segment([Pos2::new(x, origin.y), Pos2::new(x, origin.y + sh as f32 * zoom)], axis);
+        }
+        if self.mirror_y {
+            let y = origin.y + sh as f32 * zoom / 2.0;
+            painter.line_segment([Pos2::new(origin.x, y), Pos2::new(origin.x + sw as f32 * zoom, y)], axis);
         }
         // Form, die gerade aufgezogen wird, und der Rahmen der Auswahl.
         self.shape_preview(&painter, origin, zoom);
@@ -1008,6 +998,45 @@ mod tests {
         h.run();
         assert_eq!(px(&h, 0, 0), 0);
         assert_eq!(px(&h, 63, 63), 0);
+    }
+
+    #[test]
+    fn symmetrie_malt_gespiegelt() {
+        let mut h = app();
+        h.state_mut().mirror_x = true;
+        drag(&mut h, (2.0, 5.0), (2.0, 5.0));
+        assert_eq!(px(&h, 2, 5), 5);
+        assert_eq!(px(&h, 61, 5), 5, "64 - 1 - 2");
+    }
+
+    #[test]
+    fn pipette_mit_alt() {
+        let mut h = app();
+        h.state_mut().project.sprite_mut().active().set(7, 7, 3);
+        let p = at(&h, 7.0, 7.0);
+        h.hover_at(p);
+        h.run();
+        h.event_modifiers(
+            egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed: true, modifiers: Modifiers::ALT },
+            Modifiers::ALT,
+        );
+        h.run();
+        h.event_modifiers(
+            egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed: false, modifiers: Modifiers::ALT },
+            Modifiers::ALT,
+        );
+        h.run();
+        assert_eq!(h.state().color, 3);
+        assert_eq!(px(&h, 7, 7), 3, "nichts übermalt");
+    }
+
+    #[test]
+    fn freie_farbe_und_palette_bearbeiten() {
+        let mut h = app();
+        h.state_mut().set_rgb([1, 2, 3]);
+        assert!(h.state().color >= spritebit_core::FREE_BASE);
+        h.state_mut().set_rgb([0xff, 0xff, 0xff]);
+        assert_eq!(h.state().color, 1, "Palettenfarbe wird erkannt");
     }
 
     #[test]

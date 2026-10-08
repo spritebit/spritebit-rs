@@ -202,6 +202,27 @@ pub fn flood_fill(img: &mut Image, x: i64, y: i64, value: Px) -> usize {
     changed
 }
 
+/// Symmetrie: zu jedem Abschnitt die Spiegelbilder an der senkrechten
+/// (`mx`, links ↔ rechts) und/oder waagerechten Mittelachse (`my`) einer
+/// Fläche `w` × `h` dazu.
+pub fn mirror_spans(spans: Vec<Span>, w: u32, h: u32, mx: bool, my: bool) -> Vec<Span> {
+    let (w, h) = (w as i64, h as i64);
+    let mut out = Vec::with_capacity(spans.len() * (1 + mx as usize) * (1 + my as usize));
+    for (y, a, b) in spans {
+        out.push((y, a, b));
+        if mx {
+            out.push((y, w - 1 - b, w - 1 - a));
+        }
+        if my {
+            out.push((h - 1 - y, a, b));
+        }
+        if mx && my {
+            out.push((h - 1 - y, w - 1 - b, w - 1 - a));
+        }
+    }
+    out
+}
+
 /// Kleiner Zufallsgenerator (xorshift) — für Spray reicht das, und es
 /// braucht keine Abhängigkeit.
 #[derive(Clone, Debug)]
@@ -332,6 +353,13 @@ mod tests {
         let pts = spray(50, 50, 5.0, 200, &mut rng);
         assert_eq!(pts.len(), 200);
         assert!(pts.iter().all(|&(x, y)| ((x - 50).pow(2) + (y - 50).pow(2)) as f64 <= 6.0 * 6.0));
+    }
+
+    #[test]
+    fn spiegeln_an_beiden_achsen() {
+        let m = mirror_spans(vec![(1, 0, 2)], 10, 8, true, true);
+        assert_eq!(m, vec![(1, 0, 2), (1, 7, 9), (6, 0, 2), (6, 7, 9)]);
+        assert_eq!(mirror_spans(vec![(1, 0, 2)], 10, 8, false, false), vec![(1, 0, 2)]);
     }
 
     #[test]
