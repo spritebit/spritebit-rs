@@ -48,7 +48,7 @@ impl SpritebitApp {
     }
 
     /// Inhalt der Auswahl anheben: aus dem Bild nehmen, schwebend halten.
-    fn lift(&mut self) {
+    pub(crate) fn lift(&mut self) {
         if self.float.is_some() {
             return;
         }

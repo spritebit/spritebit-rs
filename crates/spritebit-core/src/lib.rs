@@ -14,11 +14,14 @@
 //! * [`io`] — eigenes Format `.spritebit` und Projektdatei der Web-Version
 //! * [`selection`] — Auswahl (Rechteck, Lasso, Farbe), kopieren, einfügen
 //! * [`cels`] — Zellen-Bereiche der Timeline: verschieben, kopieren, verknüpfen
+//! * [`cleanup`] — Hintergrund entfernen, glätten, Outline, Median-Cut
 //! * [`export`] — PNG, GIF, Spritesheet mit JSON-Atlas
+//! * [`transform`] — spiegeln, drehen, zuschneiden, Leinwand, skalieren
 //! * [`builtin`] — die eingebauten Paletten der Web-Version
 
 pub mod builtin;
 pub mod cels;
+pub mod cleanup;
 pub mod composite;
 pub mod export;
 pub mod history;
@@ -28,6 +31,7 @@ pub mod palette;
 pub mod project;
 pub mod selection;
 pub mod sprite;
+pub mod transform;
 pub mod tools;
 
 pub use composite::{render_rgba, render_rgba_step, Rect};

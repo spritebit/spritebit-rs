@@ -12,6 +12,7 @@
 mod export_ui;
 mod i18n;
 mod icons;
+mod image_ui;
 mod palette_ui;
 mod selection_ui;
 mod timeline;
@@ -143,6 +144,8 @@ struct SpritebitApp {
     unsaved_ask: Option<Pending>,
     /// Schließen ist bestätigt (nach Speichern oder Verwerfen).
     allow_close: bool,
+    /// Panels „Bild“ und „Aufräumen“.
+    image: image_ui::ImagePanel,
 }
 
 /// Was nach der Rückfrage „Ungespeicherte Änderungen" passieren soll.
@@ -203,6 +206,7 @@ impl SpritebitApp {
             play_step: 0,
             unsaved_ask: None,
             allow_close: false,
+            image: image_ui::ImagePanel::default(),
             rng: spritebit_core::tools::Rng::new(
                 std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64),
             ),
@@ -226,6 +230,8 @@ impl SpritebitApp {
     /// Undo/Redo: Schwebendes und Auswahl verwerfen — der Stand davor
     /// kommt ja gerade zurück.
     fn drop_selection(&mut self) {
+        self.image.live = None;
+        self.image.angle = 0.0;
         self.float = None;
         self.selection = None;
         self.sel_drag = None;
@@ -249,6 +255,7 @@ impl SpritebitApp {
 
     fn select_sprite(&mut self, i: usize) {
         if i < self.project.sprites.len() && i != self.project.current {
+            self.finish_rotate();
             self.deselect();
             self.project.current = i;
             self.clamp_color();
@@ -930,6 +937,9 @@ impl eframe::App for SpritebitApp {
         egui::Panel::left("side").resizable(true).default_size(180.0).show(ui, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| self.side_panel(ui));
         });
+        egui::Panel::right("panels").resizable(true).default_size(230.0).show(ui, |ui| {
+            egui::ScrollArea::vertical().show(ui, |ui| self.right_panels(ui));
+        });
         egui::CentralPanel::default().show(ui, |ui| self.canvas(ui));
         self.dialogs(&ctx);
         self.export_window(&ctx);
@@ -1178,6 +1188,47 @@ mod tests {
         i18n::set_lang(i18n::Lang::De);
         h.run();
         h.get_by_label("Bearbeiten");
+    }
+
+    #[test]
+    fn bild_spiegeln_ganzer_sprite_und_undo() {
+        let mut h = app();
+        h.state_mut().project.sprite_mut().active().set(0, 3, 5);
+        h.get_by_label("↔ Spiegeln").click();
+        h.run();
+        assert_eq!(px(&h, 63, 3), 5);
+        assert_eq!(px(&h, 0, 3), 0);
+        h.state_mut().undo();
+        assert_eq!(px(&h, 0, 3), 5);
+    }
+
+    #[test]
+    fn bild_drehen_nur_die_auswahl() {
+        let mut h = app();
+        {
+            let a = h.state_mut();
+            a.project.sprite_mut().active().set(10, 10, 5);
+            a.project.sprite_mut().active().set(40, 40, 3);
+            a.selection = Some(Selection::rect(10, 10, 13, 11)); // 4 × 2
+        }
+        h.state_mut().rotate90();
+        h.state_mut().deselect();
+        // Mitte bleibt: 4×2 bei (10,10) → 2×4 bei (11,9); (0,0) landet oben rechts.
+        assert_eq!(px(&h, 12, 9), 5);
+        assert_eq!(px(&h, 40, 40), 3, "außerhalb unberührt");
+    }
+
+    #[test]
+    fn zuschneiden_und_outline() {
+        let mut h = app();
+        h.state_mut().project.sprite_mut().active().set(20, 30, 5);
+        h.get_by_label("Zuschneiden").click();
+        h.run();
+        assert_eq!((h.state().sprite().width, h.state().sprite().height), (1, 1));
+        h.state_mut().undo();
+        assert_eq!(h.state().sprite().width, 64);
+        let n = h.state_mut().clean_for_test_outline();
+        assert_eq!(n, 4);
     }
 
     #[test]

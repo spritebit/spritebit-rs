@@ -35,6 +35,12 @@ impl History {
         self.redo.clear();
     }
 
+    /// Den zuletzt angelegten Schritt verwerfen — für Aktionen, die am Ende
+    /// nichts geändert haben.
+    pub fn drop_last(&mut self) {
+        self.undo.pop();
+    }
+
     /// Letzten Schritt zurücknehmen; `current` wird zum Redo.
     pub fn undo(&mut self, current: &mut Sprite) -> bool {
         match self.undo.pop() {

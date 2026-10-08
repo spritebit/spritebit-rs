@@ -119,6 +119,19 @@ impl Image {
         self.tiles.iter().enumerate().filter_map(|(i, t)| t.as_ref().map(|t| (i, t.as_slice())))
     }
 
+    /// Alle nicht-transparenten Pixel als (x, y, Wert) — geht nur durch die
+    /// belegten Kacheln, kostet bei leeren Flächen also nichts.
+    pub fn pixels(&self) -> impl Iterator<Item = (u32, u32, Px)> + '_ {
+        let cols = Self::cols_for(self.width);
+        self.tiles().flat_map(move |(i, t)| {
+            let (tx, ty) = ((i as u32 % cols) * TILE, (i as u32 / cols) * TILE);
+            t.iter().enumerate().filter(|(_, &v)| v != 0).filter_map(move |(k, &v)| {
+                let (x, y) = (tx + k as u32 % TILE, ty + k as u32 / TILE);
+                (x < self.width && y < self.height).then_some((x, y, v))
+            })
+        })
+    }
+
     /// Anzahl Kacheln insgesamt (belegt oder nicht).
     pub fn tile_slots(&self) -> usize {
         self.tiles.len()
