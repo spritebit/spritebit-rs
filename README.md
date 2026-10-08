@@ -40,6 +40,8 @@ cargo build --release           # schnelle Fassung (target/release)
 | Linke Maustaste | malen mit dem gewählten Werkzeug |
 | Rechte Maustaste | radieren (mit jedem Malwerkzeug) |
 | H P B S F E I R O | Hand, Stift, Pinsel, Spray, Füllen, Radierer, Linie, Rechteck, Ellipse |
+| A L K W | Auswahl, Lasso, Farbwahl, Zauberstab |
+| Strg+A / C / X / V, Entf, Esc, Pfeile | Alles, Kopieren, Ausschneiden, Einfügen, Leeren, Aufheben, Verschieben |
 | Mausrad / Strg+Mausrad | zoomen um den Mauszeiger |
 | Mittlere Taste oder Leertaste + Ziehen | Fläche verschieben |
 | Strg+Z / Strg+Y | Rückgängig / Wiederholen (je Sprite) |

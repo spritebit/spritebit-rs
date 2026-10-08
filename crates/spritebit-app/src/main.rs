@@ -10,6 +10,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod icons;
+mod selection_ui;
 mod timeline;
 mod tools_ui;
 
@@ -17,7 +18,8 @@ use std::path::{Path, PathBuf};
 
 use eframe::egui::{self, Color32, Key, Modifiers, Pos2, Sense, Stroke, Vec2};
 use spritebit_core::{
-    export_web, import_web, load_native, render_rgba_step, save_native, History, Project, Px, Rect, Sprite, MAX_SIDE,
+    export_web, import_web, load_native, render_rgba_step, save_native, selection, Clip, History, Project, Px, Rect,
+    Selection, Sprite, MAX_SIDE,
 };
 use tools_ui::{Pointer, Tool};
 
@@ -110,6 +112,13 @@ struct SpritebitApp {
     rng: spritebit_core::tools::Rng,
     /// Wo die Zeichenfläche zuletzt lag (Bildschirm) — für Tests und Zoom.
     canvas_rect: egui::Rect,
+    selection: Option<Selection>,
+    /// Angehobener Inhalt der Auswahl, der gerade verschoben wird.
+    float: Option<selection_ui::Float>,
+    sel_drag: Option<selection_ui::SelDrag>,
+    clipboard: Option<Clip>,
+    /// Toleranz von Farbwahl und Zauberstab, 0.0–1.0.
+    tolerance: f64,
 }
 
 impl SpritebitApp {
@@ -146,6 +155,11 @@ impl SpritebitApp {
             shape_value: 0,
             blocked: false,
             canvas_rect: egui::Rect::NOTHING,
+            selection: None,
+            float: None,
+            sel_drag: None,
+            clipboard: None,
+            tolerance: 0.25,
             rng: spritebit_core::tools::Rng::new(
                 std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64),
             ),
@@ -166,7 +180,16 @@ impl SpritebitApp {
         self.dirty = true;
     }
 
+    /// Undo/Redo: Schwebendes und Auswahl verwerfen — der Stand davor
+    /// kommt ja gerade zurück.
+    fn drop_selection(&mut self) {
+        self.float = None;
+        self.selection = None;
+        self.sel_drag = None;
+    }
+
     fn undo(&mut self) {
+        self.drop_selection();
         let cur = self.project.current;
         if self.histories[cur].undo(&mut self.project.sprites[cur]) {
             self.changed();
@@ -174,6 +197,7 @@ impl SpritebitApp {
     }
 
     fn redo(&mut self) {
+        self.drop_selection();
         let cur = self.project.current;
         if self.histories[cur].redo(&mut self.project.sprites[cur]) {
             self.changed();
@@ -182,6 +206,7 @@ impl SpritebitApp {
 
     fn select_sprite(&mut self, i: usize) {
         if i < self.project.sprites.len() && i != self.project.current {
+            self.deselect();
             self.project.current = i;
             self.stroke_last = None;
             self.fit_pending = true;
@@ -201,6 +226,7 @@ impl SpritebitApp {
 
     // ── Datei ───────────────────────────────────────────────────────
     fn replace_project(&mut self, project: Project, path: Option<PathBuf>) {
+        self.drop_selection();
         self.histories = project.sprites.iter().map(|_| History::default()).collect();
         self.project = project;
         self.path = path;
@@ -268,6 +294,7 @@ impl SpritebitApp {
     }
 
     fn write_native(&mut self, path: &Path) {
+        self.commit_float();
         match std::fs::write(path, save_native(&self.project)) {
             Ok(()) => {
                 self.path = Some(path.to_path_buf());
@@ -278,6 +305,7 @@ impl SpritebitApp {
     }
 
     fn export_web(&mut self) {
+        self.commit_float();
         let name = format!("{}.json", self.sprite().name);
         if let Some(path) = rfd::FileDialog::new()
             .set_title("Als Web-Projekt exportieren")
@@ -350,6 +378,9 @@ impl SpritebitApp {
                     i.consume_key(none, Key::End),
                 )
             });
+            if prev || next || first || last {
+                self.deselect();
+            }
             let n = self.sprite().frames.len();
             let f = self.sprite().frame;
             if play {
@@ -417,6 +448,28 @@ impl SpritebitApp {
                 }
                 if ui.add_enabled(can_redo, egui::Button::new("Wiederholen").shortcut_text("Strg+Y")).clicked() {
                     self.redo();
+                }
+                ui.separator();
+                let has = self.selection.is_some();
+                if ui.add_enabled(has, egui::Button::new("Ausschneiden").shortcut_text("Strg+X")).clicked() {
+                    self.cut_selection();
+                }
+                if ui.add_enabled(has, egui::Button::new("Kopieren").shortcut_text("Strg+C")).clicked() {
+                    self.copy_selection();
+                }
+                let can_paste = self.clipboard.is_some();
+                if ui.add_enabled(can_paste, egui::Button::new("Einfügen").shortcut_text("Strg+V")).clicked() {
+                    self.paste_clipboard();
+                }
+                ui.separator();
+                if ui.add(egui::Button::new("Alles auswählen").shortcut_text("Strg+A")).clicked() {
+                    self.select_all();
+                }
+                if ui.add_enabled(has, egui::Button::new("Auswahl aufheben").shortcut_text("Esc")).clicked() {
+                    self.deselect();
+                }
+                if ui.add_enabled(has, egui::Button::new("Auswahl leeren").shortcut_text("Entf")).clicked() {
+                    self.delete_selection();
                 }
             });
             ui.menu_button("Ansicht", |ui| {
@@ -600,7 +653,19 @@ impl SpritebitApp {
         if self.texture.as_ref().map(|t| t.key) != Some(key) {
             let palette = self.project.current_palette();
             let sp = self.sprite();
-            let (mut buf, tw, th) = render_rgba_step(sp, &palette, sp.frame, rect, step);
+            // Schwebendes wird in eine Kopie eingesetzt und mitgezeichnet —
+            // die Kopie teilt die Kacheln, nur die berührten werden kopiert.
+            let with_float;
+            let shown = match &self.float {
+                Some(f) => {
+                    let mut c = sp.clone();
+                    selection::paste(c.active(), &f.clip, f.x, f.y);
+                    with_float = c;
+                    &with_float
+                }
+                None => sp,
+            };
+            let (mut buf, tw, th) = render_rgba_step(shown, &palette, sp.frame, rect, step);
             // Onion Skin: Nachbar-Frames, nur ihre Form — rot davor, blau danach.
             let n = sp.frames.len();
             let mut neighbours: Vec<(Vec<u8>, [u8; 3])> = Vec::new();
@@ -680,8 +745,9 @@ impl SpritebitApp {
                 );
             }
         }
-        // Form, die gerade aufgezogen wird.
+        // Form, die gerade aufgezogen wird, und der Rahmen der Auswahl.
         self.shape_preview(&painter, origin, zoom);
+        self.selection_overlay(&painter, origin, zoom, (x0 as i64, y0 as i64, x1 as i64, y1 as i64));
         // Rand der Fläche.
         let border = egui::Rect::from_min_size(origin, Vec2::new(sw as f32, sh as f32) * zoom);
         painter.rect_stroke(border, 0.0, Stroke::new(1.0, Color32::from_gray(70)), egui::StrokeKind::Outside);
@@ -755,6 +821,7 @@ impl eframe::App for SpritebitApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.shortcuts(&ctx);
+        self.selection_keys(&ctx);
         self.tool_keys(&ctx);
         self.advance_playback(&ctx);
         egui::Panel::top("menu").show(ui, |ui| self.menu_bar(ui));
@@ -873,6 +940,74 @@ mod tests {
         drag(&mut h, (10.0, 10.0), (12.0, 10.0));
         assert_eq!(px(&h, 10, 10), 0);
         assert!(h.state().hint.as_deref().is_some_and(|t| t.contains("gesperrt")));
+    }
+
+    #[test]
+    fn auswahl_verschieben_und_rueckgaengig() {
+        let mut h = app();
+        drag(&mut h, (10.0, 10.0), (11.0, 10.0)); // zwei Pixel malen
+        h.key_press(Key::A);
+        h.run();
+        drag(&mut h, (9.0, 9.0), (12.0, 11.0)); // Auswahl um die Pixel
+        assert!(h.state().selection.is_some());
+        drag(&mut h, (10.0, 10.0), (30.0, 20.0)); // darin ziehen = verschieben
+        h.key_press(Key::Escape); // absetzen
+        h.run();
+        assert_eq!(px(&h, 10, 10), 0, "alte Stelle leer");
+        assert_eq!(px(&h, 30, 20), 5);
+        assert_eq!(px(&h, 31, 20), 5);
+        h.key_press_modifiers(Modifiers::COMMAND, Key::Z);
+        h.run();
+        assert_eq!(px(&h, 10, 10), 5, "Undo holt sie zurück");
+        assert_eq!(px(&h, 30, 20), 0);
+    }
+
+    #[test]
+    fn kopieren_und_einfuegen() {
+        let mut h = app();
+        drag(&mut h, (2.0, 2.0), (3.0, 2.0));
+        h.key_press_modifiers(Modifiers::COMMAND, Key::A);
+        h.run();
+        h.key_press_modifiers(Modifiers::COMMAND, Key::C);
+        h.run();
+        h.key_press(Key::Escape);
+        h.run();
+        h.key_press_modifiers(Modifiers::COMMAND, Key::V);
+        h.run();
+        assert!(h.state().float.is_some(), "Eingefügtes schwebt");
+        // eins nach rechts schieben und absetzen
+        h.key_press(Key::ArrowRight);
+        h.run();
+        h.key_press(Key::Escape);
+        h.run();
+        assert_eq!(px(&h, 4, 2), 5);
+        assert_eq!(px(&h, 2, 2), 5, "Original bleibt");
+    }
+
+    #[test]
+    fn zauberstab_loescht_die_flaeche() {
+        let mut h = app();
+        h.key_press(Key::F);
+        h.run();
+        let p = at(&h, 5.0, 5.0);
+        h.hover_at(p);
+        h.run();
+        h.drag_at(p);
+        h.run();
+        h.drop_at(p);
+        h.run();
+        assert_eq!(px(&h, 0, 0), 5);
+        h.key_press(Key::W);
+        h.run();
+        let p = at(&h, 5.0, 5.0);
+        h.hover_at(p);
+        h.run();
+        h.drag_at(p);
+        h.run();
+        h.drop_at(p);
+        h.run();
+        assert_eq!(px(&h, 0, 0), 0);
+        assert_eq!(px(&h, 63, 63), 0);
     }
 
     #[test]

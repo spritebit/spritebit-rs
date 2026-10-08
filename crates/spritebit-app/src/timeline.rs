@@ -27,13 +27,15 @@ const DIM: Color32 = Color32::from_gray(140);
 impl SpritebitApp {
     /// Strukturänderung am aktuellen Sprite — als ein Undo-Schritt.
     fn edit_sprite(&mut self, f: impl FnOnce(&mut spritebit_core::Sprite)) {
+        self.deselect();
         let cur = self.project.current;
         self.histories[cur].record(&self.project.sprites[cur]);
         f(&mut self.project.sprites[cur]);
         self.changed();
     }
 
-    fn go_frame(&mut self, f: usize) {
+    pub(crate) fn go_frame(&mut self, f: usize) {
+        self.deselect();
         let n = self.project.sprite().frames.len();
         self.project.sprite_mut().frame = f.min(n - 1);
         self.stroke_last = None;
@@ -232,6 +234,7 @@ impl SpritebitApp {
                         _ => self.project.sprite_mut().layer = l,
                     }
                 } else if fx >= 0.0 && (fx as usize) < n {
+                    self.deselect();
                     let s = self.project.sprite_mut();
                     s.layer = l;
                     s.frame = fx as usize;

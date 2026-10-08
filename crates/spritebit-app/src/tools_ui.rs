@@ -22,11 +22,28 @@ pub(crate) enum Tool {
     Line,
     Rect,
     Ellipse,
+    Select,
+    Lasso,
+    Magic,
+    Wand,
 }
 
 impl Tool {
-    const ALL: [Tool; 9] =
-        [Tool::Pan, Tool::Pencil, Tool::Brush, Tool::Spray, Tool::Fill, Tool::Eraser, Tool::Line, Tool::Rect, Tool::Ellipse];
+    const ALL: [Tool; 13] = [
+        Tool::Pan,
+        Tool::Pencil,
+        Tool::Brush,
+        Tool::Spray,
+        Tool::Fill,
+        Tool::Eraser,
+        Tool::Line,
+        Tool::Rect,
+        Tool::Ellipse,
+        Tool::Select,
+        Tool::Lasso,
+        Tool::Magic,
+        Tool::Wand,
+    ];
 
     fn label(self) -> &'static str {
         match self {
@@ -39,6 +56,10 @@ impl Tool {
             Tool::Line => "Linie",
             Tool::Rect => "Rechteck",
             Tool::Ellipse => "Ellipse",
+            Tool::Select => "Auswahl",
+            Tool::Lasso => "Lasso",
+            Tool::Magic => "Farbwahl",
+            Tool::Wand => "Zauberstab",
         }
     }
 
@@ -53,6 +74,10 @@ impl Tool {
             Tool::Line => Key::I,
             Tool::Rect => Key::R,
             Tool::Ellipse => Key::O,
+            Tool::Select => Key::A,
+            Tool::Lasso => Key::L,
+            Tool::Magic => Key::K,
+            Tool::Wand => Key::W,
         }
     }
 
@@ -67,6 +92,10 @@ impl Tool {
             Tool::Line => icons::LINE,
             Tool::Rect => icons::RECT,
             Tool::Ellipse => icons::ELLIPSE,
+            Tool::Select => icons::SELECT,
+            Tool::Lasso => icons::LASSO,
+            Tool::Magic => icons::MAGIC,
+            Tool::Wand => icons::WAND,
         }
     }
 
@@ -103,7 +132,7 @@ impl SpritebitApp {
                 if ui.add(btn).on_hover_text(format!("{} ({key})", t.label())).clicked() {
                     self.tool = t;
                 }
-                if t == Tool::Pan || t == Tool::Eraser {
+                if matches!(t, Tool::Pan | Tool::Eraser | Tool::Ellipse) {
                     ui.separator();
                 }
             }
@@ -119,6 +148,7 @@ impl SpritebitApp {
             if matches!(self.tool, Tool::Rect | Tool::Ellipse) {
                 ui.checkbox(&mut self.filled, "Gefüllt");
             }
+            self.selection_bar(ui);
         });
     }
 
@@ -135,7 +165,7 @@ impl SpritebitApp {
     }
 
     /// Ist die aktive Ebene bemalbar? Sonst Hinweis in die Statusleiste.
-    fn layer_ok(&mut self) -> bool {
+    pub(crate) fn layer_ok(&mut self) -> bool {
         let layer = &self.sprite().layers[self.sprite().layer];
         self.hint = if layer.locked {
             Some(format!("Ebene „{}“ ist gesperrt — Schloss in der Timeline.", layer.name))
@@ -158,6 +188,14 @@ impl SpritebitApp {
         if p.panning || self.tool == Tool::Pan {
             self.stroke_last = None;
             self.shape_start = None;
+            return;
+        }
+        if self.is_select_tool() {
+            if p.pressed && p.over && self.playing {
+                self.playing = false;
+                return;
+            }
+            self.use_select_tool(p);
             return;
         }
         // Beim Abspielen hält ein Klick an, statt zu malen.
@@ -215,6 +253,8 @@ impl SpritebitApp {
 
     /// Druck auf die Fläche: Strich beginnen, füllen oder Form anfangen.
     fn begin(&mut self, cell: (i64, i64), erase: bool) {
+        // Wer malt, setzt Schwebendes vorher ab.
+        self.commit_float();
         let value = self.value(erase);
         match self.tool {
             Tool::Fill => {
