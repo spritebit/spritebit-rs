@@ -12,7 +12,7 @@
 //! Rechte Leiste, „Palette“ (die Bibliothek): suchen, filtern, eine
 //! Palette ANSEHEN; zugewiesen wird erst per Knopf — „Für Sprite nutzen“
 //! (das Bild sieht gleich aus) oder „Sprite umfärben“ (die Nummern
-//! bleiben). Dazu neue Palette, Kopie, bearbeiten, löschen und Bild → Palette.
+//! bleiben). Dazu neue Palette, Kopie, bearbeiten, löschen und Bild » Palette.
 //!
 //! Eingebaute Paletten bleiben unverändert — wer sie ändert, bekommt eine
 //! Kopie. Alle Änderungen an Paletten sind Undo-Schritte.
@@ -49,7 +49,7 @@ pub(crate) struct PalModal {
     pub colors: Vec<Rgb>,
 }
 
-/// Dialog „Bild → Palette“.
+/// Dialog „Bild » Palette“.
 pub(crate) struct ReduceModal {
     pub colors: Vec<(Rgb, usize)>,
     pub count: usize,
@@ -254,7 +254,7 @@ impl SpritebitApp {
             }
             Err(n) => {
                 self.histories[cur].drop_last();
-                self.hint = Some(trf("{n} Farben passen nicht mehr in die Palette — „Bild → Palette“ fasst sie zusammen.", &[("n", &n)]));
+                self.hint = Some(trf("{n} Farben passen nicht mehr in die Palette — „Bild » Palette“ fasst sie zusammen.", &[("n", &n)]));
             }
         }
     }
@@ -432,7 +432,7 @@ impl SpritebitApp {
                     for (name, colors) in items {
                         let active = name == shown;
                         ui.horizontal(|ui| {
-                            let mark = if name == current { " ✓" } else { "" };
+                            let mark = if name == current { "  •" } else { "" };
                             if ui.selectable_label(active, format!("{name}{mark}")).clicked() {
                                 clicked = Some(name.clone());
                             }
@@ -499,7 +499,7 @@ impl SpritebitApp {
                 self.changed();
             }
             if ui
-                .button(tr("Bild → Palette …"))
+                .button(tr("Bild » Palette …"))
                 .on_hover_text(tr("Aus den Farben des Bildes eine Palette machen — wie viele Farben, wählst du aus"))
                 .clicked()
             {
@@ -710,7 +710,7 @@ impl SpritebitApp {
         let Some(r) = &mut self.pal.reduce else { return };
         let (mut ok, mut cancel) = (false, false);
         egui::Modal::new(egui::Id::new("reduce")).show(ctx, |ui| {
-            ui.heading(tr("Bild → Palette"));
+            ui.heading(tr("Bild » Palette"));
             ui.label(trf("Das Bild hat {n} Farben, eine Palette fasst höchstens {max}.", &[("n", &n), ("max", &MAX_COLORS)]));
             ui.horizontal(|ui| {
                 ui.label(tr("Farben in der Palette"));

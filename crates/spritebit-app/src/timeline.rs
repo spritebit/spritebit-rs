@@ -257,7 +257,7 @@ impl SpritebitApp {
             painter.rect_filled(egui::Rect::from_min_size(r.min, Vec2::new(3.0, TAG_H)), 1.0, Color32::from_rgb(cr, cg, cb));
             let mark = match t.direction {
                 Direction::Forward => "",
-                Direction::Reverse => "← ",
+                Direction::Reverse => "« ",
                 Direction::PingPong => "↔ ",
             };
             painter.with_clip_rect(r).text(r.left_center() + Vec2::new(6.0, 0.0), Align2::LEFT_CENTER, format!("{mark}{}", t.name), FontId::proportional(11.0), Color32::WHITE);

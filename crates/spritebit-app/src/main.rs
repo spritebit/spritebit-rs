@@ -1258,7 +1258,7 @@ mod tests {
             let v = h.state_mut().project.sprite_mut().free_color(*c);
             h.state_mut().project.sprite_mut().active().set(x as u32, 0, v);
         }
-        h.get_by_label("Bild → Palette …").click();
+        h.get_by_label("Bild » Palette …").click();
         h.run();
         if let Some(r) = &mut h.state_mut().pal.reduce {
             r.count = 2;
