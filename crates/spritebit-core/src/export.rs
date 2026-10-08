@@ -275,7 +275,7 @@ mod tests {
         while let Some(f) = dec.read_next_frame().unwrap() {
             assert_eq!((f.width, f.height), (4, 3));
             delays.push(f.delay);
-            assert_eq!(f.buffer[(1 * 4 + 1) * 4 + 3], 255, "schwarzer Pixel sichtbar");
+            assert_eq!(f.buffer[(4 + 1) * 4 + 3], 255, "schwarzer Pixel (1,1) sichtbar");
             assert_eq!(f.buffer[3], 0, "Ecke transparent");
         }
         assert_eq!(delays, vec![13, 30], "125 ms → 13, 300 ms → 30 Hundertstel");
