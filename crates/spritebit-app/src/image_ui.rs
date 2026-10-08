@@ -205,6 +205,7 @@ impl SpritebitApp {
 
     /// Die rechte Leiste: aufklappbare Panels wie in der Web-Version.
     pub(crate) fn right_panels(&mut self, ui: &mut egui::Ui) {
+        egui::CollapsingHeader::new(tr("Palette")).id_salt("p-palette").default_open(true).show(ui, |ui| self.palette_library(ui));
         egui::CollapsingHeader::new(tr("Bild")).id_salt("p-image").default_open(true).show(ui, |ui| self.image_panel(ui));
         egui::CollapsingHeader::new(tr("Aufräumen")).id_salt("p-cleanup").show(ui, |ui| self.cleanup_panel(ui));
     }

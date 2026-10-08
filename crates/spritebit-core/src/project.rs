@@ -47,6 +47,21 @@ impl Project {
         self.palette(&self.sprite().palette)
     }
 
+    /// Ist `name` eine eigene (bearbeitbare) Palette?
+    pub fn is_custom(&self, name: &str) -> bool {
+        self.palettes.iter().any(|p| p.name == name)
+    }
+
+    /// Ein Palettenname, den es noch nicht gibt (weder eigen noch eingebaut):
+    /// `base`, sonst `base2`, `base3` …
+    pub fn unique_palette_name(&self, base: &str) -> String {
+        let taken = |n: &str| self.is_custom(n) || builtin::builtin(n).is_some();
+        if !taken(base) {
+            return base.to_string();
+        }
+        (2..).map(|k| format!("{base}{k}")).find(|n| !taken(n)).expect("irgendwann frei")
+    }
+
     /// Ein Name, den noch kein Sprite trägt: „Sprite 2", „Sprite 3" …
     pub fn fresh_name(&self) -> String {
         let mut n = self.sprites.len() + 1;

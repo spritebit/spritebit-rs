@@ -124,7 +124,8 @@ struct SpritebitApp {
     /// Symmetrie: an der senkrechten (x) bzw. waagerechten (y) Mitte spiegeln.
     mirror_x: bool,
     mirror_y: bool,
-    palette_edit: bool,
+    /// Farbzeile, Paletten-Bibliothek und ihre Dialoge.
+    pal: palette_ui::PalState,
     export_dialog: Option<export_ui::ExportDialog>,
     /// Bereich in der Timeline (Shift-Klick) und sein Ausgangspunkt.
     cel_range: Option<spritebit_core::cels::CelRange>,
@@ -192,7 +193,7 @@ impl SpritebitApp {
             tolerance: 0.25,
             mirror_x: false,
             mirror_y: false,
-            palette_edit: false,
+            pal: palette_ui::PalState::default(),
             export_dialog: None,
             cel_range: None,
             cel_anchor: None,
@@ -236,7 +237,7 @@ impl SpritebitApp {
     fn undo(&mut self) {
         self.drop_selection();
         let cur = self.project.current;
-        if self.histories[cur].undo(&mut self.project.sprites[cur]) {
+        if self.histories[cur].undo(&mut self.project.sprites[cur], &mut self.project.palettes) {
             self.changed();
         }
     }
@@ -244,7 +245,7 @@ impl SpritebitApp {
     fn redo(&mut self) {
         self.drop_selection();
         let cur = self.project.current;
-        if self.histories[cur].redo(&mut self.project.sprites[cur]) {
+        if self.histories[cur].redo(&mut self.project.sprites[cur], &mut self.project.palettes) {
             self.changed();
         }
     }
@@ -793,6 +794,7 @@ impl SpritebitApp {
     // ── Dialoge ─────────────────────────────────────────────────────
     fn dialogs(&mut self, ctx: &egui::Context) {
         self.sprite_dialogs(ctx);
+        self.palette_dialogs(ctx);
         if self.about_open {
             egui::Window::new(tr("Über spritebit"))
                 .collapsible(false)
@@ -1213,6 +1215,61 @@ mod tests {
         let sp = h.state().sprite();
         assert_eq!(sp.layers.len(), 1);
         assert_eq!((sp.cel(0, 0).get(1, 1), sp.cel(0, 0).get(2, 2)), (5, 3));
+    }
+
+    /// Was man an (x, y) sieht — als RGB.
+    fn rgb_at(h: &Harness<'_, SpritebitApp>, x: u32, y: u32) -> Option<spritebit_core::Rgb> {
+        let a = h.state();
+        spritebit_core::selection::rgb_of(px(h, x, y), &a.project.current_palette(), &a.sprite().free)
+    }
+
+    #[test]
+    fn farbstufen_ordnen_bild_bleibt_und_undo() {
+        let mut h = app();
+        for x in 0..5 {
+            h.state_mut().project.sprite_mut().active().set(x, 0, x as u16 + 1);
+        }
+        let before: Vec<_> = (0..5).map(|x| rgb_at(&h, x, 0)).collect();
+        let name0 = h.state().sprite().palette.clone();
+        h.get_by_label("Nach Farbstufen").click();
+        h.run();
+        let after: Vec<_> = (0..5).map(|x| rgb_at(&h, x, 0)).collect();
+        assert_eq!(before, after, "das Bild sieht gleich aus");
+        h.state_mut().undo();
+        assert_eq!(h.state().sprite().palette, name0);
+        assert_eq!((0..5).map(|x| rgb_at(&h, x, 0)).collect::<Vec<_>>(), before);
+    }
+
+    #[test]
+    fn palette_zuweisen_behaelt_das_aussehen() {
+        let mut h = app();
+        h.state_mut().project.sprite_mut().active().set(3, 3, 2);
+        let look = rgb_at(&h, 3, 3);
+        let other = spritebit_core::builtin::BUILTIN.iter().map(|(n, _)| *n).find(|n| *n != h.state().sprite().palette).unwrap();
+        h.state_mut().assign_palette(other, true);
+        assert_eq!(h.state().sprite().palette, other);
+        assert_eq!(rgb_at(&h, 3, 3), look);
+    }
+
+    #[test]
+    fn bild_zu_palette_reduziert() {
+        let mut h = app();
+        for (x, c) in [[250u8, 0, 0], [240, 0, 0], [0, 0, 250]].iter().enumerate() {
+            let v = h.state_mut().project.sprite_mut().free_color(*c);
+            h.state_mut().project.sprite_mut().active().set(x as u32, 0, v);
+        }
+        h.get_by_label("Bild → Palette …").click();
+        h.run();
+        if let Some(r) = &mut h.state_mut().pal.reduce {
+            r.count = 2;
+        }
+        h.run();
+        h.get_by_label("Palette anlegen").click();
+        h.run();
+        let a = h.state();
+        assert!(a.sprite().palette.starts_with("foto"));
+        assert_eq!(a.project.current_palette().len(), 2);
+        assert!(px(&h, 0, 0) < spritebit_core::FREE_BASE && px(&h, 0, 0) == px(&h, 1, 0));
     }
 
     #[test]

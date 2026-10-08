@@ -10,6 +10,7 @@
 //! * [`composite`] — was man sieht, für einen Ausschnitt (auch ausgedünnt)
 //! * [`history`] — Undo/Redo, billig dank geteilter Kacheln
 //! * [`tools`] — Werkzeug-Hilfen (Linie)
+//! * [`palops`] — Palette wechseln, umsortieren, Bildfarben aufnehmen, reduzieren
 //! * [`project`] — mehrere Sprites und eigene Paletten
 //! * [`io`] — eigenes Format `.spritebit` und Projektdatei der Web-Version
 //! * [`selection`] — Auswahl (Rechteck, Lasso, Farbe), kopieren, einfügen
@@ -28,6 +29,7 @@ pub mod history;
 pub mod image;
 pub mod io;
 pub mod palette;
+pub mod palops;
 pub mod project;
 pub mod selection;
 pub mod sprite;
