@@ -1,0 +1,10 @@
+[package]
+name = "spritebit-core"
+description = "Datenmodell und Logik von spritebit — ohne Oberfläche"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
