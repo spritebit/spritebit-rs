@@ -9,6 +9,7 @@
 // Im Release kein Konsolenfenster neben dem Programm.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod icons;
 mod timeline;
 mod tools_ui;
 
@@ -28,7 +29,15 @@ fn main() -> eframe::Result {
             .with_min_inner_size([640.0, 400.0]),
         ..Default::default()
     };
-    eframe::run_native("spritebit", options, Box::new(|_cc| Ok(Box::new(SpritebitApp::new()))))
+    eframe::run_native(
+        "spritebit",
+        options,
+        Box::new(|cc| {
+            // SVG-Icons (icons.rs) brauchen den Bild-Lader von egui_extras.
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+            Ok(Box::new(SpritebitApp::new()))
+        }),
+    )
 }
 
 /// Grenzen der Zoomstufe (Bildschirm-Pixel je Sprite-Pixel).
@@ -771,7 +780,10 @@ mod tests {
     use egui_kittest::Harness;
 
     fn app<'a>() -> Harness<'a, SpritebitApp> {
-        let mut h = Harness::builder().with_size(Vec2::new(1280.0, 800.0)).build_eframe(|_| SpritebitApp::new());
+        let mut h = Harness::builder().with_size(Vec2::new(1280.0, 800.0)).build_eframe(|cc| {
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+            SpritebitApp::new()
+        });
         h.run();
         h
     }
@@ -866,7 +878,7 @@ mod tests {
     #[test]
     fn neuer_frame_aus_der_timeline() {
         let mut h = app();
-        h.get_by_label("+ Frame").click();
+        h.get_by_label("Leerer Frame dahinter").click();
         h.run();
         assert_eq!(h.state().project.sprite().frames.len(), 2);
         assert_eq!(h.state().project.sprite().frame, 1);

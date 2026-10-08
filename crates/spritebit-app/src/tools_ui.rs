@@ -9,7 +9,7 @@ use eframe::egui::{self, Color32, Key, Modifiers, Pos2, Vec2};
 use spritebit_core::tools::{self, Span};
 use spritebit_core::Px;
 
-use crate::SpritebitApp;
+use crate::{icons, SpritebitApp};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Tool {
@@ -56,6 +56,20 @@ impl Tool {
         }
     }
 
+    fn icon(self) -> egui::ImageSource<'static> {
+        match self {
+            Tool::Pan => icons::HAND,
+            Tool::Pencil => icons::PENCIL,
+            Tool::Brush => icons::BRUSH,
+            Tool::Spray => icons::SPRAY,
+            Tool::Fill => icons::FILL,
+            Tool::Eraser => icons::ERASER,
+            Tool::Line => icons::LINE,
+            Tool::Rect => icons::RECT,
+            Tool::Ellipse => icons::ELLIPSE,
+        }
+    }
+
     /// Hat das Werkzeug eine Größe?
     fn sized(self) -> bool {
         matches!(self, Tool::Brush | Tool::Spray | Tool::Eraser)
@@ -83,7 +97,10 @@ impl SpritebitApp {
         ui.horizontal(|ui| {
             for t in Tool::ALL {
                 let key = format!("{:?}", t.key());
-                if ui.selectable_label(self.tool == t, t.label()).on_hover_text(format!("{} ({key})", t.label())).clicked() {
+                let on = self.tool == t;
+                let color = if on { ui.visuals().strong_text_color() } else { ui.visuals().text_color() };
+                let btn = egui::Button::selectable(on, (icons::image(t.icon(), color), t.label()));
+                if ui.add(btn).on_hover_text(format!("{} ({key})", t.label())).clicked() {
                     self.tool = t;
                 }
                 if t == Tool::Pan || t == Tool::Eraser {

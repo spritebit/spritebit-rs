@@ -13,7 +13,7 @@
 
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Sense, Stroke, Vec2};
 
-use crate::SpritebitApp;
+use crate::{icons, SpritebitApp};
 
 const LAYER_W: f32 = 170.0;
 const HEAD_H: f32 = 20.0;
@@ -49,36 +49,36 @@ impl SpritebitApp {
         let n = self.project.sprite().frames.len();
         let cur = self.project.sprite().frame;
         ui.horizontal(|ui| {
-            if ui.button("⏮").on_hover_text("Erster Frame (Pos1)").clicked() {
+            if icons::button(ui, icons::FIRST, "Erster Frame (Pos1)", true).clicked() {
                 self.go_frame(0);
             }
-            if ui.button("◀").on_hover_text("Voriger Frame (,)").clicked() {
+            if icons::button(ui, icons::PREV, "Voriger Frame (,)", true).clicked() {
                 self.go_frame((cur + n - 1) % n);
             }
-            let play = if self.playing { "⏸" } else { "▶" };
-            if ui.add_enabled(n > 1, egui::Button::new(play)).on_hover_text("Abspielen / Anhalten (Enter)").clicked() {
+            let play = if self.playing { icons::PAUSE } else { icons::PLAY };
+            if icons::button(ui, play, "Abspielen / Anhalten (Enter)", n > 1).clicked() {
                 self.toggle_play(ui.ctx());
             }
-            if ui.button("▶|").on_hover_text("Nächster Frame (.)").clicked() {
+            if icons::button(ui, icons::NEXT, "Nächster Frame (.)", true).clicked() {
                 self.go_frame((cur + 1) % n);
             }
-            if ui.button("⏭").on_hover_text("Letzter Frame (Ende)").clicked() {
+            if icons::button(ui, icons::LAST, "Letzter Frame (Ende)", true).clicked() {
                 self.go_frame(n - 1);
             }
             ui.separator();
-            if ui.button("+ Frame").on_hover_text("Leerer Frame dahinter").clicked() {
+            if icons::button(ui, icons::PLUS, "Leerer Frame dahinter", true).clicked() {
                 self.edit_sprite(|s| {
                     let f = s.frame;
                     s.add_frame(f, false);
                 });
             }
-            if ui.button("Duplizieren").on_hover_text("Frame kopieren").clicked() {
+            if icons::button(ui, icons::COPY, "Frame duplizieren", true).clicked() {
                 self.edit_sprite(|s| {
                     let f = s.frame;
                     s.add_frame(f, true);
                 });
             }
-            if ui.add_enabled(n > 1, egui::Button::new("Frame löschen")).clicked() {
+            if icons::button(ui, icons::TRASH, "Frame löschen", n > 1).clicked() {
                 self.edit_sprite(|s| {
                     let f = s.frame;
                     s.delete_frame(f);
@@ -104,17 +104,18 @@ impl SpritebitApp {
             let (f, l) = (sp.frame, sp.layer);
             let linked = sp.is_linked(f, l);
             if ui
-                .add_enabled(f > 0, egui::Button::new("Verknüpfen"))
-                .on_hover_text("Diese Zelle zeigt dasselbe Bild wie der Frame davor")
+                .add_enabled(f > 0, egui::Button::image(icons::image(icons::LINK, ui.visuals().text_color())))
+                .on_hover_text("Verknüpfen — diese Zelle zeigt dasselbe Bild wie der Frame davor")
                 .clicked()
             {
                 self.edit_sprite(|s| s.link(f - 1, f, l));
             }
-            if ui.add_enabled(linked, egui::Button::new("Lösen")).on_hover_text("Eigenes Bild mit gleichem Inhalt").clicked() {
+            if icons::button(ui, icons::UNLINK, "Lösen — eigenes Bild mit gleichem Inhalt", linked).clicked() {
                 self.edit_sprite(|s| s.unlink(f, l));
             }
             ui.separator();
-            if ui.selectable_label(self.onion, "Onion Skin").on_hover_text("Voriger (rot) und nächster Frame (blau) scheinen durch").clicked() {
+            let onion_btn = egui::Button::selectable(self.onion, icons::image(icons::ONION, ui.visuals().text_color()));
+            if ui.add(onion_btn).on_hover_text("Onion Skin — voriger (rot) und nächster Frame (blau) scheinen durch").clicked() {
                 self.onion = !self.onion;
                 self.version = self.version.wrapping_add(1);
             }
@@ -170,10 +171,15 @@ impl SpritebitApp {
             // Ebenen-Spalte
             let row = egui::Rect::from_min_size(Pos2::new(o.x, y), Vec2::new(LAYER_W - 4.0, ROW_H - 2.0));
             painter.rect_filled(row, 3.0, if l == sp.layer { ACCENT.gamma_multiply(0.25) } else { Color32::from_gray(38) });
-            let icon = |k: usize| Pos2::new(o.x + 10.0 + k as f32 * ICON_W, y + ROW_H / 2.0 - 1.0);
-            painter.text(icon(0), Align2::CENTER_CENTER, if layer.visible { "👁" } else { "–" }, font.clone(), DIM);
-            painter.text(icon(1), Align2::CENTER_CENTER, if layer.locked { "🔒" } else { "🔓" }, font.clone(), if layer.locked { ACCENT } else { DIM });
-            painter.text(icon(2), Align2::CENTER_CENTER, "⛓", font.clone(), if layer.continuous { ACCENT } else { Color32::from_gray(80) });
+            let icon_rect = |k: usize| {
+                egui::Rect::from_center_size(Pos2::new(o.x + 10.0 + k as f32 * ICON_W, y + ROW_H / 2.0 - 1.0), Vec2::splat(14.0))
+            };
+            let eye = if layer.visible { icons::EYE } else { icons::EYE_OFF };
+            egui::Image::new(eye).tint(DIM).paint_at(ui, icon_rect(0));
+            let (lock, lock_c) = if layer.locked { (icons::LOCK, ACCENT) } else { (icons::UNLOCK, Color32::from_gray(90)) };
+            egui::Image::new(lock).tint(lock_c).paint_at(ui, icon_rect(1));
+            let (cont, cont_c) = if layer.continuous { (icons::CONT_ON, ACCENT) } else { (icons::CONT_OFF, Color32::from_gray(90)) };
+            egui::Image::new(cont).tint(cont_c).paint_at(ui, icon_rect(2));
             let name_col = if l == sp.layer { Color32::WHITE } else if layer.visible { Color32::from_gray(200) } else { Color32::from_gray(110) };
             painter.text(Pos2::new(o.x + 3.0 * ICON_W + 6.0, y + ROW_H / 2.0 - 1.0), Align2::LEFT_CENTER, &layer.name, font.clone(), name_col);
 
