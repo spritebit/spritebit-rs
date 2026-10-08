@@ -395,6 +395,10 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("„{name}“ ist eine eingebaute Palette — bitte einen anderen Namen.", "“{name}” is a built-in palette — please choose another name.", "„{name}“ is a eibaute Palettn — bitte an aundan Nom."),
     ("„{name}“ zugewiesen — {n} Pixel bleiben als freie Farbe.", "Assigned “{name}” — {n} pixels stay as free colors.", "„{name}“ zuagwiesn — {n} Pixel bleibn ois freie Farb."),
     ("„{name}“ zugewiesen.", "Assigned “{name}”.", "„{name}“ zuagwiesn."),
+    // ── Vorschau ──
+    ("Vorschau", "Preview", "Vorschau"),
+    ("Pixelgröße", "Pixel size", "Pixelgreß"),
+    ("{w} × {h} px · {scale}×", "{w} × {h} px · {scale}×", ""),
 ];
 
 /// Fehler beim Laden in der gewählten Sprache.
@@ -440,6 +444,7 @@ mod tests {
             include_str!("export_ui.rs"),
             include_str!("image_ui.rs"),
             include_str!("sprites_ui.rs"),
+            include_str!("preview_ui.rs"),
         ];
         let mut missing = Vec::new();
         for src in sources {

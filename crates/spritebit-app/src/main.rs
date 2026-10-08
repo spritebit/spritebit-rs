@@ -14,6 +14,7 @@ mod i18n;
 mod icons;
 mod image_ui;
 mod palette_ui;
+mod preview_ui;
 mod selection_ui;
 mod sprites_ui;
 mod timeline;
@@ -126,6 +127,7 @@ struct SpritebitApp {
     mirror_y: bool,
     /// Farbzeile, Paletten-Bibliothek und ihre Dialoge.
     pal: palette_ui::PalState,
+    preview: preview_ui::Preview,
     export_dialog: Option<export_ui::ExportDialog>,
     /// Bereich in der Timeline (Shift-Klick) und sein Ausgangspunkt.
     cel_range: Option<spritebit_core::cels::CelRange>,
@@ -194,6 +196,7 @@ impl SpritebitApp {
             mirror_x: false,
             mirror_y: false,
             pal: palette_ui::PalState::default(),
+            preview: preview_ui::Preview::default(),
             export_dialog: None,
             cel_range: None,
             cel_anchor: None,
@@ -905,7 +908,7 @@ mod tests {
     use egui_kittest::Harness;
 
     fn app<'a>() -> Harness<'a, SpritebitApp> {
-        let mut h = Harness::builder().with_size(Vec2::new(1280.0, 800.0)).build_eframe(|cc| {
+        let mut h = Harness::builder().with_size(Vec2::new(1280.0, 2400.0)).build_eframe(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
             SpritebitApp::new()
         });
