@@ -17,6 +17,7 @@
 //! * [`cels`] — Zellen-Bereiche der Timeline: verschieben, kopieren, verknüpfen
 //! * [`cleanup`] — Hintergrund entfernen, glätten, Outline, Median-Cut
 //! * [`export`] — PNG, GIF, Spritesheet mit JSON-Atlas
+//! * [`template`] — Schablone: Lage, Pipette, aufs Raster übernehmen
 //! * [`transform`] — spiegeln, drehen, zuschneiden, Leinwand, skalieren
 //! * [`builtin`] — die eingebauten Paletten der Web-Version
 
@@ -33,6 +34,7 @@ pub mod palops;
 pub mod project;
 pub mod selection;
 pub mod sprite;
+pub mod template;
 pub mod transform;
 pub mod tools;
 

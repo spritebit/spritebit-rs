@@ -18,6 +18,7 @@ mod palette_ui;
 mod preview_ui;
 mod selection_ui;
 mod sprites_ui;
+mod template_ui;
 mod timeline;
 mod tools_ui;
 
@@ -46,7 +47,10 @@ fn main() -> eframe::Result {
         Box::new(|cc| {
             // SVG-Icons (icons.rs) brauchen den Bild-Lader von egui_extras.
             egui_extras::install_image_loaders(&cc.egui_ctx);
-            Ok(Box::new(SpritebitApp::new()))
+            let mut app = SpritebitApp::new();
+            // Wie im Browser: die zuletzt geladene Schablone ist wieder da.
+            app.restore_template(&cc.egui_ctx);
+            Ok(Box::new(app))
         }),
     )
 }
@@ -130,6 +134,11 @@ struct SpritebitApp {
     pal: palette_ui::PalState,
     preview: preview_ui::Preview,
     guides: guides_ui::GuideState,
+    template: template_ui::TemplateState,
+    /// Gedrückte Umschalt-/Alt-/Strg-Tasten in diesem Durchlauf.
+    modifiers: Modifiers,
+    /// Schachbrett unter den Pixeln (2 × 2, wiederholt).
+    checker: Option<egui::TextureHandle>,
     export_dialog: Option<export_ui::ExportDialog>,
     /// Bereich in der Timeline (Shift-Klick) und sein Ausgangspunkt.
     cel_range: Option<spritebit_core::cels::CelRange>,
@@ -200,6 +209,9 @@ impl SpritebitApp {
             pal: palette_ui::PalState::default(),
             preview: preview_ui::Preview::default(),
             guides: guides_ui::GuideState::default(),
+            template: template_ui::TemplateState::default(),
+            modifiers: Modifiers::NONE,
+            checker: None,
             export_dialog: None,
             cel_range: None,
             cel_anchor: None,
@@ -664,8 +676,11 @@ impl SpritebitApp {
             panning,
             alt,
         };
-        // Im Hilfslinien-Modus gehört der Zeiger den Linien.
-        if !self.guide_pointer(pointer, pressed, released, p.over, origin, zoom) {
+        // Umschalt+Alt gehört der Schablone, im Hilfslinien-Modus gehört
+        // der Zeiger den Linien.
+        if !self.template_pointer(pointer, pressed, released, p.over, origin, zoom)
+            && !self.guide_pointer(pointer, pressed, released, p.over, origin, zoom)
+        {
             self.use_tool(&p, ui.ctx());
         }
 
@@ -714,22 +729,17 @@ impl SpritebitApp {
                     neighbours.push((render_rgba_step(sp, &palette, sp.frame + 1, rect, step).0, [96, 156, 255]));
                 }
             }
-            // Transparente Stellen als Schachbrett, ein Feld je Sprite-Pixel.
-            for ty in 0..th {
-                for tx in 0..tw {
-                    let o = ((ty * tw + tx) * 4) as usize;
+            // Transparente Stellen bleiben durchsichtig — darunter liegen
+            // Schachbrett und Schablone. Onion Skin tönt sie leicht ein.
+            if !neighbours.is_empty() {
+                for o in (0..buf.len()).step_by(4) {
                     if buf[o + 3] == 0 {
-                        let (x, y) = (x0 + tx * step, y0 + ty * step);
-                        let mut c = CHECKER[((x + y) % 2) as usize];
                         for (nb, tint) in &neighbours {
                             if nb[o + 3] != 0 {
-                                for (ch, t) in c.iter_mut().zip(tint) {
-                                    *ch = (*ch as f32 * 0.7 + *t as f32 * 0.3) as u8;
-                                }
+                                buf[o..o + 3].copy_from_slice(tint);
+                                buf[o + 3] = 77;
                             }
                         }
-                        buf[o..o + 3].copy_from_slice(&c);
-                        buf[o + 3] = 255;
                     }
                 }
             }
@@ -761,7 +771,19 @@ impl SpritebitApp {
                     (ey - y0) as f32 / (th as u32 * step) as f32,
                 ),
             );
+            // Schachbrett (ein Feld je Textur-Pixel), dann die Schablone, dann die Pixel.
+            let checker = self.checker.get_or_insert_with(|| {
+                let [a, b] = CHECKER.map(|[r, g, b]| Color32::from_rgb(r, g, b));
+                let img = egui::ColorImage::new([2, 2], vec![a, b, b, a]);
+                let opts = egui::TextureOptions { wrap_mode: egui::TextureWrapMode::Repeat, ..egui::TextureOptions::NEAREST };
+                ui.ctx().load_texture("checker", img, opts)
+            });
+            let k = 2.0 * step as f32;
+            let cuv = egui::Rect::from_min_max(Pos2::new(x0 as f32 / k, y0 as f32 / k), Pos2::new(ex as f32 / k, ey as f32 / k));
+            painter.image(checker.id(), screen, cuv, Color32::WHITE);
+            self.draw_template(&painter.with_clip_rect(screen.intersect(area)), origin, zoom, false);
             painter.image(t.handle.id(), screen, uv, Color32::WHITE);
+            self.draw_template(&painter, origin, zoom, true);
         }
 
         // Gitterlinien, nur stark hineingezoomt und nur im Ausschnitt.
@@ -885,6 +907,7 @@ impl eframe::App for SpritebitApp {
         let ctx = ui.ctx().clone();
         self.guard_close(&ctx);
         self.shortcuts(&ctx);
+        self.modifiers = ctx.input(|i| i.modifiers);
         self.guide_keys(&ctx);
         self.selection_keys(&ctx);
         self.tool_keys(&ctx);
@@ -1300,6 +1323,42 @@ mod tests {
         drag(&mut h, (5.0, 9.6), (5.0, -6.0));
         assert!(h.state().sprite().guides.h.is_empty());
         assert!(!h.state().guides.edit, "nichts mehr zu verschieben");
+    }
+
+    #[test]
+    fn schablone_laden_uebernehmen_und_verschieben() {
+        let mut h = app();
+        // Ein echtes PNG durch den Lader: 2×1, links weiß, rechts schwarz.
+        let mut sp = spritebit_core::Sprite::new("t", 2, 1).unwrap();
+        sp.active().set(0, 0, 1);
+        sp.active().set(1, 0, 5);
+        let png = spritebit_core::export::png(&sp, &h.state().project.current_palette(), 0, 1).unwrap();
+        let t = template_ui::decode(&png).unwrap();
+        let ctx = h.ctx.clone();
+        h.state_mut().set_template(&ctx, t, "test.png".into());
+        h.run();
+        h.get_by_label("Schablone").click();
+        h.run();
+        h.get_by_label("Palettenfarben").click();
+        h.run();
+        // Fläche 64×64, Bild 2:1 eingepasst → Zeilen 16..48 belegt.
+        assert_eq!(px(&h, 10, 30), 1);
+        assert_eq!(px(&h, 50, 30), 5);
+        assert_eq!(px(&h, 10, 5), 0, "Rand bleibt leer");
+        // Umschalt+Alt ziehen verschiebt — gemalt wird dabei nicht.
+        let before = h.state().template.offset;
+        let (a, b) = (at(&h, 20.0, 20.0), at(&h, 30.0, 20.0));
+        let m = Modifiers::SHIFT | Modifiers::ALT;
+        h.hover_at(a);
+        h.run();
+        h.event_modifiers(egui::Event::PointerButton { pos: a, button: egui::PointerButton::Primary, pressed: true, modifiers: m }, m);
+        h.run();
+        h.event_modifiers(egui::Event::PointerMoved(b), m);
+        h.run();
+        h.event_modifiers(egui::Event::PointerButton { pos: b, button: egui::PointerButton::Primary, pressed: false, modifiers: m }, m);
+        h.run();
+        let after = h.state().template.offset;
+        assert!((after.0 - before.0 - 10.0).abs() < 0.5, "{after:?}");
     }
 
     #[test]

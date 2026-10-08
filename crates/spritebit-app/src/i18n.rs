@@ -57,12 +57,17 @@ pub fn set_lang(l: Lang) {
     LANG.with(|c| c.set(l));
 }
 
-fn settings_file() -> Option<PathBuf> {
+/// Einstellungsordner der App (Windows: %APPDATA%\spritebit).
+pub(crate) fn settings_dir() -> Option<PathBuf> {
     let base = std::env::var_os("APPDATA")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from))
         .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
-    Some(base.join("spritebit").join("lang"))
+    Some(base.join("spritebit"))
+}
+
+fn settings_file() -> Option<PathBuf> {
+    Some(settings_dir()?.join("lang"))
 }
 
 /// Gespeicherte Sprache laden (sonst bleibt Deutsch).
@@ -429,6 +434,28 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Hüfte", "hip", "Hüftn"),
     ("Schritt", "crotch", ""),
     ("Knie", "knee", "Knia"),
+    // ── Schablone ──
+    ("Schablone", "Stencil", ""),
+    ("Aufs Raster übernehmen", "Copy onto the grid", "Aufs Raster übernehma"),
+    ("Bild laden …", "Load image …", "Buidl lodn …"),
+    ("Bilder", "Images", "Buidln"),
+    ("Schablone laden", "Load stencil", "Schablone lodn"),
+    ("Das Bild „{name}“ ließ sich nicht laden: {e}", "The image “{name}” could not be loaded: {e}", "S’Buidl „{name}“ hot si ned lodn lossn: {e}"),
+    ("Deckkraft", "Opacity", ""),
+    ("Dort ist die Schablone durchsichtig.", "The stencil is transparent there.", "Do is d’Schablone durchsichtig."),
+    ("Dort liegt keine Schablone.", "There is no stencil there.", "Do liegt ka Schablone."),
+    ("Ein Foto oder Bild zum Abzeichnen — es liegt hinter den Pixeln.", "A photo or picture to trace — it lies behind the pixels.", "A Foto oder Buidl zum Obzeichnen — es liegt hinter de Pixel."),
+    ("Entfernen", "Remove", "Weghaun"),
+    ("Farbe aus der Schablone: {hex}", "Color from the stencil: {hex}", "Farb aus da Schablone: {hex}"),
+    ("Genau die Farben des Bildes — als freie Farben", "Exactly the image’s colors — as free colors", "Genau de Farben vom Buidl — ois freie Farben"),
+    ("Jede Zelle bekommt die nächste Farbe der Palette", "Each cell gets the closest color of the palette", "Jede Zön kriagt de nächste Farb vo da Palettn"),
+    ("Keine Farben in der Schablone gefunden.", "No colors found in the stencil.", "Kane Farben in da Schablone gfunden."),
+    ("Keine Pixel geändert — Schablone über der Fläche positionieren?", "No pixels changed — is the stencil placed over the canvas?", "Ka Pixel gändert — d’Schablone über d’Flächn legn?"),
+    ("Originalfarben", "Original colors", "Originalfarbn"),
+    ("Palettenfarben", "Palette colors", "Palettnfarbn"),
+    ("Reduzieren auf", "Reduce to", "Owe auf"),
+    ("Schablone übernommen — {n} Pixel ({mode}).", "Stencil applied — {n} pixels ({mode}).", ""),
+    ("Umschalt+Alt ziehen: verschieben · Umschalt+Alt Klick: Farbe nehmen · Umschalt halten: vorne zeigen", "Shift+Alt drag: move · Shift+Alt click: pick color · hold Shift: show in front", "Umschalt+Alt ziagn: vaschiabn · Umschalt+Alt Klick: Farb nehma · Umschalt hoitn: vorn zagn"),
 ];
 
 /// Fehler beim Laden in der gewählten Sprache.
@@ -476,6 +503,7 @@ mod tests {
             include_str!("sprites_ui.rs"),
             include_str!("preview_ui.rs"),
             include_str!("guides_ui.rs"),
+            include_str!("template_ui.rs"),
         ];
         let mut missing = Vec::new();
         for src in sources {
