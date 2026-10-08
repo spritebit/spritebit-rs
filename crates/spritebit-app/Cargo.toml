@@ -10,3 +10,6 @@ publish.workspace = true
 eframe = "0.36.2"
 rfd = "0.17.2"
 spritebit-core = { version = "0.1.0", path = "../spritebit-core" }
+
+[dev-dependencies]
+egui_kittest = { version = "0.36.2", features = ["eframe"] }

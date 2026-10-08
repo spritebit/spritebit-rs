@@ -28,7 +28,7 @@ Voraussetzung: Rust über [rustup](https://rustup.rs) (unter Windows zusätzlich
 die C++-Build-Tools von Visual Studio).
 
 ```
-cargo test                      # alle Tests
+cargo test                      # alle Tests (Core und Oberfläche)
 cargo run -p spritebit-app      # Programm starten
 cargo build --release           # schnelle Fassung (target/release)
 ```
@@ -37,8 +37,9 @@ cargo build --release           # schnelle Fassung (target/release)
 
 | | |
 |---|---|
-| Linke Maustaste | malen in der gewählten Farbe |
-| Rechte Maustaste | radieren |
+| Linke Maustaste | malen mit dem gewählten Werkzeug |
+| Rechte Maustaste | radieren (mit jedem Malwerkzeug) |
+| H P B S F E I R O | Hand, Stift, Pinsel, Spray, Füllen, Radierer, Linie, Rechteck, Ellipse |
 | Mausrad / Strg+Mausrad | zoomen um den Mauszeiger |
 | Mittlere Taste oder Leertaste + Ziehen | Fläche verschieben |
 | Strg+Z / Strg+Y | Rückgängig / Wiederholen (je Sprite) |
@@ -50,6 +51,13 @@ cargo build --release           # schnelle Fassung (target/release)
 | Enter / , / . / Pos1 / Ende | Abspielen, voriger, nächster, erster, letzter Frame |
 
 Die Statusleiste zeigt, wie viele Kacheln tatsächlich Speicher belegen.
+
+## Tests
+
+* `spritebit-core` — Modell, Formate, Werkzeuge; dazu ein Test gegen eine
+  Projektdatei, die mit der Web-Version erzeugt wurde.
+* `spritebit-app` — Oberflächen-Tests mit `egui_kittest`: die App läuft ohne
+  Fenster, Maus und Tasten werden simuliert, geprüft wird das Bild im Sprite.
 
 ## Dateiformate
 

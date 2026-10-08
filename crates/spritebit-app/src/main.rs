@@ -10,13 +10,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod timeline;
+mod tools_ui;
 
 use std::path::{Path, PathBuf};
 
 use eframe::egui::{self, Color32, Key, Modifiers, Pos2, Sense, Stroke, Vec2};
 use spritebit_core::{
-    export_web, import_web, load_native, render_rgba_step, save_native, tools, History, Project, Rect, Sprite, MAX_SIDE,
+    export_web, import_web, load_native, render_rgba_step, save_native, History, Project, Px, Rect, Sprite, MAX_SIDE,
 };
+use tools_ui::{Pointer, Tool};
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -85,6 +87,20 @@ struct SpritebitApp {
     /// Zeitpunkt (egui-Zeit, Sekunden), seit dem der aktuelle Frame steht.
     frame_started: f64,
     onion: bool,
+    tool: Tool,
+    /// Größe von Pinsel, Radierer und Spray (1–9).
+    size: u32,
+    /// Rechteck und Ellipse gefüllt.
+    filled: bool,
+    /// Form, die gerade aufgezogen wird: Anfang, Ende, Farbe.
+    shape_start: Option<(i64, i64)>,
+    shape_end: Option<(i64, i64)>,
+    shape_value: Px,
+    /// Der laufende Druck darf nicht malen (gesperrte Ebene, Abspielen beendet).
+    blocked: bool,
+    rng: spritebit_core::tools::Rng,
+    /// Wo die Zeichenfläche zuletzt lag (Bildschirm) — für Tests und Zoom.
+    canvas_rect: egui::Rect,
 }
 
 impl SpritebitApp {
@@ -113,6 +129,17 @@ impl SpritebitApp {
             playing: false,
             frame_started: 0.0,
             onion: false,
+            tool: Tool::Pencil,
+            size: 1,
+            filled: false,
+            shape_start: None,
+            shape_end: None,
+            shape_value: 0,
+            blocked: false,
+            canvas_rect: egui::Rect::NOTHING,
+            rng: spritebit_core::tools::Rng::new(
+                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64),
+            ),
         }
     }
 
@@ -485,6 +512,7 @@ impl SpritebitApp {
     fn canvas(&mut self, ui: &mut egui::Ui) {
         let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
         let area = resp.rect;
+        self.canvas_rect = area;
         if self.fit_pending {
             self.fit(area);
             self.fit_pending = false;
@@ -504,6 +532,12 @@ impl SpritebitApp {
                 i.pointer.delta(),
             )
         });
+        let (pressed, released) = ui.input(|i| {
+            (
+                i.pointer.primary_pressed() || i.pointer.secondary_pressed(),
+                i.pointer.primary_released() || i.pointer.secondary_released(),
+            )
+        });
         if let Some(at) = pointer.filter(|p| area.contains(*p)) {
             if zoom_delta != 1.0 {
                 self.zoom_at(zoom_delta, at, area);
@@ -511,7 +545,7 @@ impl SpritebitApp {
                 self.zoom_at((scroll * 0.0025).exp(), at, area);
             }
         }
-        let panning = middle || (space && primary);
+        let panning = middle || (space && primary) || (self.tool == Tool::Pan && primary);
         if panning && (resp.hovered() || resp.dragged()) {
             self.pan += delta;
         }
@@ -524,47 +558,17 @@ impl SpritebitApp {
         };
         self.hover = pointer.filter(|p| area.contains(*p)).map(to_cell);
 
-        // Malen. Beim Abspielen hält ein Klick an, statt zu malen.
-        let mut painting = !panning && (primary || secondary) && (resp.hovered() || resp.dragged());
-        if painting && self.playing {
-            self.playing = false;
-            painting = false;
-        }
-        if painting && self.stroke_last.is_none() {
-            let layer = &self.sprite().layers[self.sprite().layer];
-            self.hint = if layer.locked {
-                Some(format!("Ebene „{}“ ist gesperrt — Schloss in der Timeline.", layer.name))
-            } else if !layer.visible {
-                Some(format!("Ebene „{}“ ist ausgeblendet — Auge in der Timeline.", layer.name))
-            } else {
-                None
-            };
-            if self.hint.is_some() {
-                painting = false;
-            }
-        }
-        if painting {
-            if let Some(cell) = pointer.map(to_cell) {
-                if self.stroke_last.is_none() {
-                    let cur = self.project.current;
-                    self.histories[cur].record(&self.project.sprites[cur]);
-                }
-                let from = self.stroke_last.unwrap_or(cell);
-                let value = if secondary { 0 } else { self.color };
-                let sp = self.project.sprite_mut();
-                let (w, h) = (sp.width as i64, sp.height as i64);
-                let img = sp.active();
-                for (x, y) in tools::line(from.0, from.1, cell.0, cell.1) {
-                    if x >= 0 && y >= 0 && x < w && y < h {
-                        img.set(x as u32, y as u32, value);
-                    }
-                }
-                self.stroke_last = Some(cell);
-                self.changed();
-            }
-        } else {
-            self.stroke_last = None;
-        }
+        // Werkzeug anwenden (tools_ui.rs).
+        let p = Pointer {
+            cell: pointer.map(to_cell),
+            over: resp.hovered() || resp.dragged(),
+            primary,
+            secondary,
+            pressed,
+            released,
+            panning,
+        };
+        self.use_tool(&p, ui.ctx());
 
         // Sichtbarer Ausschnitt in Sprite-Pixeln.
         let (sw, sh) = (self.sprite().width, self.sprite().height);
@@ -667,6 +671,8 @@ impl SpritebitApp {
                 );
             }
         }
+        // Form, die gerade aufgezogen wird.
+        self.shape_preview(&painter, origin, zoom);
         // Rand der Fläche.
         let border = egui::Rect::from_min_size(origin, Vec2::new(sw as f32, sh as f32) * zoom);
         painter.rect_stroke(border, 0.0, Stroke::new(1.0, Color32::from_gray(70)), egui::StrokeKind::Outside);
@@ -740,8 +746,10 @@ impl eframe::App for SpritebitApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.shortcuts(&ctx);
+        self.tool_keys(&ctx);
         self.advance_playback(&ctx);
         egui::Panel::top("menu").show(ui, |ui| self.menu_bar(ui));
+        egui::Panel::top("tools").show(ui, |ui| self.toolbar(ui));
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
         egui::Panel::bottom("timeline").resizable(true).default_size(150.0).show(ui, |ui| self.timeline(ui));
         egui::Panel::left("side").resizable(true).default_size(180.0).show(ui, |ui| {
@@ -750,5 +758,117 @@ impl eframe::App for SpritebitApp {
         egui::CentralPanel::default().show(ui, |ui| self.canvas(ui));
         self.dialogs(&ctx);
         self.sync_title(&ctx);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Oberflächen-Tests: die App läuft ohne Fenster (egui_kittest), Maus und
+    //! Tasten werden simuliert, geprüft wird das Bild im Sprite.
+
+    use super::*;
+    use egui_kittest::kittest::Queryable;
+    use egui_kittest::Harness;
+
+    fn app<'a>() -> Harness<'a, SpritebitApp> {
+        let mut h = Harness::builder().with_size(Vec2::new(1280.0, 800.0)).build_eframe(|_| SpritebitApp::new());
+        h.run();
+        h
+    }
+
+    /// Bildschirmpunkt in der Mitte von Sprite-Pixel (x, y).
+    fn at(h: &Harness<'_, SpritebitApp>, x: f32, y: f32) -> Pos2 {
+        let a = h.state();
+        a.canvas_rect.min + a.pan + Vec2::new(x + 0.5, y + 0.5) * a.zoom
+    }
+
+    fn drag(h: &mut Harness<'_, SpritebitApp>, from: (f32, f32), to: (f32, f32)) {
+        let (a, b) = (at(h, from.0, from.1), at(h, to.0, to.1));
+        h.hover_at(a);
+        h.run();
+        h.drag_at(a);
+        h.run();
+        for k in 1..=8 {
+            h.hover_at(a + (b - a) * (k as f32 / 8.0));
+            h.run();
+        }
+        h.drop_at(b);
+        h.run();
+    }
+
+    fn px(h: &Harness<'_, SpritebitApp>, x: u32, y: u32) -> u16 {
+        let s = h.state().project.sprite();
+        s.cel(s.frame, s.layer).get(x, y)
+    }
+
+    #[test]
+    fn stift_malt_einen_strich_ohne_luecken() {
+        let mut h = app();
+        drag(&mut h, (10.0, 10.0), (20.0, 10.0));
+        for x in 10..=20 {
+            assert_eq!(px(&h, x, 10), 5, "Pixel ({x}, 10)");
+        }
+        assert_eq!(px(&h, 21, 10), 0);
+        assert!(h.state().dirty);
+    }
+
+    #[test]
+    fn rueckgaengig_nimmt_den_strich_zurueck() {
+        let mut h = app();
+        drag(&mut h, (5.0, 5.0), (8.0, 5.0));
+        h.key_press_modifiers(Modifiers::COMMAND, Key::Z);
+        h.run();
+        assert_eq!(px(&h, 5, 5), 0);
+        h.key_press_modifiers(Modifiers::COMMAND, Key::Y);
+        h.run();
+        assert_eq!(px(&h, 5, 5), 5);
+    }
+
+    #[test]
+    fn rechteck_aus_der_werkzeugleiste() {
+        let mut h = app();
+        h.get_by_label("Rechteck").click();
+        h.run();
+        assert_eq!(h.state().tool, Tool::Rect);
+        drag(&mut h, (10.0, 10.0), (14.0, 13.0));
+        assert_eq!(px(&h, 10, 10), 5);
+        assert_eq!(px(&h, 14, 13), 5);
+        assert_eq!(px(&h, 12, 10), 5, "obere Kante");
+        assert_eq!(px(&h, 12, 11), 0, "innen leer");
+    }
+
+    #[test]
+    fn fuellen_per_taste() {
+        let mut h = app();
+        h.key_press(Key::F);
+        h.run();
+        assert_eq!(h.state().tool, Tool::Fill);
+        let p = at(&h, 30.0, 30.0);
+        h.hover_at(p);
+        h.run();
+        h.drag_at(p);
+        h.run();
+        h.drop_at(p);
+        h.run();
+        assert_eq!(px(&h, 0, 0), 5);
+        assert_eq!(px(&h, 63, 63), 5);
+    }
+
+    #[test]
+    fn gesperrte_ebene_wird_nicht_bemalt() {
+        let mut h = app();
+        h.state_mut().project.sprite_mut().layers[0].locked = true;
+        drag(&mut h, (10.0, 10.0), (12.0, 10.0));
+        assert_eq!(px(&h, 10, 10), 0);
+        assert!(h.state().hint.as_deref().is_some_and(|t| t.contains("gesperrt")));
+    }
+
+    #[test]
+    fn neuer_frame_aus_der_timeline() {
+        let mut h = app();
+        h.get_by_label("+ Frame").click();
+        h.run();
+        assert_eq!(h.state().project.sprite().frames.len(), 2);
+        assert_eq!(h.state().project.sprite().frame, 1);
     }
 }
