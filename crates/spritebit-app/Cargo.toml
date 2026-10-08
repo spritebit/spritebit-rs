@@ -1,0 +1,11 @@
+[package]
+name = "spritebit-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+eframe = "0.36.2"
+spritebit-core = { version = "0.1.0", path = "../spritebit-core" }

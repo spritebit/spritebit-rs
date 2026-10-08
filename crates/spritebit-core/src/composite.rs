@@ -44,9 +44,19 @@ fn mix(below: Rgb, top: Rgb, a: f32) -> Rgb {
 /// Frame `frame` im Ausschnitt `rect` als RGBA (4 Byte je Pixel, Zeile für
 /// Zeile). Transparente Stellen haben Alpha 0.
 pub fn render_rgba(sp: &Sprite, pal: &Palette, frame: usize, rect: Rect) -> Vec<u8> {
+    render_rgba_step(sp, pal, frame, rect, 1).0
+}
+
+/// Wie [`render_rgba`], aber nur jedes `step`-te Pixel in jeder Richtung —
+/// für weit herausgezoomte Ansichten, in denen mehrere Sprite-Pixel auf
+/// einen Bildschirm-Pixel fallen. Ergebnis: Puffer und seine Breite/Höhe
+/// (aufgerundet, `ceil(w / step)` × `ceil(h / step)`).
+pub fn render_rgba_step(sp: &Sprite, pal: &Palette, frame: usize, rect: Rect, step: u32) -> (Vec<u8>, u32, u32) {
+    let step = step.max(1);
     let r = rect.clamp_to(sp.width, sp.height);
-    let mut out = vec![0u8; (r.w * r.h * 4) as usize];
-    let mut filled = vec![false; (r.w * r.h) as usize];
+    let (ow, oh) = (r.w.div_ceil(step), r.h.div_ceil(step));
+    let mut out = vec![0u8; (ow * oh * 4) as usize];
+    let mut filled = vec![false; (ow * oh) as usize];
     for (l, layer) in sp.layers.iter().enumerate() {
         if !layer.visible || layer.opacity <= 0.0 {
             continue;
@@ -55,14 +65,14 @@ pub fn render_rgba(sp: &Sprite, pal: &Palette, frame: usize, rect: Rect) -> Vec<
         if img.allocated_tiles() == 0 {
             continue;
         }
-        for y in 0..r.h {
-            for x in 0..r.w {
-                let px = img.get(r.x + x, r.y + y);
+        for y in 0..oh {
+            for x in 0..ow {
+                let px = img.get(r.x + x * step, r.y + y * step);
                 if px == 0 {
                     continue;
                 }
                 let Some(top) = color_of(px, pal, &sp.free) else { continue };
-                let i = (y * r.w + x) as usize;
+                let i = (y * ow + x) as usize;
                 let o = i * 4;
                 let rgb = if layer.opacity >= 1.0 || !filled[i] {
                     top
@@ -75,7 +85,7 @@ pub fn render_rgba(sp: &Sprite, pal: &Palette, frame: usize, rect: Rect) -> Vec<
             }
         }
     }
-    out
+    (out, ow, oh)
 }
 
 #[cfg(test)]
@@ -142,6 +152,27 @@ mod tests {
         let buf = render_rgba(&sp, &pal, 0, r);
         assert_eq!(buf.len(), 20 * 20 * 4);
         assert_eq!(px(&buf, 20, 10, 10), [0, 0, 0, 255]);
+    }
+
+    #[test]
+    fn mit_schrittweite_nur_jedes_nte_pixel() {
+        let pal = Palette::grayscale();
+        let mut sp = Sprite::new("a", 10, 10).unwrap();
+        sp.active().set(4, 4, 5);
+        sp.active().set(5, 5, 1);
+        let (buf, w, h) = render_rgba_step(&sp, &pal, 0, Rect { x: 0, y: 0, w: 10, h: 10 }, 4);
+        assert_eq!((w, h), (3, 3));
+        assert_eq!(px(&buf, w, 1, 1), [0, 0, 0, 255], "Pixel (4,4) steht für den Block");
+        assert_eq!(buf.len(), 3 * 3 * 4);
+    }
+
+    #[test]
+    fn ganz_herausgezoomt_bleibt_der_puffer_klein() {
+        let pal = Palette::grayscale();
+        let sp = Sprite::new("gross", 8192, 8192).unwrap();
+        let (buf, w, h) = render_rgba_step(&sp, &pal, 0, Rect { x: 0, y: 0, w: 8192, h: 8192 }, 8);
+        assert_eq!((w, h), (1024, 1024));
+        assert_eq!(buf.len(), 1024 * 1024 * 4);
     }
 
     #[test]

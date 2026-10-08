@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/spritebit-core"]
+members = ["crates/spritebit-app","crates/spritebit-core"]
 
 [workspace.package]
 version = "0.1.0"
