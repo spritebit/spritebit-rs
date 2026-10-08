@@ -10,7 +10,7 @@ später auch als Browser-Version über WebAssembly aus derselben Codebasis.
 ```
 crates/
   spritebit-core   Datenmodell und Logik, ohne Oberfläche
-  spritebit-app    Oberfläche (egui/eframe) — folgt
+  spritebit-app    Oberfläche (egui/eframe 0.36)
 ```
 
 ### Große Zeichenflächen
@@ -28,6 +28,21 @@ Voraussetzung: Rust über [rustup](https://rustup.rs) (unter Windows zusätzlich
 die C++-Build-Tools von Visual Studio).
 
 ```
-cargo test        # alle Tests
-cargo build       # bauen
+cargo test                      # alle Tests
+cargo run -p spritebit-app      # Programm starten
+cargo build --release           # schnelle Fassung (target/release)
 ```
+
+## Bedienung (erste Fassung)
+
+| | |
+|---|---|
+| Linke Maustaste | malen in der gewählten Farbe |
+| Rechte Maustaste | radieren |
+| Mausrad / Strg+Mausrad | zoomen um den Mauszeiger |
+| Mittlere Taste oder Leertaste + Ziehen | Fläche verschieben |
+| Strg+Z / Strg+Y | Rückgängig / Wiederholen |
+| Datei → Neuer Sprite … | Größe bis 8192 × 8192 |
+| Ansicht | Einpassen, 100 %, Gitter |
+
+Die Statusleiste zeigt, wie viele Kacheln tatsächlich Speicher belegen.
