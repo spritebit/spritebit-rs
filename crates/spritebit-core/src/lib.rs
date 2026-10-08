@@ -12,6 +12,7 @@
 //! * [`tools`] — Werkzeug-Hilfen (Linie)
 //! * [`project`] — mehrere Sprites und eigene Paletten
 //! * [`io`] — eigenes Format `.spritebit` und Projektdatei der Web-Version
+//! * [`selection`] — Auswahl (Rechteck, Lasso, Farbe), kopieren, einfügen
 //! * [`builtin`] — die eingebauten Paletten der Web-Version
 
 pub mod builtin;
@@ -21,6 +22,7 @@ pub mod image;
 pub mod io;
 pub mod palette;
 pub mod project;
+pub mod selection;
 pub mod sprite;
 pub mod tools;
 
@@ -30,4 +32,5 @@ pub use image::{Image, Px, FREE_BASE, TILE};
 pub use io::{export_web, import_web, load_native, save_native, IoError};
 pub use palette::{Palette, Rgb};
 pub use project::Project;
+pub use selection::{Clip, Selection};
 pub use sprite::{Direction, Frame, Layer, Sprite, SpriteError, Tag, MAX_SIDE};
