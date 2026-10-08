@@ -1,21 +1,27 @@
 //! Timeline: Ebenen × Frames als Raster, wie in der Web-Version.
 //!
 //! ```text
-//!   [⏮ ◀ ▶ ▶ ⏭]  [+ Frame] [Duplizieren] [Frame löschen] …  FPS  Dauer
+//!   [⏮ ◀ ▶ ▶ ⏭]  Frame [+ ⧉ 🗑]  Ebene [+ ▲ ▼ 🗑]  Zellen [⧉ 📋 ⌫ ⛓ ⛓̸]  [Tag] [Onion]  FPS  Dauer
+//!               │ [Laufen──────]        ← Tags
 //!               │  1   2   3   4
 //!   👁 🔒 ⛓ Figur │  ●   ●   ○   ●
 //!   👁 🔒 ⛓ Grund │  ●━━━●━━━●━━━●     ← verknüpft: dasselbe Bild
 //! ```
 //!
-//! Ein Klick auf eine Zelle wählt Frame und Ebene, ein Klick auf eine
-//! Frame-Nummer nur den Frame. Auge, Schloss und Kette in der Ebenen-Spalte
-//! schalten Sichtbarkeit, Sperre und „durchgehend" um.
+//! * Klick auf eine Zelle wählt Frame und Ebene; Shift-Klick spannt einen
+//!   Bereich auf, auf den die Zellen-Knöpfe wirken.
+//! * Klick auf eine Frame-Nummer wählt den Frame, auf einen Tag öffnet ihn.
+//! * Auge, Schloss, Kette schalten Sichtbarkeit, Sperre, „durchgehend";
+//!   Doppelklick auf den Namen benennt die Ebene um.
 
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Sense, Stroke, Vec2};
+use spritebit_core::cels::{self, CelRange};
+use spritebit_core::sprite::{Direction, Tag};
 
 use crate::{icons, SpritebitApp};
 
 const LAYER_W: f32 = 170.0;
+const TAG_H: f32 = 16.0;
 const HEAD_H: f32 = 20.0;
 const ROW_H: f32 = 22.0;
 const CELL_W: f32 = 26.0;
@@ -23,6 +29,7 @@ const ICON_W: f32 = 20.0;
 
 const ACCENT: Color32 = Color32::from_rgb(0x6c, 0x9e, 0xf8);
 const DIM: Color32 = Color32::from_gray(140);
+const TAG_COLORS: [[u8; 3]; 6] = [[0xe5, 0x53, 0x4b], [0xe0, 0x82, 0x3d], [0xc9, 0xb3, 0x3a], [0x57, 0xab, 0x5a], [0x4a, 0xa3, 0xdf], [0x98, 0x6e, 0xe2]];
 
 impl SpritebitApp {
     /// Strukturänderung am aktuellen Sprite — als ein Undo-Schritt.
@@ -41,16 +48,24 @@ impl SpritebitApp {
         self.stroke_last = None;
     }
 
+    /// Der Bereich, auf den die Zellen-Knöpfe wirken — ohne Bereich die
+    /// aktive Zelle.
+    fn cur_range(&self) -> CelRange {
+        let sp = self.project.sprite();
+        self.cel_range.and_then(|r| r.clamp(sp)).unwrap_or(CelRange::single(sp.frame, sp.layer))
+    }
+
     pub(crate) fn timeline(&mut self, ui: &mut egui::Ui) {
         self.timeline_buttons(ui);
         ui.add_space(4.0);
         egui::ScrollArea::both().auto_shrink([false, false]).show(ui, |ui| self.timeline_grid(ui));
+        self.timeline_windows(ui.ctx());
     }
 
     fn timeline_buttons(&mut self, ui: &mut egui::Ui) {
         let n = self.project.sprite().frames.len();
         let cur = self.project.sprite().frame;
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             if icons::button(ui, icons::FIRST, "Erster Frame (Pos1)", true).clicked() {
                 self.go_frame(0);
             }
@@ -68,6 +83,7 @@ impl SpritebitApp {
                 self.go_frame(n - 1);
             }
             ui.separator();
+            ui.weak("Frame");
             if icons::button(ui, icons::PLUS, "Leerer Frame dahinter", true).clicked() {
                 self.edit_sprite(|s| {
                     let f = s.frame;
@@ -87,35 +103,78 @@ impl SpritebitApp {
                 });
             }
             ui.separator();
-            if ui.button("+ Ebene").on_hover_text("Neue Ebene über der aktiven").clicked() {
+            ui.weak("Ebene");
+            let (nl, l) = (self.project.sprite().layers.len(), self.project.sprite().layer);
+            if icons::button(ui, icons::PLUS, "Neue Ebene über der aktiven", true).clicked() {
                 self.edit_sprite(|s| {
                     let name = format!("Ebene {}", s.layers.len() + 1);
                     let at = s.layer + 1;
                     s.add_layer(at, name);
                 });
             }
-            let many_layers = self.project.sprite().layers.len() > 1;
-            if ui.add_enabled(many_layers, egui::Button::new("Ebene löschen")).clicked() {
+            if ui.add_enabled(l + 1 < nl, egui::Button::new("▲")).on_hover_text("Ebene nach oben").clicked() {
+                self.edit_sprite(|s| s.move_layer(l, l + 1));
+            }
+            if ui.add_enabled(l > 0, egui::Button::new("▼")).on_hover_text("Ebene nach unten").clicked() {
+                self.edit_sprite(|s| s.move_layer(l, l - 1));
+            }
+            if icons::button(ui, icons::TRASH, "Ebene löschen", nl > 1).clicked() {
                 self.edit_sprite(|s| {
                     let l = s.layer;
                     s.delete_layer(l);
                 });
             }
             ui.separator();
+            ui.weak("Zellen");
+            let r = self.cur_range();
             let sp = self.project.sprite();
-            let (f, l) = (sp.frame, sp.layer);
-            let linked = sp.is_linked(f, l);
-            if ui
-                .add_enabled(f > 0, egui::Button::image(icons::image(icons::LINK, ui.visuals().text_color())))
-                .on_hover_text("Verknüpfen — diese Zelle zeigt dasselbe Bild wie der Frame davor")
-                .clicked()
-            {
-                self.edit_sprite(|s| s.link(f - 1, f, l));
+            let linked = (r.l0..=r.l1).any(|l| (r.f0..=r.f1).any(|f| sp.is_linked(f, l)));
+            let can_link = r.f1 > r.f0 || sp.frame > 0;
+            if icons::button(ui, icons::COPY, "Zellen kopieren (Bereich per Shift-Klick)", true).clicked() {
+                self.cel_clip = Some(cels::copy(self.project.sprite(), r));
             }
-            if icons::button(ui, icons::UNLINK, "Lösen — eigenes Bild mit gleichem Inhalt", linked).clicked() {
-                self.edit_sprite(|s| s.unlink(f, l));
+            if icons::button(ui, icons::PASTE, "Zellen an der aktiven Zelle einfügen", self.cel_clip.is_some()).clicked() {
+                if let Some(clip) = self.cel_clip.clone() {
+                    let mut used = None;
+                    self.edit_sprite(|s| {
+                        let (f, l) = (s.frame, s.layer);
+                        used = cels::paste(s, &clip, f, l);
+                    });
+                    match used {
+                        Some(u) if u.size() > 1 => self.cel_range = Some(u),
+                        Some(_) => self.cel_range = None,
+                        None => self.hint = Some("Hier passt nichts hin — die Zellen haben eine andere Größe.".into()),
+                    }
+                }
+            }
+            if icons::button(ui, icons::ERASER, "Zellen leeren", true).clicked() {
+                self.edit_sprite(|s| cels::clear(s, r));
+            }
+            if icons::button(ui, icons::LINK, "Verknüpfen — die Frames teilen sich je Ebene ein Bild (ohne Bereich: mit dem Frame davor)", can_link).clicked() {
+                let r = if r.f1 > r.f0 { r } else { CelRange { f0: r.f0 - 1, ..r } };
+                self.edit_sprite(|s| {
+                    cels::link(s, r);
+                });
+            }
+            if icons::button(ui, icons::UNLINK, "Lösen — jede Zelle bekommt ihr eigenes Bild", linked).clicked() {
+                self.edit_sprite(|s| {
+                    cels::unlink(s, r);
+                });
             }
             ui.separator();
+            if icons::button(ui, icons::TAG, "Tag anlegen — benennt den Bereich bzw. den Frame, z. B. „Laufen“", true).clicked() {
+                let k = self.project.sprite().tags.len();
+                self.edit_sprite(|s| {
+                    s.tags.push(Tag {
+                        name: format!("Tag {}", k + 1),
+                        from: r.f0,
+                        to: r.f1,
+                        color: TAG_COLORS[k % TAG_COLORS.len()],
+                        direction: Direction::Forward,
+                    });
+                });
+                self.tag_edit = Some(k);
+            }
             let onion_btn = egui::Button::selectable(self.onion, icons::image(icons::ONION, ui.visuals().text_color()));
             if ui.add(onion_btn).on_hover_text("Onion Skin — voriger (rot) und nächster Frame (blau) scheinen durch").clicked() {
                 self.onion = !self.onion;
@@ -144,24 +203,36 @@ impl SpritebitApp {
     fn timeline_grid(&mut self, ui: &mut egui::Ui) {
         let sp = self.project.sprite();
         let (n, nl) = (sp.frames.len(), sp.layers.len());
-        let size = Vec2::new(LAYER_W + n as f32 * CELL_W + 8.0, HEAD_H + nl as f32 * ROW_H + 4.0);
+        let tag_h = if sp.tags.is_empty() { 0.0 } else { TAG_H + 2.0 };
+        let size = Vec2::new(LAYER_W + n as f32 * CELL_W + 8.0, tag_h + HEAD_H + nl as f32 * ROW_H + 4.0);
         let (resp, painter) = ui.allocate_painter(size, Sense::click());
         let o = resp.rect.min;
         let font = FontId::proportional(12.0);
+        let head_y = o.y + tag_h;
         // Zeile `r` von oben zeigt Ebene nl-1-r — oberste Ebene oben.
-        let row_y = |r: usize| o.y + HEAD_H + r as f32 * ROW_H;
+        let row_y = |r: usize| head_y + HEAD_H + r as f32 * ROW_H;
         let col_x = |f: usize| o.x + LAYER_W + f as f32 * CELL_W;
+        let range = self.cel_range.and_then(|r| r.clamp(sp)).filter(|r| r.size() > 1);
+
+        // Tags über den Frame-Nummern.
+        for t in &sp.tags {
+            let r = egui::Rect::from_min_max(Pos2::new(col_x(t.from) + 1.0, o.y), Pos2::new(col_x(t.to + 1) - 1.0, o.y + TAG_H));
+            let [cr, cg, cb] = t.color;
+            painter.rect_filled(r, 3.0, Color32::from_rgb(cr, cg, cb).gamma_multiply(0.45));
+            painter.rect_filled(egui::Rect::from_min_size(r.min, Vec2::new(3.0, TAG_H)), 1.0, Color32::from_rgb(cr, cg, cb));
+            let mark = match t.direction {
+                Direction::Forward => "",
+                Direction::Reverse => "← ",
+                Direction::PingPong => "↔ ",
+            };
+            painter.with_clip_rect(r).text(r.left_center() + Vec2::new(6.0, 0.0), Align2::LEFT_CENTER, format!("{mark}{}", t.name), FontId::proportional(11.0), Color32::WHITE);
+        }
 
         // Kopfzeile: Frame-Nummern (1-basiert, wie in der Web-Version).
         for f in 0..n {
-            let c = egui::Rect::from_min_size(Pos2::new(col_x(f), o.y), Vec2::new(CELL_W, HEAD_H));
+            let c = egui::Rect::from_min_size(Pos2::new(col_x(f), head_y), Vec2::new(CELL_W, HEAD_H));
             if f == sp.frame {
                 painter.rect_filled(c.shrink(1.0), 3.0, ACCENT.gamma_multiply(0.35));
-            }
-            let in_tag = sp.tags.iter().find(|t| f >= t.from && f <= t.to);
-            if let Some(t) = in_tag {
-                let [r, g, b] = t.color;
-                painter.line_segment([c.left_bottom(), c.right_bottom()], Stroke::new(3.0, Color32::from_rgb(r, g, b)));
             }
             painter.text(c.center(), Align2::CENTER_CENTER, format!("{}", f + 1), font.clone(), if f == sp.frame { Color32::WHITE } else { DIM });
         }
@@ -189,8 +260,11 @@ impl SpritebitApp {
             for f in 0..n {
                 let c = egui::Rect::from_min_size(Pos2::new(col_x(f), y), Vec2::new(CELL_W, ROW_H - 2.0));
                 let active = f == sp.frame && l == sp.layer;
+                let in_range = range.is_some_and(|rg| rg.contains(f, l));
                 let bg = if active {
                     ACCENT.gamma_multiply(0.45)
+                } else if in_range {
+                    ACCENT.gamma_multiply(0.25)
                 } else if f == sp.frame || l == sp.layer {
                     Color32::from_gray(44)
                 } else {
@@ -216,12 +290,21 @@ impl SpritebitApp {
         }
 
         // Klicks auswerten
-        if let Some(p) = resp.interact_pointer_pos().filter(|_| resp.clicked()) {
+        let shift = ui.input(|i| i.modifiers.shift);
+        let double = resp.double_clicked();
+        if let Some(p) = resp.interact_pointer_pos().filter(|_| resp.clicked() || double) {
             let fx = ((p.x - o.x - LAYER_W) / CELL_W).floor();
-            let ry = ((p.y - o.y - HEAD_H) / ROW_H).floor();
-            if p.y < o.y + HEAD_H {
-                if fx >= 0.0 && (fx as usize) < n {
-                    self.go_frame(fx as usize);
+            let ry = ((p.y - head_y - HEAD_H) / ROW_H).floor();
+            let frame_at = (fx >= 0.0 && (fx as usize) < n).then_some(fx as usize);
+            if p.y < head_y {
+                // Tag-Spur
+                if let Some(f) = frame_at {
+                    self.tag_edit = self.project.sprite().tags.iter().position(|t| f >= t.from && f <= t.to);
+                }
+            } else if p.y < head_y + HEAD_H {
+                if let Some(f) = frame_at {
+                    self.cel_range = None;
+                    self.go_frame(f);
                 }
             } else if ry >= 0.0 && (ry as usize) < nl {
                 let l = nl - 1 - ry as usize;
@@ -231,16 +314,127 @@ impl SpritebitApp {
                         0 => self.edit_sprite(|s| s.layers[l].visible = !s.layers[l].visible),
                         1 => self.edit_sprite(|s| s.layers[l].locked = !s.layers[l].locked),
                         2 => self.edit_sprite(|s| s.layers[l].continuous = !s.layers[l].continuous),
-                        _ => self.project.sprite_mut().layer = l,
+                        _ if double => self.rename_layer = Some((l, self.project.sprite().layers[l].name.clone())),
+                        _ => {
+                            self.deselect();
+                            self.project.sprite_mut().layer = l;
+                        }
                     }
-                } else if fx >= 0.0 && (fx as usize) < n {
+                } else if let Some(f) = frame_at {
                     self.deselect();
+                    if shift {
+                        let (af, al) = self.cel_anchor.unwrap_or((self.project.sprite().frame, self.project.sprite().layer));
+                        self.cel_range = Some(CelRange::new(af, al, f, l));
+                    } else {
+                        self.cel_range = None;
+                        self.cel_anchor = Some((f, l));
+                    }
                     let s = self.project.sprite_mut();
                     s.layer = l;
-                    s.frame = fx as usize;
+                    s.frame = f;
                     self.stroke_last = None;
                 }
             }
+        }
+    }
+
+    /// Fenster der Timeline: Ebene umbenennen, Tag bearbeiten.
+    fn timeline_windows(&mut self, ctx: &egui::Context) {
+        // Ebene umbenennen
+        let mut done = None;
+        let mut cancel = false;
+        if let Some((l, name)) = &mut self.rename_layer {
+            egui::Window::new("Ebene umbenennen").collapsible(false).resizable(false).show(ctx, |ui| {
+                let r = ui.text_edit_singleline(name);
+                r.request_focus();
+                let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                ui.horizontal(|ui| {
+                    if ui.button("OK").clicked() || enter {
+                        done = Some((*l, name.trim().to_string()));
+                    }
+                    if ui.button("Abbrechen").clicked() {
+                        cancel = true;
+                    }
+                });
+            });
+        }
+        if let Some((l, name)) = done {
+            if !name.is_empty() && l < self.project.sprite().layers.len() {
+                self.edit_sprite(|s| s.layers[l].name = name);
+            }
+            self.rename_layer = None;
+        }
+        if cancel {
+            self.rename_layer = None;
+        }
+
+        // Tag bearbeiten
+        let Some(k) = self.tag_edit else { return };
+        let n = self.project.sprite().frames.len();
+        let Some(mut t) = self.project.sprite().tags.get(k).cloned() else {
+            self.tag_edit = None;
+            return;
+        };
+        let before = t.clone();
+        let (mut close, mut delete, mut play) = (false, false, false);
+        egui::Window::new("Tag").collapsible(false).resizable(false).show(ctx, |ui| {
+            ui.text_edit_singleline(&mut t.name);
+            ui.horizontal(|ui| {
+                ui.label("Frames");
+                let (mut a, mut b) = (t.from + 1, t.to + 1);
+                ui.add(egui::DragValue::new(&mut a).range(1..=n));
+                ui.label("–");
+                ui.add(egui::DragValue::new(&mut b).range(1..=n));
+                t.from = a.min(b) - 1;
+                t.to = a.max(b) - 1;
+            });
+            ui.horizontal(|ui| {
+                ui.label("Richtung");
+                egui::ComboBox::from_id_salt("tag-dir")
+                    .selected_text(match t.direction {
+                        Direction::Forward => "Vorwärts",
+                        Direction::Reverse => "Rückwärts",
+                        Direction::PingPong => "Ping-Pong",
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut t.direction, Direction::Forward, "Vorwärts");
+                        ui.selectable_value(&mut t.direction, Direction::Reverse, "Rückwärts");
+                        ui.selectable_value(&mut t.direction, Direction::PingPong, "Ping-Pong");
+                    });
+            });
+            ui.horizontal(|ui| {
+                ui.label("Farbe");
+                egui::color_picker::color_edit_button_srgb(ui, &mut t.color);
+            });
+            ui.separator();
+            ui.horizontal(|ui| {
+                play = ui.button("Abspielen").clicked();
+                delete = ui.button("Löschen").clicked();
+                close = ui.button("Fertig").clicked();
+            });
+        });
+        if delete {
+            self.edit_sprite(|s| {
+                s.tags.remove(k);
+            });
+            self.tag_edit = None;
+            return;
+        }
+        if t != before {
+            if t.name.trim().is_empty() {
+                t.name = before.name.clone();
+            }
+            self.edit_sprite(|s| s.tags[k] = t.clone());
+        }
+        if play {
+            self.go_frame(t.from);
+            if !self.playing {
+                self.toggle_play(ctx);
+            }
+            close = true;
+        }
+        if close {
+            self.tag_edit = None;
         }
     }
 
@@ -248,10 +442,11 @@ impl SpritebitApp {
     pub(crate) fn toggle_play(&mut self, ctx: &egui::Context) {
         self.playing = !self.playing && self.project.sprite().frames.len() > 1;
         self.frame_started = ctx.input(|i| i.time);
+        self.play_step = 0;
     }
 
     /// Bei jedem Durchlauf: ist die Zeit des Frames um, kommt der nächste.
-    /// Steht man in einem Tag, läuft nur dieser.
+    /// Steht man in einem Tag, läuft nur dieser — in seiner Richtung.
     pub(crate) fn advance_playback(&mut self, ctx: &egui::Context) {
         if !self.playing {
             return;
@@ -261,9 +456,13 @@ impl SpritebitApp {
         let dur = sp.frame_duration(sp.frame) as f64 / 1000.0;
         if now - self.frame_started >= dur {
             let f = sp.frame;
-            let next = match sp.tags.iter().find(|t| f >= t.from && f <= t.to && t.to > t.from) {
-                Some(t) if f >= t.to => t.from,
-                Some(_) => f + 1,
+            let next = match sp.tags.iter().filter(|t| f >= t.from && f <= t.to && t.to > t.from).min_by_key(|t| t.to - t.from) {
+                Some(t) => {
+                    let order = spritebit_core::export::tag_frames(t);
+                    let k = if order.get(self.play_step) == Some(&f) { self.play_step } else { order.iter().position(|&x| x == f).unwrap_or(0) };
+                    self.play_step = (k + 1) % order.len();
+                    order[self.play_step]
+                }
                 None => (f + 1) % sp.frames.len(),
             };
             self.project.sprite_mut().frame = next;

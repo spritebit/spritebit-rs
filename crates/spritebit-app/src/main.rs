@@ -126,6 +126,16 @@ struct SpritebitApp {
     mirror_y: bool,
     palette_edit: bool,
     export_dialog: Option<export_ui::ExportDialog>,
+    /// Bereich in der Timeline (Shift-Klick) und sein Ausgangspunkt.
+    cel_range: Option<spritebit_core::cels::CelRange>,
+    cel_anchor: Option<(usize, usize)>,
+    cel_clip: Option<spritebit_core::cels::CelClip>,
+    /// Welcher Tag gerade bearbeitet wird.
+    tag_edit: Option<usize>,
+    /// Ebene, die gerade umbenannt wird, und der Name im Feld.
+    rename_layer: Option<(usize, String)>,
+    /// Stelle in der Runde eines Tags beim Abspielen (Ping-Pong).
+    play_step: usize,
 }
 
 impl SpritebitApp {
@@ -171,6 +181,12 @@ impl SpritebitApp {
             mirror_y: false,
             palette_edit: false,
             export_dialog: None,
+            cel_range: None,
+            cel_anchor: None,
+            cel_clip: None,
+            tag_edit: None,
+            rename_layer: None,
+            play_step: 0,
             rng: spritebit_core::tools::Rng::new(
                 std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64),
             ),

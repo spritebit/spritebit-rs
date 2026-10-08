@@ -13,10 +13,12 @@
 //! * [`project`] — mehrere Sprites und eigene Paletten
 //! * [`io`] — eigenes Format `.spritebit` und Projektdatei der Web-Version
 //! * [`selection`] — Auswahl (Rechteck, Lasso, Farbe), kopieren, einfügen
+//! * [`cels`] — Zellen-Bereiche der Timeline: verschieben, kopieren, verknüpfen
 //! * [`export`] — PNG, GIF, Spritesheet mit JSON-Atlas
 //! * [`builtin`] — die eingebauten Paletten der Web-Version
 
 pub mod builtin;
+pub mod cels;
 pub mod composite;
 pub mod export;
 pub mod history;
