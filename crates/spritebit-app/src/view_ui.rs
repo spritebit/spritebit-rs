@@ -204,7 +204,7 @@ impl SpritebitApp {
         egui::Window::new(tr("Hilfe")).open(&mut open).default_size([560.0, 620.0]).show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.weak(format!("spritebit {}", crate::VERSION));
-                ui.label(tr("Pixel-Editor mit Foto-Vorlage. Du malst frei — oder paust ein Foto als Schablone ab und lässt es automatisch zu einem sauberen Sprite verarbeiten."));
+                ui.label(tr("Pixel-Editor für Sprites, Animationen und Spiel-Levels. Du malst frei — mit Ebenen, Frames, Licht und Kacheln — oder paust ein Foto als Schablone ab und lässt es automatisch zu einem sauberen Sprite verarbeiten."));
                 for (title, lines) in help_sections() {
                     ui.add_space(8.0);
                     ui.strong(title);
@@ -362,6 +362,10 @@ fn civil(z: i64) -> (i64, u32, u32) {
 
 fn help_sections() -> Vec<(&'static str, Vec<&'static str>)> {
     vec![
+        (tr("Arbeitsfläche"), vec![
+            tr("Reiter über der Zeichenfläche zeigen die geöffneten Sprites: Klick wechselt, × oder Mittelklick schließt, Ziehen ordnet."),
+            tr("In Feldern für Größen darf man rechnen: 24 * 4, 24x4, (16+8)*2 oder 96 : 4."),
+        ]),
         (tr("Farbpaletten"), vec![
             tr("Eine Palette ordnet jeder Nummer eine Farbe zu. 0 ist immer transparent."),
             tr("Jeder Sprite merkt sich seine eigene Palette. Eine Farbe ändern färbt alle Pixel mit dieser Nummer sofort um."),
@@ -371,8 +375,10 @@ fn help_sections() -> Vec<(&'static str, Vec<&'static str>)> {
         (tr("Werkzeuge"), vec![
             tr("Stift — einzelne Pixel. Pinsel — Fläche; Stärke = Dichte, Größe = Kantenlänge. Spray — zufällige Pixel; Stärke = Menge."),
             tr("Füllen — zusammenhängende gleiche Fläche. Radierer — setzt auf transparent. Zauberstab — löscht zusammenhängende ähnliche Fläche."),
+            tr("Größe 1–64 per Regler oder Zahlenfeld; Alt + rechte Maustaste ziehen verstellt sie direkt auf der Fläche. Ein Umriss zeigt, was Pinsel, Radierer und Spray gleich treffen."),
+            tr("Clean Stroke — beim Stift (und beim Radierer mit Größe 1) verschwinden die L-Ecken einer freihändigen Linie: saubere 1-Pixel-Linien."),
             tr("Linie · Rechteck · Ellipse — aufziehen, Loslassen zeichnet. „Gefüllt“ schaltet zwischen Kontur und Fläche."),
-            tr("Hand — schiebt nur die Ansicht. Dasselbe geht jederzeit mit gehaltener Leertaste oder der mittleren Maustaste."),
+            tr("Hand — schiebt nur die Ansicht; auf einer Hilfslinie zieht sie die Linie. Verschieben geht jederzeit auch mit gehaltener Leertaste oder der mittleren Maustaste."),
         ]),
         (tr("Symmetrie"), vec![tr("Die Knöpfe ↔ und ↕ spiegeln jeden Strich an der Mittelachse — beide zusammen ergeben vier Spiegelungen.")]),
         (tr("Auswahl"), vec![
@@ -385,10 +391,28 @@ fn help_sections() -> Vec<(&'static str, Vec<&'static str>)> {
             tr("Frei drehen: der Regler zeigt eine Vorschau; Enter übernimmt, Esc geht zurück auf 0°."),
             tr("Zuschneiden, Zentrieren, Leinwand (ohne zu skalieren) und ×2 / ÷2 wirken auf alle Frames."),
         ]),
+        (tr("Hilfslinien"), vec![
+            tr("Freie Linien und Figuren-Proportionen (2–8 Kopfhöhen) — nur zum Zeichnen, nie im Export. G blendet sie ein und aus."),
+            tr("Im Modus „Verschieben“ (oder mit der Hand) Linien ziehen; aus dem Bild gezogen ist eine Linie gelöscht."),
+            tr("Eigene Layouts: Linien und Einteilung unter einem Namen speichern und auf jeden Sprite anwenden — bei anderer Größe anteilig umgerechnet."),
+        ]),
         (tr("Ebenen und Animation"), vec![
             tr("Gemalt wird in die aktive Ebene; angezeigt werden alle sichtbaren übereinander. Auge blendet aus, Schloss sperrt."),
             tr("In der Timeline: Klick wählt, Strg+Klick und Umschalt+Klick markieren mehrere Frames, Ziehen sortiert Frames und Ebenen um."),
+            tr("Ebenen: nach unten oder alle sichtbaren zusammenführen. Eine Maske blendet Teile einer Ebene aus, ohne sie zu löschen — beim Bearbeiten blendet Malen aus und Radieren wieder ein."),
+            tr("Zellen: Umschalt+Klick oder Ziehen spannt einen Bereich auf — kopieren, einfügen, leeren, verknüpfen (die Frames teilen sich ein Bild) oder lösen. „Durchgehend“ lässt neue Frames das Bild des vorigen teilen."),
+            tr("Tags benennen einen Abschnitt (z. B. „Laufen“) mit Richtung — vorwärts, rückwärts, Ping-Pong; GIFs gehen auch je Tag."),
             tr("Onion Skin lässt Nachbar-Frames durchscheinen — einstellbar im Zahnrad-Menü der Timeline."),
+        ]),
+        (tr("Licht und Schatten"), vec![
+            tr("Panel Licht: Lichtquelle aus 8 Richtungen, Stärke und Breite der Kanten, auf Wunsch Schlagschatten. Solange es offen ist, zeigt die Fläche eine Vorschau."),
+            tr("„Als Ebene übernehmen“ legt Licht und Schatten als eigene, gesperrte Ebenen an — für alle Frames. Danach rechnet jede Änderung die Ebenen neu."),
+        ]),
+        (tr("Kacheln (Tilemaps)"), vec![
+            tr("Eine Tilemap-Ebene besteht aus Kacheln fester Größe (8–64 px). Malt man eine Kachel an, ändert sie sich überall, wo sie liegt — auch in anderen Frames."),
+            tr("Panel Kacheln: neue Tilemap-Ebene oder die aktive umwandeln. Pixel malen: Auto legt in leeren Zellen neue Kacheln an, Manuell nicht."),
+            tr("Kacheln setzen: Kachel in der Liste wählen, dann setzt der Stift sie, Radierer oder Rechtsklick leert, Füllen füllt, Alt+Klick nimmt eine Kachel auf."),
+            tr("„Für Godot exportieren“ schreibt einen Ordner mit Kachelbild (PNG), Szene (.tscn mit TileMapLayer) und JSON — in den Godot-Projektordner legen (Godot 4.3 oder neuer)."),
         ]),
         (tr("Schablone"), vec![
             tr("Bild laden, mit Umschalt+Alt ziehen verschieben, Deckkraft und Größe per Regler; Umschalt+Alt halten zeigt sie vorn."),
@@ -406,6 +430,7 @@ fn help_keys() -> Vec<(&'static str, &'static str)> {
         (tr("Klick"), tr("Malen")),
         (tr("Rechtsklick"), tr("Löschen (gedrückt halten = durchgehend)")),
         ("Alt + Klick", tr("Pipette")),
+        (tr("Alt + Klick (Kacheln setzen)"), tr("Kachel aufnehmen")),
         (tr("Alt + Rechts ziehen"), tr("Größe von Pinsel, Radierer und Spray")),
         ("Shift + Alt", tr("Schablone: halten = vorn, ziehen = verschieben, Klick = Farbe")),
         ("0 – 9", tr("Farbe mit dieser Nummer")),

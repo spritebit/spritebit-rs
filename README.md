@@ -1,7 +1,10 @@
 # spritebit (Rust)
 
 Neubau von [spritebit](https://spritebit.at) als Desktop-Programm in Rust —
-später auch als Browser-Version über WebAssembly aus derselben Codebasis.
+Pixel-Art-Editor für Sprites, Animationen und Spiel-Levels: Ebenen mit Masken,
+Timeline als Raster mit Tags und verknüpften Zellen, Licht und Schatten,
+**Tilemaps mit Godot-Export**, Code-Export in neun Formaten. Später auch als
+Browser-Version über WebAssembly aus derselben Codebasis.
 
 [**⬇ Download für Windows**](https://github.com/spritebit/spritebit-rs/releases/latest/download/spritebit-windows-x64.zip) ·
 [Alle Versionen](https://github.com/spritebit/spritebit-rs/releases) ·
@@ -93,7 +96,11 @@ cargo build --release           # schnelle Fassung (target/release)
 | Strg+E | Export: PNG (Frame oder alle), GIF (ganz oder je Tag), Spritesheet + JSON-Atlas |
 | Ansicht → Sprache | Deutsch, English, Österreichisch (wird gemerkt) |
 | Reiter | Geöffnete Sprites über der Zeichenfläche: Klick wechselt, × / Mittelklick / Strg+W schließt, Strg+Tab schaltet weiter, Ziehen ordnet |
-| Rechte Leiste | Vorschau, Palette (Bibliothek), Bild, Aufräumen, Licht (Lichtquelle, Kantenlicht, Schlagschatten — als eigene Ebenen, jederzeit umstellbar), Hilfslinien, Schablone, Code & Export |
+| Rechte Leiste | Vorschau, Palette (Bibliothek), Bild, Aufräumen, Licht (Lichtquelle, Kantenlicht, Schlagschatten — als eigene Ebenen, jederzeit umstellbar), Kacheln, Hilfslinien, Schablone, Code & Export |
+| Panel Kacheln | Tilemap-Ebene anlegen oder umwandeln; *Pixel malen* (eine Kachel ändert sich überall, Auto/Manuell) oder *Kacheln setzen* (Stift setzt, Radierer/Rechts leert, Füllen füllt, Alt+Klick nimmt auf); Export für Godot 4 (PNG + .tscn + JSON) |
+| Pinselgröße | 1–64 per Regler oder Zahlenfeld, Alt + rechte Maustaste ziehen |
+| Größenfelder | rechnen: `24 * 4`, `24x4`, `(16+8)*2`, `96 : 4` |
+| Hilfslinien | Hand greift Linien direkt; eigene Layouts speichern und anwenden (anteilig umgerechnet, `guide_layouts.json`) |
 | 0 – 9 | Farbe mit dieser Nummer |
 | Alt + Ziehen in der Auswahl | Kopie verschieben |
 | Umschalt + Alt | Schablone: halten = vorn, ziehen = verschieben, Klick = Farbe |
@@ -126,7 +133,8 @@ Die Statusleiste zeigt, wie viele Kacheln tatsächlich Speicher belegen.
 Die laufende Sitzung wird im Einstellungsordner (`%APPDATA%\spritebit`)
 gesichert. Stürzt die App ab, ist beim nächsten Start alles wieder da; der
 Stand vom Sitzungsstart bleibt als Sicherung (Hilfe → Sicherung). Dort
-liegen auch Sprache, Timeline-Einstellungen, Hintergrund und die Schablone.
+liegen auch Sprache, Timeline-Einstellungen, Hintergrund, die Schablone und die
+eigenen Hilfslinien-Layouts.
 
 ## Schriften
 
