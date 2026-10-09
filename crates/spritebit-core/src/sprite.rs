@@ -86,6 +86,24 @@ pub struct Guides {
 }
 
 impl Guides {
+    /// Von einem Sprite `from` (Breite, Höhe) auf einen der Größe `to`
+    /// umrechnen: die Linien wandern anteilig mit — wie `fitLayout` im Web
+    /// (eigene Hilfslinien-Layouts).
+    pub fn scaled(&self, from: (u32, u32), to: (u32, u32)) -> Guides {
+        let sx = to.0 as f64 / from.0.max(1) as f64;
+        let sy = to.1 as f64 / from.1.max(1) as f64;
+        let x = |v: u32| (v as f64 * sx).round() as u32;
+        let y = |v: u32| (v as f64 * sy).round() as u32;
+        Guides {
+            h: self.h.iter().map(|&v| y(v)).collect(),
+            v: self.v.iter().map(|&v| x(v)).collect(),
+            heads: self.heads,
+            top: y(self.top),
+            bottom: y(self.bottom),
+        }
+        .normalized(to.0, to.1)
+    }
+
     /// Auf eine Fläche `w × h` begrenzen — wie `normalizeGuides` im Web.
     pub fn normalized(&self, w: u32, h: u32) -> Guides {
         let ints = |a: &[u32], max: u32| {
@@ -541,6 +559,14 @@ impl Sprite {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hilfslinien_anteilig_umrechnen() {
+        let g = Guides { h: vec![8, 16], v: vec![12], heads: 4, top: 2, bottom: 30 };
+        assert_eq!(g.scaled((24, 32), (24, 32)), g);
+        assert_eq!(g.scaled((24, 32), (48, 64)), Guides { h: vec![16, 32], v: vec![24], heads: 4, top: 4, bottom: 60 });
+        assert_eq!(g.scaled((24, 32), (12, 16)), Guides { h: vec![4, 8], v: vec![6], heads: 4, top: 1, bottom: 15 });
+    }
 
     #[test]
     fn ebene_verdoppeln_haelt_verknuepfung() {

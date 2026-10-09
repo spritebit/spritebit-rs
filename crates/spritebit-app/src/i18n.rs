@@ -329,6 +329,20 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Keine Outline nötig — Sprite leer?", "No outline needed — is the sprite empty?", "Ka Umrandung nötig — is da Sprite laar?"),
     // ── Licht ──
     ("Licht", "Light", "Liacht"),
+    // ── Eigene Hilfslinien-Layouts (guides_ui.rs) ──
+    ("Eigene Layouts", "Own layouts", ""),
+    ("noch keine gespeichert", "none saved yet", "no kane gspeichert"),
+    ("Linien und Einteilung dieses Layouts auf den Sprite legen — bei anderer Größe anteilig umgerechnet", "Put the lines and division of this layout on the sprite — scaled proportionally for another size", ""),
+    ("Gewähltes Layout löschen", "Delete the chosen layout", ""),
+    ("Name des Layouts", "Name of the layout", ""),
+    ("Die jetzigen Linien und die Einteilung als Layout speichern — gleicher Name ersetzt", "Save the current lines and division as a layout — the same name replaces it", ""),
+    ("Erst einen Namen für das Layout eingeben.", "Enter a name for the layout first.", ""),
+    ("Layout „{name}“ gespeichert — gilt für alle Sprites.", "Layout “{name}” saved — it applies to all sprites.", ""),
+    ("Layout „{name}“ ersetzt.", "Layout “{name}” replaced.", ""),
+    ("Layout „{name}“ angewendet.", "Layout “{name}” applied.", ""),
+    ("Layout „{name}“ angewendet — von {w} × {h} auf diese Größe umgerechnet.", "Layout “{name}” applied — scaled from {w} × {h} to this size.", ""),
+    ("Layout „{name}“ gelöscht.", "Layout “{name}” deleted.", ""),
+    ("Layouts konnten nicht gespeichert werden.", "Layouts could not be saved.", ""),
     // ── Kacheln (tiles_ui.rs) ──
     ("Kacheln", "Tiles", "Kachln"),
     ("Kachelgröße", "Tile size", ""),

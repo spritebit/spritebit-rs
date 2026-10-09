@@ -155,11 +155,13 @@ fn parse_tags(v: Option<&Value>, frames: usize) -> Vec<Tag> {
         .collect()
 }
 
-fn guides_json(g: &Guides) -> Value {
+/// Hilfslinien als JSON (auch für die eigenen Layouts der App).
+pub fn guides_json(g: &Guides) -> Value {
     json!({ "h": g.h, "v": g.v, "heads": g.heads, "top": g.top, "bottom": g.bottom })
 }
 
-fn parse_guides(v: Option<&Value>, w: u32, h: u32) -> Guides {
+/// Hilfslinien aus JSON, auf `w × h` begrenzt.
+pub fn parse_guides(v: Option<&Value>, w: u32, h: u32) -> Guides {
     let nums = |k: &str| -> Vec<u32> {
         v.and_then(|g| g.get(k)).and_then(Value::as_array).map(|a| a.iter().filter_map(|x| x.as_u64()).map(|x| x as u32).collect()).unwrap_or_default()
     };

@@ -13,7 +13,7 @@
 use eframe::egui::{self, Align2, Color32, FontId, Key, Pos2, Stroke};
 use spritebit_core::{transform, FIGURE_HEADS};
 
-use crate::i18n::tr;
+use crate::i18n::{tr, trf};
 use crate::SpritebitApp;
 
 const FREE: Color32 = Color32::from_rgba_premultiplied(42, 190, 230, 230);
@@ -33,6 +33,52 @@ pub(crate) struct GuideState {
     pub show: bool,
     pub edit: bool,
     pub drag: Option<GuideHit>,
+    /// Eigene Layouts — für alle Sprites, im Einstellungsordner gespeichert.
+    pub layouts: Vec<GuideLayout>,
+    /// Gewähltes Layout in der Liste.
+    pub layout_sel: usize,
+    /// Name im Feld „Name des Layouts“.
+    pub layout_name: String,
+    /// Nur die echte App schreibt die Datei (Tests nicht).
+    pub persist: bool,
+}
+
+/// Ein gespeichertes Hilfslinien-Layout: Linien und Einteilung eines
+/// Sprites samt seiner Größe — wie in der Web-Version (js/guidelayouts.js).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct GuideLayout {
+    pub name: String,
+    pub width: u32,
+    pub height: u32,
+    pub guides: spritebit_core::Guides,
+}
+
+fn layouts_path() -> Option<std::path::PathBuf> {
+    crate::i18n::settings_dir().map(|d| d.join("guide_layouts.json"))
+}
+
+/// Liste aus JSON (gleiches Format wie im Web); Unbrauchbares fällt weg.
+pub(crate) fn parse_layouts(v: &serde_json::Value) -> Vec<GuideLayout> {
+    let mut out: Vec<GuideLayout> = Vec::new();
+    for l in v.as_array().into_iter().flatten() {
+        let name = l.get("name").and_then(|n| n.as_str()).map(str::trim).unwrap_or("");
+        let w = l.get("width").and_then(|n| n.as_u64()).unwrap_or(0) as u32;
+        let h = l.get("height").and_then(|n| n.as_u64()).unwrap_or(0) as u32;
+        if name.is_empty() || w == 0 || h == 0 || out.iter().any(|o| o.name == name) {
+            continue;
+        }
+        let guides = spritebit_core::io::parse_guides(l.get("guides"), w, h);
+        out.push(GuideLayout { name: name.to_string(), width: w, height: h, guides });
+    }
+    out
+}
+
+pub(crate) fn layouts_json(list: &[GuideLayout]) -> serde_json::Value {
+    serde_json::Value::Array(
+        list.iter()
+            .map(|l| serde_json::json!({ "name": l.name, "width": l.width, "height": l.height, "guides": spritebit_core::io::guides_json(&l.guides) }))
+            .collect(),
+    )
 }
 
 /// Marken je Einteilung: (Kopfhöhen von oben, Name).
@@ -68,7 +114,7 @@ fn dashed(p: &egui::Painter, y: f32, x0: f32, x1: f32, dash: f32, gap: f32, stro
 }
 
 impl SpritebitApp {
-    fn guides_mut(&mut self) -> &mut spritebit_core::Guides {
+    pub(crate) fn guides_mut(&mut self) -> &mut spritebit_core::Guides {
         &mut self.project.sprite_mut().guides
     }
 
@@ -184,7 +230,106 @@ impl SpritebitApp {
         if ui.button(tr("An Figur anpassen")).on_hover_text(tr("Ober- und Unterkante der Einteilung auf das Gezeichnete setzen")).clicked() {
             self.fit_figure();
         }
+        self.guide_layouts_ui(ui);
         ui.weak(tr("Nur zum Zeichnen — die Linien erscheinen in keinem Export."));
+    }
+
+    /// Beim Start: gespeicherte Layouts laden.
+    pub(crate) fn load_guide_layouts(&mut self) {
+        self.guides.persist = true;
+        if let Some(v) = layouts_path().and_then(|p| std::fs::read_to_string(p).ok()).and_then(|s| serde_json::from_str(&s).ok()) {
+            self.guides.layouts = parse_layouts(&v);
+        }
+    }
+
+    fn store_guide_layouts(&mut self) {
+        if !self.guides.persist {
+            return;
+        }
+        let Some(p) = layouts_path() else { return };
+        if let Some(d) = p.parent() {
+            let _ = std::fs::create_dir_all(d);
+        }
+        if std::fs::write(&p, layouts_json(&self.guides.layouts).to_string()).is_err() {
+            self.hint = Some(tr("Layouts konnten nicht gespeichert werden.").into());
+        }
+    }
+
+    /// Jetzige Linien und Einteilung unter `name` speichern (gleicher Name ersetzt).
+    pub(crate) fn save_guide_layout(&mut self, name: &str) {
+        let name = name.trim();
+        if name.is_empty() {
+            self.hint = Some(tr("Erst einen Namen für das Layout eingeben.").into());
+            return;
+        }
+        let sp = self.sprite();
+        let l = GuideLayout { name: name.to_string(), width: sp.width, height: sp.height, guides: sp.guides.normalized(sp.width, sp.height) };
+        let had = self.guides.layouts.iter().position(|o| o.name == name);
+        match had {
+            Some(i) => self.guides.layouts[i] = l,
+            None => self.guides.layouts.push(l),
+        }
+        self.guides.layout_sel = had.unwrap_or(self.guides.layouts.len() - 1);
+        self.store_guide_layouts();
+        self.hint = Some(if had.is_some() {
+            trf("Layout „{name}“ ersetzt.", &[("name", &name)])
+        } else {
+            trf("Layout „{name}“ gespeichert — gilt für alle Sprites.", &[("name", &name)])
+        });
+    }
+
+    /// Gewähltes Layout auf den Sprite legen (anteilig umgerechnet).
+    pub(crate) fn apply_guide_layout(&mut self, i: usize) {
+        let Some(l) = self.guides.layouts.get(i).cloned() else { return };
+        let (w, h) = (self.sprite().width, self.sprite().height);
+        *self.guides_mut() = l.guides.scaled((l.width, l.height), (w, h));
+        self.guides.show = true;
+        self.dirty = true;
+        self.hint = Some(if (l.width, l.height) == (w, h) {
+            trf("Layout „{name}“ angewendet.", &[("name", &l.name)])
+        } else {
+            trf("Layout „{name}“ angewendet — von {w} × {h} auf diese Größe umgerechnet.", &[("name", &l.name), ("w", &l.width), ("h", &l.height)])
+        });
+    }
+
+    fn guide_layouts_ui(&mut self, ui: &mut egui::Ui) {
+        ui.label(tr("Eigene Layouts"));
+        let n = self.guides.layouts.len();
+        if self.guides.layout_sel >= n {
+            self.guides.layout_sel = n.saturating_sub(1);
+        }
+        ui.horizontal(|ui| {
+            let label = |l: &GuideLayout| format!("{} ({} × {})", l.name, l.width, l.height);
+            let text = self.guides.layouts.get(self.guides.layout_sel).map_or_else(|| tr("noch keine gespeichert").to_string(), label);
+            ui.add_enabled_ui(n > 0, |ui| {
+                egui::ComboBox::from_id_salt("gd-layouts").width(130.0).selected_text(text).show_ui(ui, |ui| {
+                    for (i, l) in self.guides.layouts.iter().enumerate() {
+                        ui.selectable_value(&mut self.guides.layout_sel, i, label(l));
+                    }
+                });
+            });
+            let tip = tr("Linien und Einteilung dieses Layouts auf den Sprite legen — bei anderer Größe anteilig umgerechnet");
+            if ui.add_enabled(n > 0, egui::Button::new(tr("Anwenden"))).on_hover_text(tip).clicked() {
+                self.apply_guide_layout(self.guides.layout_sel);
+            }
+            if ui.add_enabled(n > 0, egui::Button::new("×")).on_hover_text(tr("Gewähltes Layout löschen")).clicked() {
+                let l = self.guides.layouts.remove(self.guides.layout_sel);
+                self.store_guide_layouts();
+                self.hint = Some(trf("Layout „{name}“ gelöscht.", &[("name", &l.name)]));
+            }
+        });
+        ui.horizontal(|ui| {
+            let r = ui.add(egui::TextEdit::singleline(&mut self.guides.layout_name).hint_text(tr("Name des Layouts")).desired_width(130.0).char_limit(40));
+            let enter = r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter));
+            let tip = tr("Die jetzigen Linien und die Einteilung als Layout speichern — gleicher Name ersetzt");
+            if ui.button(tr("Speichern")).on_hover_text(tip).clicked() || enter {
+                let name = std::mem::take(&mut self.guides.layout_name);
+                self.save_guide_layout(&name);
+                if self.hint.as_deref() == Some(tr("Erst einen Namen für das Layout eingeben.")) {
+                    self.guides.layout_name = name;
+                }
+            }
+        });
     }
 
     /// G: ein/aus. Esc: Verschieben beenden.

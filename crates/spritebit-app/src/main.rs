@@ -59,6 +59,7 @@ fn main() -> eframe::Result {
             app.restore_template(&cc.egui_ctx);
             app.load_tl_opts();
             app.load_view();
+            app.load_guide_layouts();
             // Nach einem Absturz: die Sitzung zurückholen.
             app.start_session();
             // Einmal bei GitHub nach einer neueren Version fragen (abschaltbar).
@@ -1284,6 +1285,33 @@ mod tests {
         h.run();
         assert_eq!(px(&h, 17, 1), 0, "geleert");
         assert_eq!(px(&h, 1, 1), 5, "die andere Stelle bleibt");
+    }
+
+    #[test]
+    fn hilfslinien_layout_speichern_und_anwenden() {
+        let mut h = app();
+        let (w, hh) = (h.state().sprite().width, h.state().sprite().height);
+        {
+            let g = h.state_mut().guides_mut();
+            g.h = vec![8];
+            g.v = vec![16];
+        }
+        h.state_mut().save_guide_layout(" Held ");
+        assert_eq!(h.state().guides.layouts.len(), 1);
+        assert_eq!(h.state().guides.layouts[0].name, "Held");
+        // Gleicher Name ersetzt.
+        h.state_mut().guides_mut().v = vec![20];
+        h.state_mut().save_guide_layout("Held");
+        assert_eq!(h.state().guides.layouts.len(), 1);
+        // Andere Linien, dann anwenden: die gespeicherten sind zurück.
+        h.state_mut().guides_mut().h.clear();
+        h.state_mut().apply_guide_layout(0);
+        assert_eq!(h.state().sprite().guides.h, vec![8]);
+        assert_eq!(h.state().sprite().guides.v, vec![20]);
+        // JSON hin und zurück (Format wie im Web).
+        let list = guides_ui::parse_layouts(&guides_ui::layouts_json(&h.state().guides.layouts));
+        assert_eq!(list, h.state().guides.layouts);
+        assert_eq!((list[0].width, list[0].height), (w, hh));
     }
 
     #[test]
