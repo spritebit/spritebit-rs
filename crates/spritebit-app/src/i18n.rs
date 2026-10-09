@@ -399,6 +399,9 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("waagerecht", "horizontal", ""),
     ("senkrecht", "vertical", ""),
     ("Gleichmäßig: eine Anzahl eintippen (z. B. 4 waagerecht, 8 senkrecht) — die Linien verteilen sich sofort gleichmäßig.", "Evenly: type a number (e.g. 4 horizontal, 8 vertical) — the lines spread out evenly right away.", ""),
+    // ── Unterstützen (Ko-fi) ──
+    ("spritebit unterstützen (Ko-fi)", "Support spritebit (Ko-fi)", "spritebit unterstützn (Ko-fi)"),
+    ("Kostenlos bleibt spritebit sowieso. Spenden fließen in ein Code-Signatur-Zertifikat, damit Windows bei der Desktop-App nicht mehr warnt.", "spritebit stays free either way. Donations go towards a code-signing certificate so Windows stops warning about the desktop app.", ""),
     // ── Kacheln (tiles_ui.rs) ──
     ("Kacheln", "Tiles", "Kachln"),
     ("Kachelgröße", "Tile size", ""),

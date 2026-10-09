@@ -81,6 +81,8 @@ const GRID_FROM: f32 = 8.0;
 const EXT: &str = "spritebit";
 /// Version aus Cargo.toml — steht in Titelleiste, Hilfe und „Über“.
 pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Unterstützen (Ko-fi) — fließt in ein Code-Signatur-Zertifikat. Wie im Web (js/site-links.js).
+const DONATE_URL: &str = "https://ko-fi.com/baloou";
 
 /// Die Textur der Zeichenfläche und wofür sie gerechnet wurde. Ändert sich
 /// nichts davon, wird sie nicht neu gerechnet.
@@ -647,6 +649,15 @@ impl SpritebitApp {
                 self.help_menu(ui);
                 ui.separator();
                 self.update_menu(ui);
+                ui.separator();
+                if ui
+                    .button(tr("spritebit unterstützen (Ko-fi)"))
+                    .on_hover_text(tr("Kostenlos bleibt spritebit sowieso. Spenden fließen in ein Code-Signatur-Zertifikat, damit Windows bei der Desktop-App nicht mehr warnt."))
+                    .clicked()
+                {
+                    ui.ctx().open_url(egui::OpenUrl::new_tab(DONATE_URL));
+                    ui.close();
+                }
                 if ui.button(tr("Über spritebit")).clicked() {
                     self.about_open = true;
                 }
@@ -953,6 +964,9 @@ impl SpritebitApp {
                     ui.strong(format!("Version {VERSION}"));
                     ui.label(tr("© 2026 Marco Jan · freie Software unter der MIT-Lizenz"));
                     ui.hyperlink_to(tr("Neue Versionen auf GitHub"), "https://github.com/spritebit/spritebit-rs/releases");
+                    ui.add_space(6.0);
+                    ui.hyperlink_to(tr("spritebit unterstützen (Ko-fi)"), DONATE_URL)
+                        .on_hover_text(tr("Kostenlos bleibt spritebit sowieso. Spenden fließen in ein Code-Signatur-Zertifikat, damit Windows bei der Desktop-App nicht mehr warnt."));
                 });
         }
         let mut dismiss = false;
