@@ -351,7 +351,8 @@ impl Sprite {
     pub fn frame_duration(&self, f: usize) -> u32 {
         match self.frames.get(f).map(|fr| fr.duration_ms) {
             Some(d) if d > 0 => d,
-            _ => 1000 / self.fps.max(1),
+            // Gerundet wie im Web (Math.round): 6 FPS → 167 ms.
+            _ => (1000 + self.fps.max(1) / 2) / self.fps.max(1),
         }
     }
 

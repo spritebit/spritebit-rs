@@ -1,0 +1,19 @@
+<!-- Held — 6×4 · 3 Frames, 350 ms -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 6 4" width="48" height="32" shape-rendering="crispEdges">
+  <style>
+    .held-f1{animation:held-f1 350ms step-end infinite}@keyframes held-f1{0%{visibility:visible}28.57%{visibility:hidden}}
+    .held-f2{animation:held-f2 350ms step-end infinite}@keyframes held-f2{0%{visibility:hidden}28.57%{visibility:visible}71.43%{visibility:hidden}}
+    .held-f3{animation:held-f3 350ms step-end infinite}@keyframes held-f3{0%{visibility:hidden}71.43%{visibility:visible}100%{visibility:visible}}
+  </style>
+  <g class="held-f1" data-ms="100">
+    <rect x="1" y="1" width="1" height="1" fill="#e8b84b"/>
+    <rect x="0" y="3" width="6" height="1" fill="#1a0800"/>
+  </g>
+  <g class="held-f2" data-ms="150" visibility="hidden">
+    <rect x="2" y="1" width="1" height="1" fill="#abcdef"/>
+    <rect x="0" y="3" width="6" height="1" fill="#1a0800"/>
+  </g>
+  <g class="held-f3" data-ms="100" visibility="hidden">
+    <rect x="0" y="3" width="6" height="1" fill="#1a0800"/>
+  </g>
+</svg>

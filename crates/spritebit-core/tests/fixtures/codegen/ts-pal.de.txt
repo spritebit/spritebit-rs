@@ -1,0 +1,31 @@
+// 2 freie Farben wurden als Indizes 10+ gesichert (verlustfrei)
+// Palette „golden“
+export const HELD_PALETTE: Record<number, string> = {
+  5: '#1a0800',
+  10: '#e8b84b',
+  11: '#abcdef',
+};
+
+// Animation: 3 Frames — HELD[Frame][y][x], Dauer je Frame in ms: HELD_DURATIONS
+export const HELD_DURATIONS: number[] = [100, 150, 100];
+
+export const HELD: number[][][] = [
+  [
+    [0,0,0,0,0,0],
+    [0,10,0,0,0,0],
+    [0,0,0,0,0,0],
+    [5,5,5,5,5,5],
+  ],
+  [
+    [0,0,0,0,0,0],
+    [0,0,11,0,0,0],
+    [0,0,0,0,0,0],
+    [5,5,5,5,5,5],
+  ],
+  [
+    [0,0,0,0,0,0],
+    [0,0,0,0,0,0],
+    [0,0,0,0,0,0],
+    [5,5,5,5,5,5],
+  ],
+];

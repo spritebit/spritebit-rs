@@ -1,5 +1,7 @@
 //! Ein Projekt: mehrere Sprites und die eigenen Paletten.
 
+use std::collections::BTreeMap;
+
 use crate::builtin;
 use crate::palette::Palette;
 use crate::sprite::Sprite;
@@ -11,6 +13,9 @@ pub struct Project {
     pub palettes: Vec<Palette>,
     /// Der Sprite, an dem gerade gearbeitet wird.
     pub current: usize,
+    /// Materialien je Palette (für „JSON (Spiel)“): Name → Nummer → Material.
+    /// Auch für eingebaute Paletten; fehlende Nummern sind „none“.
+    pub materials: BTreeMap<String, BTreeMap<u16, String>>,
 }
 
 impl Default for Project {
@@ -19,6 +24,7 @@ impl Default for Project {
             sprites: vec![Sprite::new("Sprite 1", 64, 64).expect("gültige Größe")],
             palettes: Vec::new(),
             current: 0,
+            materials: BTreeMap::new(),
         }
     }
 }

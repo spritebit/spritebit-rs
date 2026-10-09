@@ -1,0 +1,45 @@
+/* Held — 6×4. Benutzung: <div class="held"></div>
+   Ein einziges 1×1-Element, hochskaliert. --px stellt die Pixelgröße. */
+/* Animation: 3 Frames, 350 ms pro Durchlauf, läuft endlos. */
+.held {
+  --px: 8;
+  width: 1px;
+  height: 1px;
+  transform: scale(var(--px));
+  transform-origin: 0 0;
+  margin: 0 5px 3px 0; /* Platz für die Skalierung */
+  animation: held-anim 350ms step-end infinite;
+  box-shadow:
+    1px 1px 0 #e8b84b,
+    0px 3px 0 #1a0800,
+    1px 3px 0 #1a0800,
+    2px 3px 0 #1a0800,
+    3px 3px 0 #1a0800,
+    4px 3px 0 #1a0800,
+    5px 3px 0 #1a0800;
+}
+@keyframes held-anim {
+  0% { box-shadow:
+      1px 1px 0 #e8b84b,
+      0px 3px 0 #1a0800,
+      1px 3px 0 #1a0800,
+      2px 3px 0 #1a0800,
+      3px 3px 0 #1a0800,
+      4px 3px 0 #1a0800,
+      5px 3px 0 #1a0800; }
+  28.57% { box-shadow:
+      2px 1px 0 #abcdef,
+      0px 3px 0 #1a0800,
+      1px 3px 0 #1a0800,
+      2px 3px 0 #1a0800,
+      3px 3px 0 #1a0800,
+      4px 3px 0 #1a0800,
+      5px 3px 0 #1a0800; }
+  71.43% { box-shadow:
+      0px 3px 0 #1a0800,
+      1px 3px 0 #1a0800,
+      2px 3px 0 #1a0800,
+      3px 3px 0 #1a0800,
+      4px 3px 0 #1a0800,
+      5px 3px 0 #1a0800; }
+}

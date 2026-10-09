@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "name": "held",
+  "width": 18,
+  "height": 4,
+  "palette": [
+    { "color": "#00000000", "material": "empty" },
+    { "color": "#f5d98aff", "material": "none" },
+    { "color": "#e8b84bff", "material": "none" },
+    { "color": "#c89030ff", "material": "none" },
+    { "color": "#956020ff", "material": "none" },
+    { "color": "#1a0800ff", "material": "none" },
+    { "color": "#ff9898ff", "material": "none" },
+    { "color": "#ffffffff", "material": "none" },
+    { "color": "#5a3010ff", "material": "none" },
+    { "color": "#3a2410ff", "material": "none" },
+    { "color": "#e8b84bff", "material": "none" },
+    { "color": "#abcdefff", "material": "none" }
+  ],
+  "data": [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 10, 0, 0, 0, 0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5
+  ],
+  "sprites": {
+    "held": { "x": 0, "y": 0, "w": 6, "h": 4, "frames": 3 }
+  },
+  "durations": [100, 150, 100]
+}

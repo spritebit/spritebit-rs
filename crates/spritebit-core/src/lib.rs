@@ -7,6 +7,8 @@
 //!   teilen sich die Kacheln (Undo, verknüpfte Zellen)
 //! * [`sprite`] — Ebenen × Frames, verknüpfte Zellen, durchgehende Ebenen, Tags
 //! * [`palette`] — bis zu 255 Farben, 0 ist transparent
+//! * [`codegen`] — Code-Formate (TS, JS, JSON, Spiel-JSON, SVG, CSS, C, Python, Text)
+//! * [`codeimport`] — Sprite aus Code einlesen (Format am Inhalt erkannt)
 //! * [`composite`] — was man sieht, für einen Ausschnitt (auch ausgedünnt)
 //! * [`history`] — Undo/Redo, billig dank geteilter Kacheln
 //! * [`tools`] — Werkzeug-Hilfen (Linie)
@@ -24,6 +26,8 @@
 pub mod builtin;
 pub mod cels;
 pub mod cleanup;
+pub mod codegen;
+pub mod codeimport;
 pub mod composite;
 pub mod export;
 pub mod history;

@@ -11,6 +11,7 @@
 //!   `"#rrggbb"`, verknüpfte Zellen als `{ "link": k }`. Importieren und
 //!   exportieren, damit Arbeiten zwischen beiden Versionen wandern können.
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::io::{Read, Write};
 
@@ -131,6 +132,24 @@ fn parse_guides(v: Option<&Value>, w: u32, h: u32) -> Guides {
         .normalized(w, h)
 }
 
+fn materials_json(m: &BTreeMap<String, BTreeMap<u16, String>>) -> Value {
+    Value::Object(m.iter().filter(|(_, v)| !v.is_empty()).map(|(k, v)| (k.clone(), json!(v.iter().map(|(i, m)| (i.to_string(), Value::String(m.clone()))).collect::<serde_json::Map<_, _>>()))).collect())
+}
+
+fn parse_materials(v: Option<&Value>) -> BTreeMap<String, BTreeMap<u16, String>> {
+    let Some(o) = v.and_then(Value::as_object) else { return BTreeMap::new() };
+    o.iter()
+        .map(|(name, m)| {
+            let inner: BTreeMap<u16, String> = m
+                .as_object()
+                .map(|m| m.iter().filter_map(|(i, v)| Some((i.parse::<u16>().ok()?, v.as_str()?.to_string()))).collect())
+                .unwrap_or_default();
+            (name.clone(), inner)
+        })
+        .filter(|(_, m)| !m.is_empty())
+        .collect()
+}
+
 fn palette_json(p: &Palette) -> Value {
     Value::Array(p.colors.iter().map(|&c| Value::String(hex(c))).collect())
 }
@@ -161,6 +180,7 @@ pub fn save_native(p: &Project) -> Vec<u8> {
     let header = json!({
         "current": p.current,
         "palettes": p.palettes.iter().map(|pal| json!({ "name": pal.name, "colors": palette_json(pal) })).collect::<Vec<_>>(),
+        "materials": materials_json(&p.materials),
         "sprites": sprites.iter().map(|s| json!({
             "name": s.name, "width": s.width, "height": s.height, "palette": s.palette, "fps": s.fps,
             "frame": s.frame, "layer": s.layer,
@@ -297,7 +317,7 @@ pub fn load_native(bytes: &[u8]) -> Result<Project, IoError> {
         return Err(IoError::Corrupt("keine Sprites".into()));
     }
     let current = (head["current"].as_u64().unwrap_or(0) as usize).min(sprites.len() - 1);
-    Ok(Project { sprites, palettes, current })
+    Ok(Project { sprites, palettes, current, materials: parse_materials(head.get("materials")) })
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -401,7 +421,7 @@ pub fn import_web(text: &str) -> Result<Project, IoError> {
     }
     let cur = v.pointer("/ui/curSprite").and_then(Value::as_str);
     let current = cur.and_then(|c| ids.iter().position(|id| id == c)).unwrap_or(0);
-    Ok(Project { sprites, palettes, current })
+    Ok(Project { sprites, palettes, current, materials: parse_materials(v.get("paletteMaterials")) })
 }
 
 /// Id aus einem Namen, wie die Web-Version sie bildet — und eindeutig.
@@ -477,7 +497,7 @@ pub fn export_web(p: &Project) -> String {
         "version": 2,
         "sprites": sprites,
         "customPalettes": custom,
-        "paletteMaterials": {},
+        "paletteMaterials": materials_json(&p.materials),
         "ui": { "curSprite": ids.get(p.current) },
     });
     serde_json::to_string(&doc).expect("JSON aus eigenen Daten")
@@ -506,12 +526,15 @@ mod tests {
         a.tags.push(Tag { name: "Lauf".into(), from: 0, to: 2, color: [1, 2, 3], direction: Direction::PingPong });
         a.guides = Guides { h: vec![3], v: vec![1, 5], heads: 6, top: 2, bottom: 7 };
         let b = Sprite::new("Zweiter", 4, 4).unwrap();
-        Project { sprites: vec![a, b], palettes: vec![Palette::new("meine", vec![[9, 9, 9], [8, 8, 8], [7, 7, 7]])], current: 1 }
+        let mut materials = BTreeMap::new();
+        materials.insert("meine".to_string(), BTreeMap::from([(2u16, "sand".to_string())]));
+        Project { sprites: vec![a, b], palettes: vec![Palette::new("meine", vec![[9, 9, 9], [8, 8, 8], [7, 7, 7]])], current: 1, materials }
     }
 
     fn assert_same(a: &Project, b: &Project) {
         assert_eq!(a.current, b.current);
         assert_eq!(a.palettes, b.palettes);
+        assert_eq!(a.materials, b.materials);
         assert_eq!(a.sprites.len(), b.sprites.len());
         for (x, y) in a.sprites.iter().zip(&b.sprites) {
             assert_eq!((x.name.as_str(), x.width, x.height, x.fps), (y.name.as_str(), y.width, y.height, y.fps));
@@ -556,7 +579,7 @@ mod tests {
             sp.add_frame(i, true);
         }
         sp.active().set(4000, 4000, 1);
-        let p = Project { sprites: vec![sp], palettes: vec![], current: 0 };
+        let p = Project { sprites: vec![sp], palettes: vec![], current: 0, materials: BTreeMap::new() };
         let bytes = save_native(&p);
         assert!(bytes.len() < 20_000, "{} Bytes", bytes.len());
         let back = load_native(&bytes).unwrap();

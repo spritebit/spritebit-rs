@@ -1,0 +1,41 @@
+// Held — 6×4, 3 Farben
+// Index 0 ist transparent; Farben als 0xRRGGBB.
+// Animation: 3 Frames — HELD_DATA[Frame][y * WIDTH + x], Dauer in ms: HELD_DURATIONS
+#ifndef HELD_H
+#define HELD_H
+
+#include <stdint.h>
+
+#define HELD_WIDTH  6
+#define HELD_HEIGHT 4
+
+static const uint32_t HELD_PALETTE[12] = {
+  0x000000, 0x000000, 0x000000, 0x000000, 0x000000, 0x1A0800, 0x000000, 0x000000, 0x000000, 0x000000, 0xE8B84B, 0xABCDEF
+};
+
+#define HELD_FRAMES 3
+
+static const uint16_t HELD_DURATIONS[3] = { 100, 150, 100 };
+
+static const uint8_t HELD_DATA[3][24] = {
+  {
+     0,  0,  0,  0,  0,  0,
+     0, 10,  0,  0,  0,  0,
+     0,  0,  0,  0,  0,  0,
+     5,  5,  5,  5,  5,  5,
+  },
+  {
+     0,  0,  0,  0,  0,  0,
+     0,  0, 11,  0,  0,  0,
+     0,  0,  0,  0,  0,  0,
+     5,  5,  5,  5,  5,  5,
+  },
+  {
+     0,  0,  0,  0,  0,  0,
+     0,  0,  0,  0,  0,  0,
+     0,  0,  0,  0,  0,  0,
+     5,  5,  5,  5,  5,  5,
+  },
+};
+
+#endif // HELD_H
