@@ -46,6 +46,15 @@ pub(crate) struct ImagePanel {
     /// „An der Figur wurde weitergemalt“ — zuletzt geprüft für (Sprite, Version).
     pub stale: bool,
     pub stale_key: Option<(usize, u64)>,
+    /// Schlagschatten mit anlegen bzw. in der Vorschau zeigen.
+    pub cast_on: bool,
+    /// Das Licht-Panel wurde in diesem Durchlauf gezeichnet (für die Vorschau).
+    pub light_open: bool,
+    /// Licht-Vorschau: Schlüssel der Einstellungen und die Kopie, die die
+    /// Zeichenfläche statt des Sprites zeigt. `preview_gen` zählt jede
+    /// Änderung, damit die Textur neu gebaut wird.
+    pub preview: Option<(String, spritebit_core::Sprite)>,
+    pub preview_gen: u64,
 }
 
 impl Default for ImagePanel {
@@ -66,6 +75,10 @@ impl Default for ImagePanel {
             cast_distance: 1,
             stale: false,
             stale_key: None,
+            cast_on: false,
+            light_open: false,
+            preview: None,
+            preview_gen: 0,
         }
     }
 }
@@ -436,6 +449,63 @@ impl SpritebitApp {
         });
     }
 
+    /// Licht (und, wenn angehakt, Schatten) als Ebenen anlegen — ein Undo-Schritt.
+    pub(crate) fn commit_light_layers(&mut self) {
+        self.finish_rotate();
+        let Some(base) = self.light_base() else {
+            self.hint = Some(tr("Keine Ebene, auf die das Licht wirken kann.").into());
+            return;
+        };
+        let (lfx, sfx) = (self.panel_fx(true), self.image.cast_on.then(|| self.panel_fx(false)));
+        let figure = self.sprite().layers[base].name.clone();
+        let (ln, sn) = (trf("Licht · {name}", &[("name", &figure)]), trf("Schatten · {name}", &[("name", &figure)]));
+        let pal = self.project.current_palette();
+        self.edit_sprite(|s| {
+            let mut b = base;
+            if let Some(fx) = sfx {
+                light::upsert_fx(s, b, fx, sn, &pal);
+                b += 1;
+            }
+            light::upsert_fx(s, b, lfx, ln, &pal);
+        });
+    }
+
+    /// Vorschau aktualisieren (vor dem Zeichnen der Fläche). Ohne offenes
+    /// Panel, mit schwebender Auswahl oder wenn schon alles als Ebene da ist:
+    /// keine Vorschau.
+    pub(crate) fn update_light_preview(&mut self) {
+        let want = if self.image.light_open && self.float.is_none() { self.light_preview_plan() } else { None };
+        self.image.light_open = false;
+        match want {
+            None => {
+                if self.image.preview.take().is_some() {
+                    self.image.preview_gen += 1;
+                }
+            }
+            Some((key, base, lfx, sfx)) => {
+                if self.image.preview.as_ref().map(|p| &p.0) != Some(&key) {
+                    let pal = self.project.current_palette();
+                    let sp = self.sprite();
+                    let pv = light::preview_fx(sp, base, sp.frame, lfx, sfx, &pal);
+                    self.image.preview = Some((key, pv));
+                    self.image.preview_gen += 1;
+                }
+            }
+        }
+    }
+
+    fn light_preview_plan(&self) -> Option<(String, usize, Option<LayerFx>, Option<LayerFx>)> {
+        let base = self.light_base()?;
+        let layers = &self.sprite().layers;
+        let lfx = light::fx_for(layers, base, true).is_none().then(|| self.panel_fx(true));
+        let sfx = (self.image.cast_on && light::fx_for(layers, base, false).is_none()).then(|| self.panel_fx(false));
+        if lfx.is_none() && sfx.is_none() {
+            return None;
+        }
+        let key = format!("{}|{}|{}|{base}|{lfx:?}|{sfx:?}", self.project.current, self.version, self.sprite().frame);
+        Some((key, base, lfx, sfx))
+    }
+
     pub(crate) fn light_panel(&mut self, ui: &mut egui::Ui) {
         // Gibt es zur Figur schon Licht bzw. Schatten, zeigt das Panel deren
         // Einstellungen — und jede Änderung rechnet die Ebene neu.
@@ -463,6 +533,10 @@ impl SpritebitApp {
                 self.image.light_dir = fx.dir;
             }
         }
+        if li.is_some() || si.is_some() {
+            self.image.cast_on = si.is_some();
+        }
+        self.image.light_open = true;
         let (mut light_changed, mut shadow_changed) = (false, false);
 
         ui.label(tr("Lichtquelle"));
@@ -519,41 +593,56 @@ impl SpritebitApp {
             .checkbox(&mut o.allow_free, tr("Auch Farben außerhalb der Palette"))
             .on_hover_text(tr("Fehlt in der Palette eine passende hellere oder dunklere Farbe, wird eine freie Farbe berechnet — sonst bleibt der Pixel, wie er ist"))
             .changed();
-        let label = if li.is_some() { tr("Licht neu berechnen") } else { tr("Licht-Ebene anlegen") };
-        if ui
-            .button(label)
-            .on_hover_text(tr("Legt über der aktiven Ebene eine Licht-Ebene an: Kanten zur Lichtquelle hin heller, abgewandte dunkler. Das Original bleibt unverändert; Richtung, Stärke und Breite ändern rechnet die Ebene sofort neu"))
-            .clicked()
-        {
-            self.upsert_light_layer(true, true);
-            light_changed = false;
-        }
         ui.separator();
+        let cast_before = self.image.cast_on;
+        ui.checkbox(&mut self.image.cast_on, tr("Schlagschatten"));
         ui.horizontal(|ui| {
-            ui.label(tr("Schlagschatten"));
-            egui::color_picker::color_edit_button_srgb(ui, &mut self.image.cast_color).on_hover_text(tr("Schattenfarbe"));
-            let before = self.image.cast_distance;
-            egui::ComboBox::from_id_salt("cast-dist")
-                .width(50.0)
-                .selected_text(format!("{} px", self.image.cast_distance))
-                .show_ui(ui, |ui| {
-                    for d in 1..=3 {
-                        ui.selectable_value(&mut self.image.cast_distance, d, format!("{d} px"));
-                    }
-                })
-                .response
-                .on_hover_text(tr("Wie weit der Schatten fällt"));
-            shadow_changed |= self.image.cast_distance != before;
-            let label = if si.is_some() { tr("Neu werfen") } else { tr("Werfen") };
-            if ui
-                .button(label)
-                .on_hover_text(tr("Legt unter der aktiven Ebene eine Schatten-Ebene an: die Silhouette, von der Lichtquelle weg versetzt"))
-                .clicked()
-            {
-                self.upsert_light_layer(false, true);
-                shadow_changed = false;
+            ui.add_enabled_ui(self.image.cast_on, |ui| {
+                // Farbe: live nur in der Vorschau — als Ebene mit „Neu werfen“
+                // (sonst wäre jede Bewegung im Farbwähler ein Undo-Schritt).
+                egui::color_picker::color_edit_button_srgb(ui, &mut self.image.cast_color).on_hover_text(tr("Schattenfarbe"));
+                let dist = self.image.cast_distance;
+                egui::ComboBox::from_id_salt("cast-dist")
+                    .width(50.0)
+                    .selected_text(format!("{} px", self.image.cast_distance))
+                    .show_ui(ui, |ui| {
+                        for d in 1..=3 {
+                            ui.selectable_value(&mut self.image.cast_distance, d, format!("{d} px"));
+                        }
+                    })
+                    .response
+                    .on_hover_text(tr("Wie weit der Schatten fällt"));
+                shadow_changed |= self.image.cast_distance != dist;
+            });
+            if si.is_some() && ui.button(tr("Neu werfen")).on_hover_text(tr("Schattenfarbe übernehmen und den Schatten neu berechnen")).clicked() {
+                shadow_changed = true;
             }
         });
+        // Häkchen umgelegt, während es schon Ebenen gibt: Schatten-Ebene dazu bzw. weg.
+        if self.image.cast_on != cast_before && (li.is_some() || si.is_some()) {
+            if let Some(base) = base {
+                if self.image.cast_on {
+                    self.upsert_light_layer(false, true);
+                } else {
+                    self.edit_sprite(|s| {
+                        light::remove_fx(s, base, false);
+                    });
+                }
+            }
+            shadow_changed = false;
+        }
+        if li.is_none() {
+            ui.label(egui::RichText::new(tr("Vorschau — im Bild ist noch nichts verändert.")).weak().italics());
+            if ui
+                .button(tr("Als Ebene übernehmen"))
+                .on_hover_text(tr("Legt Licht (und, wenn angehakt, Schatten) als eigene Ebenen an — das Original bleibt unverändert. Danach rechnet jede Änderung hier die Ebenen sofort neu"))
+                .clicked()
+            {
+                self.commit_light_layers();
+                light_changed = false;
+                shadow_changed = false;
+            }
+        }
         if light_changed {
             self.upsert_light_layer(true, false);
         }
@@ -564,13 +653,9 @@ impl SpritebitApp {
         // Hinweis, wenn an der Figur weitergemalt wurde — nur neu prüfen,
         // wenn sich am Sprite etwas geändert hat (die Prüfsumme läuft über
         // alle Frames).
-        if let Some(b) = self.light_base() {
+        if let (Some(b), true) = (self.light_base(), li.is_some() || si.is_some()) {
             let name = self.sprite().layers[b].name.clone();
-            ui.weak(if li.is_some() || si.is_some() {
-                trf("Licht für „{name}“ ist eine eigene Ebene — Änderungen hier rechnen sie neu.", &[("name", &name)])
-            } else {
-                trf("Wirkt auf „{name}“ — als eigene Ebene, das Original bleibt.", &[("name", &name)])
-            });
+            ui.weak(trf("Licht für „{name}“ ist eine eigene Ebene — Änderungen hier rechnen sie neu.", &[("name", &name)]));
         }
         let key = (self.project.current, self.version);
         if self.image.stale_key != Some(key) {

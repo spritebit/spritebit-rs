@@ -507,6 +507,36 @@ pub fn upsert_fx(sp: &mut Sprite, base: usize, fx: LayerFx, name: impl Into<Stri
     idx
 }
 
+/// Effekt-Ebene der Art (`light`) zur Ebene `base` entfernen. Die aktive
+/// Ebene bleibt dieselbe. `false` = es gab keine.
+pub fn remove_fx(sp: &mut Sprite, base: usize, light: bool) -> bool {
+    let Some(i) = fx_for(&sp.layers, base, light) else { return false };
+    let active = sp.layer;
+    sp.delete_layer(i);
+    sp.layer = if active > i { active - 1 } else { active.min(sp.layers.len() - 1) };
+    true
+}
+
+/// Vorschau: eine Kopie nur von Frame `frame`, in die Licht und Schatten
+/// wie Ebenen eingesetzt sind — der Sprite selbst bleibt unberührt. Kopien
+/// teilen sich die Bild-Kacheln, das kostet also wenig. Der Frame der Kopie
+/// ist 0.
+pub fn preview_fx(sp: &Sprite, base: usize, frame: usize, light: Option<LayerFx>, shadow: Option<LayerFx>, pal: &Palette) -> Sprite {
+    let mut c = sp.clone();
+    c.frames = vec![c.frames[frame].clone()];
+    c.frame = 0;
+    c.tags.clear();
+    let mut base = base;
+    if let Some(fx) = shadow {
+        upsert_fx(&mut c, base, fx, "", pal);
+        base += 1; // die Schatten-Ebene liegt jetzt darunter
+    }
+    if let Some(fx) = light {
+        upsert_fx(&mut c, base, fx, "", pal);
+    }
+    c
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -735,5 +765,31 @@ mod tests {
         let b = light_fx((0, 1));
         assert_eq!(LayerFx::from_json(&b.to_json()), Some(b));
         assert_eq!(LayerFx::from_json(&json!({ "kind": "blur" })), None);
+    }
+
+    #[test]
+    fn vorschau_laesst_den_sprite_unberuehrt() {
+        let mut sp = sprite_with_block();
+        sp.add_frame(0, true);
+        let before = sp.clone();
+        let shadow = LayerFx { kind: FxKind::Shadow { color: FxColor::Index(6), distance: 1 }, dir: TOP_LEFT, src: String::new() };
+        let pv = preview_fx(&sp, 0, 1, Some(light_fx(TOP_LEFT)), Some(shadow), &pal());
+        assert_eq!(sp.layers, before.layers, "Sprite unverändert");
+        assert_eq!(sp.frames, before.frames);
+        assert_eq!(pv.frames.len(), 1);
+        assert_eq!(pv.layers.len(), 3, "Schatten, Figur, Licht");
+        assert_eq!(pv.cel(0, 2).get(1, 1), 3, "Licht in der Vorschau");
+        assert_eq!(pv.cel(0, 0).get(6, 6), 6, "Schatten in der Vorschau");
+    }
+
+    #[test]
+    fn schatten_ebene_entfernen() {
+        let mut sp = sprite_with_block();
+        let fx = LayerFx { kind: FxKind::Shadow { color: FxColor::Index(6), distance: 1 }, dir: TOP_LEFT, src: String::new() };
+        upsert_fx(&mut sp, 0, fx, "Schatten", &pal());
+        assert_eq!((sp.layers.len(), sp.layer), (2, 1));
+        assert!(remove_fx(&mut sp, 1, false));
+        assert_eq!((sp.layers.len(), sp.layer), (1, 0), "Figur bleibt aktiv");
+        assert!(!remove_fx(&mut sp, 0, false));
     }
 }

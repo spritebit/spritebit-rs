@@ -700,6 +700,14 @@ const TEXTS: &[(&str, &str, &str)] = &[
         "",
     ),
     ("Neu werfen", "Cast again", "Nei werfn"),
+    ("Schattenfarbe übernehmen und den Schatten neu berechnen", "Apply the shadow colour and recompute the shadow", ""),
+    ("Vorschau — im Bild ist noch nichts verändert.", "Preview — nothing in the image has changed yet.", "Vorschau — im Buidl is no nix gändert."),
+    ("Als Ebene übernehmen", "Apply as layer", "Ois Ebene übernehma"),
+    (
+        "Legt Licht (und, wenn angehakt, Schatten) als eigene Ebenen an — das Original bleibt unverändert. Danach rechnet jede Änderung hier die Ebenen sofort neu",
+        "Adds light (and, if ticked, shadow) as separate layers — the original stays untouched. Afterwards every change here recomputes the layers right away",
+        "",
+    ),
     (
         "Legt unter der aktiven Ebene eine Schatten-Ebene an: die Silhouette, von der Lichtquelle weg versetzt",
         "Adds a shadow layer below the active layer: the silhouette, offset away from the light",

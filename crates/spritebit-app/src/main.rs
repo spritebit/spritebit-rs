@@ -81,7 +81,8 @@ pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// nichts davon, wird sie nicht neu gerechnet.
 struct CanvasTexture {
     handle: egui::TextureHandle,
-    key: (usize, Rect, u32, usize, u64),
+    /// Sprite, Ausschnitt, Schritt, Frame, Version, Stand der Licht-Vorschau.
+    key: (usize, Rect, u32, usize, u64, u64),
 }
 
 /// Dialog „Neuer Sprite".
@@ -694,6 +695,9 @@ impl SpritebitApp {
 
     // ── Zeichenfläche ───────────────────────────────────────────────
     fn canvas(&mut self, ui: &mut egui::Ui) {
+        // Licht-Vorschau: nur, solange das Licht-Panel in diesem Durchlauf
+        // gezeichnet wurde (es setzt light_open, die Fläche kommt danach).
+        self.update_light_preview();
         let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
         let area = resp.rect;
         self.canvas_rect = area;
@@ -783,23 +787,25 @@ impl SpritebitApp {
         // Herausgezoomt: nur jedes n-te Pixel, sonst wäre die Textur größer
         // als der Bildschirm.
         let step = if zoom < 1.0 { (1.0 / zoom).floor() as u32 } else { 1 };
-        let key = (self.project.current, rect, step, self.sprite().frame, self.version);
+        let key = (self.project.current, rect, step, self.sprite().frame, self.version, self.image.preview_gen);
         if self.texture.as_ref().map(|t| t.key) != Some(key) {
             let palette = self.project.current_palette();
             let sp = self.sprite();
             // Schwebendes wird in eine Kopie eingesetzt und mitgezeichnet —
             // die Kopie teilt die Kacheln, nur die berührten werden kopiert.
+            // Die Licht-Vorschau ist ebenso eine Kopie (nur dieser Frame, Frame 0).
             let with_float;
-            let shown = match &self.float {
-                Some(f) => {
+            let (shown, frame) = match (&self.float, &self.image.preview) {
+                (Some(f), _) => {
                     let mut c = sp.clone();
                     selection::paste(c.active(), &f.clip, f.x, f.y);
                     with_float = c;
-                    &with_float
+                    (&with_float, sp.frame)
                 }
-                None => sp,
+                (None, Some((_, pv))) => (pv, 0),
+                (None, None) => (sp, sp.frame),
             };
-            let (buf, tw, th) = render_rgba_step(shown, &palette, sp.frame, rect, step);
+            let (buf, tw, th) = render_rgba_step(shown, &palette, frame, rect, step);
             let image = egui::ColorImage::from_rgba_unmultiplied([tw as usize, th as usize], &buf);
             match &mut self.texture {
                 Some(t) => {
@@ -1398,7 +1404,7 @@ mod tests {
     }
 
     #[test]
-    fn licht_und_schlagschatten_als_ebenen() {
+    fn licht_vorschau_dann_als_ebenen() {
         let mut h = app();
         // 4×4-Block aus Farbe 3 (#999999) bei (10,10)
         for y in 10..14 {
@@ -1409,36 +1415,45 @@ mod tests {
         h.run();
         h.get_by_label("Licht").click();
         h.run();
-        h.get_by_label("Licht-Ebene anlegen").click();
         h.run();
         let cel = |h: &Harness<'_, SpritebitApp>, l: usize, x: u32, y: u32| h.state().project.sprite().cel(0, l).get(x, y);
+        // Vorschau: noch keine Ebene, die Zeichenfläche zeigt eine Kopie mit Licht.
+        assert_eq!(h.state().project.sprite().layers.len(), 1, "Vorschau legt nichts an");
+        let pv = &h.state().image.preview.as_ref().expect("Vorschau da").1;
+        assert_eq!(pv.cel(0, 1).get(10, 10), 2, "Vorschau: oben links heller");
+
+        h.get_by_label("Als Ebene übernehmen").click();
+        h.run();
         let sp = h.state().project.sprite();
         assert_eq!(sp.layers.len(), 2, "Licht-Ebene dazu");
         assert!(sp.layers[1].fx.is_some() && sp.layers[1].locked);
         assert_eq!(sp.layer, 0, "aktiv bleibt die Figur");
         assert_eq!(cel(&h, 0, 10, 10), 3, "Original unverändert");
-        assert_eq!(cel(&h, 1, 10, 10), 2, "oben links heller (#CCCCCC)");
-        assert_ne!(cel(&h, 1, 13, 13), 0, "unten rechts dunkler");
-        assert_eq!(cel(&h, 1, 11, 11), 0, "Mitte bleibt");
+        assert_eq!(cel(&h, 1, 10, 10), 2);
+        h.run();
+        assert!(h.state().image.preview.is_none(), "keine Vorschau mehr, die Ebene zeigt es");
 
-        // Andere Richtung: die alten Kanten verschwinden, neu gerechnet.
+        // Andere Richtung: neu gerechnet, die alten Kanten sind weg.
         h.get_by_label("↘").click();
         h.run();
-        assert_eq!(h.state().project.sprite().layers.len(), 2);
         assert_eq!(cel(&h, 1, 13, 13), 2, "unten rechts jetzt hell");
-        assert_ne!(cel(&h, 1, 10, 10), 2, "oben links nicht mehr hell");
+        assert_ne!(cel(&h, 1, 10, 10), 2);
         h.state_mut().undo();
+        h.run();
         assert_eq!(cel(&h, 1, 10, 10), 2, "Rückgängig holt das vorige Licht");
 
-        // Schatten-Ebene unter der Figur.
-        h.get_by_label("Werfen").click();
+        // Schlagschatten anhaken: Schatten-Ebene unter der Figur.
+        h.get_by_label("Schlagschatten").click();
         h.run();
         let sp = h.state().project.sprite();
         assert_eq!(sp.layers.len(), 3);
         assert_eq!(sp.layer, 1, "die Figur ist nach oben gerückt und bleibt aktiv");
-        // Licht von oben links (nach dem Rückgängig) → Schatten fällt nach unten rechts.
-        assert_ne!(cel(&h, 0, 14, 14), 0, "Schatten unten rechts neben der Figur");
-        assert_eq!(cel(&h, 0, 9, 9), 0, "nicht auf der Lichtseite");
+        assert_ne!(cel(&h, 0, 14, 14), 0, "Schatten unten rechts (Licht von oben links)");
+        // … und wieder weg.
+        h.get_by_label("Schlagschatten").click();
+        h.run();
+        assert_eq!(h.state().project.sprite().layers.len(), 2);
+        assert_eq!(h.state().project.sprite().layer, 0);
     }
 
     #[test]
