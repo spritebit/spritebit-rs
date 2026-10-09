@@ -1295,6 +1295,19 @@ mod tests {
     }
 
     #[test]
+    fn hilfslinien_gleichmaessig_verteilen() {
+        let mut h = app();
+        h.state_mut().set_even(true, 3);
+        h.state_mut().set_even(false, 1);
+        let (w, hh) = (h.state().sprite().width, h.state().sprite().height);
+        assert_eq!(h.state().sprite().guides.h, spritebit_core::Guides::even_lines(3, hh));
+        assert_eq!(h.state().sprite().guides.v, vec![w / 2]);
+        assert!(h.state().guides.show);
+        h.state_mut().set_even(true, 0);
+        assert!(h.state().sprite().guides.h.is_empty());
+    }
+
+    #[test]
     fn hilfslinien_layout_speichern_und_anwenden() {
         let mut h = app();
         let (w, hh) = (h.state().sprite().width, h.state().sprite().height);

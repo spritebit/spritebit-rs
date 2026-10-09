@@ -86,6 +86,21 @@ pub struct Guides {
 }
 
 impl Guides {
+    /// `n` Linien gleichmäßig über eine Strecke der Länge `size` verteilen —
+    /// wie `evenLines` im Web: 4 Linien teilen in 5 gleiche Teile. Gerundet auf
+    /// Pixelgrenzen, nie auf dem Rand, keine doppelt.
+    pub fn even_lines(n: u32, size: u32) -> Vec<u32> {
+        let k = n.min(size.saturating_sub(1));
+        let mut out = Vec::with_capacity(k as usize);
+        for i in 1..=k {
+            let v = (size as f64 * i as f64 / (k + 1) as f64).round() as u32;
+            if v > 0 && v < size && !out.contains(&v) {
+                out.push(v);
+            }
+        }
+        out
+    }
+
     /// Von einem Sprite `from` (Breite, Höhe) auf einen der Größe `to`
     /// umrechnen: die Linien wandern anteilig mit — wie `fitLayout` im Web
     /// (eigene Hilfslinien-Layouts).
@@ -559,6 +574,16 @@ impl Sprite {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hilfslinien_gleichmaessig_verteilen() {
+        assert_eq!(Guides::even_lines(1, 24), vec![12]);
+        assert_eq!(Guides::even_lines(3, 24), vec![6, 12, 18]);
+        assert_eq!(Guides::even_lines(4, 30), vec![6, 12, 18, 24]);
+        assert_eq!(Guides::even_lines(2, 10), vec![3, 7], "gerundet wie im Web");
+        assert!(Guides::even_lines(0, 24).is_empty());
+        assert_eq!(Guides::even_lines(100, 8).len(), 7, "höchstens eine je Pixelgrenze");
+    }
 
     #[test]
     fn hilfslinien_anteilig_umrechnen() {

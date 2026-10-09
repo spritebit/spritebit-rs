@@ -438,6 +438,7 @@ fn help_sections() -> Vec<(&'static str, Vec<&'static str>)> {
         (tr("Hilfslinien"), vec![
             tr("Freie Linien und Figuren-Proportionen (2–8 Kopfhöhen) — nur zum Zeichnen, nie im Export. G blendet sie ein und aus."),
             tr("Im Modus „Verschieben“ (oder mit der Hand) Linien ziehen; aus dem Bild gezogen ist eine Linie gelöscht."),
+            tr("Gleichmäßig: eine Anzahl eintippen (z. B. 4 waagerecht, 8 senkrecht) — die Linien verteilen sich sofort gleichmäßig."),
             tr("Eigene Layouts: Linien und Einteilung unter einem Namen speichern und auf jeden Sprite anwenden — bei anderer Größe anteilig umgerechnet."),
         ]),
         (tr("Ebenen und Animation"), vec![

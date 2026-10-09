@@ -393,6 +393,12 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Jetzt aktualisieren", "Update now", ""),
     ("Lädt die neue Version, prüft sie und tauscht die App aus — ohne ZIP und ohne Entpacken.", "Downloads the new version, checks it and swaps the app — no ZIP, no unpacking.", ""),
     ("Was ist neu?", "What's new?", ""),
+    // ── Hilfslinien gleichmäßig verteilen (guides_ui.rs) ──
+    ("Gleichmäßig", "Evenly", ""),
+    ("Anzahl eintippen — die Linien verteilen sich sofort gleichmäßig (4 Linien = 5 gleiche Teile). 0 entfernt sie.", "Type a number — the lines spread out evenly right away (4 lines = 5 equal parts). 0 removes them.", ""),
+    ("waagerecht", "horizontal", ""),
+    ("senkrecht", "vertical", ""),
+    ("Gleichmäßig: eine Anzahl eintippen (z. B. 4 waagerecht, 8 senkrecht) — die Linien verteilen sich sofort gleichmäßig.", "Evenly: type a number (e.g. 4 horizontal, 8 vertical) — the lines spread out evenly right away.", ""),
     // ── Kacheln (tiles_ui.rs) ──
     ("Kacheln", "Tiles", "Kachln"),
     ("Kachelgröße", "Tile size", ""),

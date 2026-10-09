@@ -154,6 +154,24 @@ impl SpritebitApp {
         self.set_guide_edit(true);
     }
 
+    /// `n` Linien einer Richtung gleichmäßig verteilen (die bisherigen ersetzt).
+    pub(crate) fn set_even(&mut self, horizontal: bool, n: u32) {
+        let (w, h) = (self.sprite().width, self.sprite().height);
+        let lines = spritebit_core::Guides::even_lines(n, if horizontal { h } else { w });
+        let any = !lines.is_empty();
+        let g = self.guides_mut();
+        if horizontal {
+            g.h = lines;
+        } else {
+            g.v = lines;
+        }
+        if any {
+            self.guides.show = true;
+        }
+        self.dirty = true;
+        self.leave_if_empty();
+    }
+
     /// Ober- und Unterkante auf den gezeichneten Inhalt aller Ebenen.
     fn fit_figure(&mut self) {
         let sp = self.sprite();
@@ -201,6 +219,18 @@ impl SpritebitApp {
             }
             if ui.button(tr("+ Senkrecht")).on_hover_text(tr("Eine senkrechte Linie in die Mitte setzen")).clicked() {
                 self.add_line(false);
+            }
+        });
+        // Gleichmäßig verteilen (wie in Photoshop): jede Änderung wirkt sofort.
+        ui.horizontal_wrapped(|ui| {
+            ui.label(tr("Gleichmäßig"));
+            let tip = tr("Anzahl eintippen — die Linien verteilen sich sofort gleichmäßig (4 Linien = 5 gleiche Teile). 0 entfernt sie.");
+            for (horizontal, unit) in [(true, tr("waagerecht")), (false, tr("senkrecht"))] {
+                let mut n = if horizontal { self.sprite().guides.h.len() } else { self.sprite().guides.v.len() } as u32;
+                if ui.add(egui::DragValue::new(&mut n).range(0..=64).speed(0.1)).on_hover_text(tip).changed() {
+                    self.set_even(horizontal, n);
+                }
+                ui.label(unit);
             }
         });
         let g = &self.sprite().guides;
