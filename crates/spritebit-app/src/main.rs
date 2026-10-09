@@ -129,6 +129,8 @@ struct SpritebitApp {
     size: u32,
     /// Stärke 1–100: Dichte bei Pinsel/Radierer, Menge beim Spray.
     strength: u32,
+    /// Alt + rechte Maustaste ziehen verstellt gerade die Größe (tools_ui.rs).
+    size_drag: Option<tools_ui::SizeDrag>,
     /// Pixel-perfekt (Stift, Radierer 1 px) und der Pfad des laufenden Strichs.
     pixel_perfect: bool,
     pp: Option<spritebit_core::tools::PixelPerfect>,
@@ -231,7 +233,8 @@ impl SpritebitApp {
             onion: false,
             tool: Tool::Pencil,
             size: 1,
-            strength: 80,
+            strength: 100,
+            size_drag: None,
             pixel_perfect: false,
             pp: None,
             filled: false,
@@ -713,11 +716,12 @@ impl SpritebitApp {
                 i.pointer.delta(),
             )
         });
-        let (pressed, released, alt) = ui.input(|i| {
+        let (pressed, released, alt, secondary_pressed) = ui.input(|i| {
             (
                 i.pointer.primary_pressed() || i.pointer.secondary_pressed(),
                 i.pointer.primary_released() || i.pointer.secondary_released(),
                 i.modifiers.alt,
+                i.pointer.secondary_pressed(),
             )
         });
         // Wie im Web: Mausrad scrollt (Umschalt: waagerecht), Strg+Mausrad
@@ -755,7 +759,9 @@ impl SpritebitApp {
         };
         // Umschalt+Alt gehört der Schablone, im Hilfslinien-Modus gehört
         // der Zeiger den Linien.
-        if !self.template_pointer(pointer, pressed, released, p.over, origin, zoom)
+        // Alt + rechte Maustaste ziehen: Größe verstellen statt radieren.
+        if !self.size_drag_pointer(pointer, &p, secondary_pressed)
+            && !self.template_pointer(pointer, pressed, released, p.over, origin, zoom)
             && !self.guide_pointer(pointer, pressed, released, p.over, origin, zoom)
         {
             self.use_tool(&p, ui.ctx());
@@ -883,6 +889,8 @@ impl SpritebitApp {
         self.draw_guides(&painter, origin, zoom);
         // Form, die gerade aufgezogen wird, und der Rahmen der Auswahl.
         self.shape_preview(&painter, origin, zoom);
+        // Umriss dessen, was Stift, Pinsel, Radierer oder Spray gleich treffen.
+        self.brush_preview(&painter.with_clip_rect(area), origin, zoom);
         self.selection_overlay(&painter, origin, zoom, (x0 as i64, y0 as i64, x1 as i64, y1 as i64));
         // Rand der Fläche.
         let border = egui::Rect::from_min_size(origin, Vec2::new(sw as f32, sh as f32) * zoom);
@@ -1200,6 +1208,46 @@ mod tests {
         drag(&mut h, (2.0, 5.0), (2.0, 5.0));
         assert_eq!(px(&h, 2, 5), 5);
         assert_eq!(px(&h, 61, 5), 5, "64 - 1 - 2");
+    }
+
+    #[test]
+    fn groesse_mit_alt_und_rechts_ziehen() {
+        let mut h = app();
+        h.state_mut().tool = Tool::Brush;
+        h.state_mut().size = 3;
+        // Etwas Gemaltes unter dem Zug — Alt + Rechts darf es nicht radieren.
+        for x in 4..12 {
+            h.state_mut().project.sprite_mut().active().set(x, 8, 3);
+        }
+        let a = at(&h, 5.0, 8.0);
+        let alt = Modifiers::ALT;
+        let btn = |pos, pressed| egui::Event::PointerButton { pos, button: egui::PointerButton::Secondary, pressed, modifiers: alt };
+        h.hover_at(a);
+        h.run();
+        h.event_modifiers(btn(a, true), alt);
+        h.run();
+        // 3 Stufen nach rechts (je 12 Bildschirmpixel), in kleinen Schritten.
+        for k in 1..=6 {
+            h.event_modifiers(egui::Event::PointerMoved(a + Vec2::new(6.0 * k as f32, 0.0)), alt);
+            h.run();
+        }
+        assert_eq!(h.state().size, 6, "3 + 3 Stufen");
+        // Weit nach links: nie unter 1.
+        h.event_modifiers(egui::Event::PointerMoved(a - Vec2::new(400.0, 0.0)), alt);
+        h.run();
+        assert_eq!(h.state().size, 1);
+        h.event_modifiers(btn(a - Vec2::new(400.0, 0.0), false), alt);
+        h.run();
+        assert!(h.state().size_drag.is_none(), "Loslassen beendet das Ziehen");
+        for x in 4..12 {
+            assert_eq!(px(&h, x, 8), 3, "nichts radiert bei x = {x}");
+        }
+        assert_eq!(h.state().color, 5, "keine Pipette (sonst wäre es 3)");
+    }
+
+    #[test]
+    fn staerke_ist_anfangs_100_prozent() {
+        assert_eq!(app().state().strength, 100);
     }
 
     #[test]

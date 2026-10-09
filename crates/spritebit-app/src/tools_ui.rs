@@ -111,6 +111,22 @@ impl Tool {
 }
 
 /// Was die Zeichenfläche über die Maus weiß.
+/// Alt + rechte Maustaste ziehen: so viele Bildschirmpixel je Größenstufe.
+const SIZE_STEP_PX: f32 = 12.0;
+
+/// Laufendes Größe-Ziehen: Startpunkt, Größe beim Start und die Zelle, an
+/// der die Vorschau stehen bleibt.
+pub(crate) struct SizeDrag {
+    start_x: f32,
+    start_size: u32,
+    cell: Option<(i64, i64)>,
+}
+
+/// Neue Größe aus dem Mausweg seit dem Start (1–9).
+pub(crate) fn dragged_size(start_size: u32, dx: f32) -> u32 {
+    (start_size as i64 + (dx / SIZE_STEP_PX).round() as i64).clamp(1, 9) as u32
+}
+
 pub(crate) struct Pointer {
     pub cell: Option<(i64, i64)>,
     /// Maus über der Fläche oder ein Zug, der auf ihr begann.
@@ -225,6 +241,66 @@ impl SpritebitApp {
     }
 
     /// Ein Schritt des Werkzeugs für diesen Durchlauf.
+    /// Alt + rechte Maustaste ziehen verstellt bei Pinsel, Radierer und Spray
+    /// die Größe: nach rechts größer, nach links kleiner. `true` = die Eingabe
+    /// gehört dem Ziehen (dann wird weder radiert noch die Pipette benutzt).
+    pub(crate) fn size_drag_pointer(&mut self, pointer: Option<Pos2>, p: &Pointer, secondary_pressed: bool) -> bool {
+        if let Some(d) = &self.size_drag {
+            if !p.secondary {
+                self.size_drag = None;
+                return true;
+            }
+            if let Some(pos) = pointer {
+                self.size = dragged_size(d.start_size, pos.x - d.start_x);
+                self.hint = Some(trf("Größe {n}", &[("n", &self.size)]));
+            }
+            return true;
+        }
+        if p.alt && secondary_pressed && p.over && self.tool.sized() {
+            if let Some(pos) = pointer {
+                self.size_drag = Some(SizeDrag { start_x: pos.x, start_size: self.size, cell: p.cell });
+                self.hint = Some(trf("Größe {n}", &[("n", &self.size)]));
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Umriss dessen, was das Werkzeug gleich trifft: ein Quadrat bei Stift,
+    /// Pinsel und Radierer, ein Kreis beim Spray. Zwei Striche (dunkel, hell),
+    /// damit er auf jedem Untergrund zu sehen ist.
+    pub(crate) fn brush_preview(&self, painter: &egui::Painter, origin: Pos2, zoom: f32) {
+        if self.playing || self.shape_start.is_some() {
+            return;
+        }
+        let size = match self.tool {
+            Tool::Pencil => 1,
+            Tool::Brush | Tool::Eraser | Tool::Spray => self.size,
+            _ => return,
+        };
+        let cell = match &self.size_drag {
+            Some(d) => d.cell,
+            None => self.hover,
+        };
+        let Some((x, y)) = cell else { return };
+        let dark = egui::Stroke::new(3.0, Color32::from_black_alpha(150));
+        let light = egui::Stroke::new(1.0, Color32::from_white_alpha(230));
+        if self.tool == Tool::Spray {
+            let c = origin + Vec2::new(x as f32 + 0.5, y as f32 + 0.5) * zoom;
+            let r = (size as f32 + 0.5) * zoom;
+            painter.circle_stroke(c, r, dark);
+            painter.circle_stroke(c, r, light);
+        } else {
+            let s = tools::stamp(x, y, size);
+            let rect = egui::Rect::from_min_max(
+                origin + Vec2::new(s.x0 as f32, s.y0 as f32) * zoom,
+                origin + Vec2::new((s.x1 + 1) as f32, (s.y1 + 1) as f32) * zoom,
+            );
+            painter.rect_stroke(rect, 0.0, dark, egui::StrokeKind::Middle);
+            painter.rect_stroke(rect, 0.0, light, egui::StrokeKind::Middle);
+        }
+    }
+
     pub(crate) fn use_tool(&mut self, p: &Pointer, ctx: &egui::Context) {
         let down = p.primary || p.secondary;
         if p.panning || self.tool == Tool::Pan {
@@ -430,5 +506,19 @@ impl SpritebitApp {
                 painter.rect_filled(r, 0.0, color);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod size_tests {
+    use super::dragged_size;
+
+    #[test]
+    fn groesse_aus_dem_mausweg() {
+        assert_eq!(dragged_size(3, 0.0), 3);
+        assert_eq!(dragged_size(3, 24.0), 5, "zwei Stufen");
+        assert_eq!(dragged_size(3, 5.0), 3, "unter einer halben Stufe bleibt es");
+        assert_eq!(dragged_size(3, -100.0), 1);
+        assert_eq!(dragged_size(3, 500.0), 9);
     }
 }

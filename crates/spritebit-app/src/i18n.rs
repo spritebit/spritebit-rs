@@ -688,6 +688,10 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("{n} Pixel in dieser Farbe", "{n} pixels in this color", "{n} Pixel in dera Farb"),
     // ── Auswahl-Leiste ──
     ("Alles", "All", "Ois"),
+    // ── Werkzeuggröße per Alt + Rechts ──
+    ("Größe {n}", "Size {n}", "Greß {n}"),
+    ("Alt + Rechts ziehen", "Alt + right-drag", "Alt + Rechts ziehn"),
+    ("Größe von Pinsel, Radierer und Spray", "Size of brush, eraser and spray", "Greß vom Pinsl, Radiergummi und Spray"),
     // ── Update-Hinweis ──
     ("Neue Version {new} verfügbar", "New version {new} available", "Neiche Version {new} do"),
     ("(du hast {old})", "(you have {old})", "(du host {old})"),

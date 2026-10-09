@@ -406,6 +406,7 @@ fn help_keys() -> Vec<(&'static str, &'static str)> {
         (tr("Klick"), tr("Malen")),
         (tr("Rechtsklick"), tr("Löschen (gedrückt halten = durchgehend)")),
         ("Alt + Klick", tr("Pipette")),
+        (tr("Alt + Rechts ziehen"), tr("Größe von Pinsel, Radierer und Spray")),
         ("Shift + Alt", tr("Schablone: halten = vorn, ziehen = verschieben, Klick = Farbe")),
         ("0 – 9", tr("Farbe mit dieser Nummer")),
         ("P B S F E W", tr("Stift · Pinsel · Spray · Füllen · Radierer · Zauberstab")),
