@@ -1,0 +1,53 @@
+# Release der Desktop-App — ganz ohne eigenen Server.
+#
+# Ein Tag wie `v0.2.0` pushen (git tag v0.2.0 && git push origin v0.2.0):
+# GitHub baut und testet auf Windows und haengt die fertige Datei an eine
+# Release. Die Startseite verlinkt
+#   https://github.com/<user>/<repo>/releases/latest/download/spritebit-windows-x64.zip
+# — das zeigt immer auf die neueste Version (Eintrag in js/site-links.js
+# der Web-Version).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Tests
+        run: cargo test --workspace
+
+      - name: Bauen
+        run: cargo build --release -p spritebit-app
+
+      - name: Packen
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/spritebit | Out-Null
+          Copy-Item target/release/spritebit-app.exe dist/spritebit/spritebit.exe
+          Copy-Item LICENSE, README.md dist/spritebit/
+          Compress-Archive -Path dist/spritebit/* -DestinationPath dist/spritebit-windows-x64.zip
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/spritebit-windows-x64.zip
+          generate_release_notes: true
+
+      - name: Als Artefakt (manueller Lauf ohne Tag)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: spritebit-windows-x64
+          path: dist/spritebit-windows-x64.zip
