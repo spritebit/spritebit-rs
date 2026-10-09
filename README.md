@@ -3,7 +3,7 @@
 Neubau von [spritebit](https://www.spritebit.at) als Desktop-Programm in Rust —
 später auch als Browser-Version über WebAssembly aus derselben Codebasis.
 
-© 2026 Marco Jan — alle Rechte vorbehalten.
+© 2026 Marco Jan — freie Software unter der [MIT-Lizenz](LICENSE).
 
 ## Aufbau
 
