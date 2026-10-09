@@ -89,6 +89,7 @@ cargo build --release           # schnelle Fassung (target/release)
 | Shift-Klick in der Timeline | Zellen-Bereich: kopieren, einfügen, leeren, verknüpfen, lösen |
 | Tag-Knopf / Klick auf einen Tag | Tag anlegen bzw. bearbeiten (Bereich, Richtung, Farbe) |
 | Doppelklick auf einen Ebenen-Namen | umbenennen; Pfeile verschieben die Ebene |
+| Masken-Knopf in der Timeline | Ebenenmaske: hinzufügen, bearbeiten (Malen blendet aus, Radieren ein), an/aus, anwenden, löschen — auch auf gesperrten Ebenen |
 | Strg+E | Export: PNG (Frame oder alle), GIF (ganz oder je Tag), Spritesheet + JSON-Atlas |
 | Ansicht → Sprache | Deutsch, English, Österreichisch (wird gemerkt) |
 | Reiter | Geöffnete Sprites über der Zeichenfläche: Klick wechselt, × / Mittelklick / Strg+W schließt, Strg+Tab schaltet weiter, Ziehen ordnet |

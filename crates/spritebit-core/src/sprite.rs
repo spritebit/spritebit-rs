@@ -25,11 +25,13 @@ pub struct Layer {
     pub continuous: bool,
     /// Licht- oder Schatten-Ebene (siehe [`crate::light`]); `None` = normale Ebene.
     pub fx: Option<crate::light::LayerFx>,
+    /// Ebenenmaske (siehe [`crate::mask`]), gilt für alle Frames.
+    pub mask: Option<crate::mask::Mask>,
 }
 
 impl Layer {
     pub fn new(name: impl Into<String>) -> Self {
-        Layer { name: name.into(), visible: true, locked: false, opacity: 1.0, continuous: false, fx: None }
+        Layer { name: name.into(), visible: true, locked: false, opacity: 1.0, continuous: false, fx: None, mask: None }
     }
 }
 
@@ -116,6 +118,9 @@ pub struct Sprite {
     /// Aktiver Frame und aktive Ebene.
     pub frame: usize,
     pub layer: usize,
+    /// „Maske bearbeiten“: [`Self::active`] liefert die Maske der aktiven
+    /// Ebene statt ihres Bildes (nicht gespeichert).
+    pub editing_mask: bool,
 }
 
 impl Sprite {
@@ -138,6 +143,7 @@ impl Sprite {
             guides: Guides { bottom: height, ..Guides::default() },
             frame: 0,
             layer: 0,
+            editing_mask: false,
         })
     }
 
@@ -158,9 +164,28 @@ impl Sprite {
         &mut self.images[id]
     }
 
-    /// Das Bild, in das gerade gemalt wird.
+    /// Das Bild, in das gerade gemalt wird — beim Bearbeiten der Maske die
+    /// Maske der aktiven Ebene.
     pub fn active(&mut self) -> &mut Image {
+        if self.editing_mask && self.layers[self.layer].mask.is_some() {
+            let layer = self.layer;
+            return &mut self.layers[layer].mask.as_mut().expect("eben geprüft").hide;
+        }
         self.cel_mut(self.frame, self.layer)
+    }
+
+    /// Lesend wie [`Self::active`]: das Bild bzw. die Maske, die die
+    /// Werkzeuge gerade bearbeiten.
+    pub fn target(&self) -> &Image {
+        match (&self.layers[self.layer].mask, self.editing_mask) {
+            (Some(m), true) => &m.hide,
+            _ => self.cel(self.frame, self.layer),
+        }
+    }
+
+    /// Wird gerade die Maske der aktiven Ebene bearbeitet?
+    pub fn editing_mask(&self) -> bool {
+        self.editing_mask && self.layers[self.layer].mask.is_some()
     }
 
     /// Teilt die Zelle ihr Bild mit einem anderen Frame?
@@ -308,7 +333,11 @@ impl Sprite {
                 None => {
                     let mut out = self.images[dst].clone();
                     let pixels: Vec<(u32, u32, Px)> = self.images[src].pixels().collect();
+                    let mask = self.layers[top].mask.clone();
                     for (x, y, v) in pixels {
+                        if mask.as_ref().is_some_and(|m| m.hides(x, y)) {
+                            continue; // was die Maske ausblendet, kommt nicht mit
+                        }
                         let under = out.get(x, y);
                         let value = if a >= 1.0 {
                             v
@@ -335,6 +364,32 @@ impl Sprite {
         }
         self.layers.remove(top);
         self.layer = below;
+        self.editing_mask = false;
+        true
+    }
+
+    /// Maske der aktiven Ebene fest übernehmen: ausgeblendete Pixel werden in
+    /// jedem Frame gelöscht, die Maske verschwindet. Verknüpfte Zellen
+    /// bleiben verknüpft.
+    pub fn apply_mask(&mut self) -> bool {
+        let l = self.layer;
+        let Some(mask) = self.layers[l].mask.take() else { return false };
+        let mut done: Vec<(ImageId, ImageId)> = Vec::new();
+        for f in 0..self.frames.len() {
+            let id = self.frames[f].cels[l];
+            let new = match done.iter().find(|(k, _)| *k == id) {
+                Some(&(_, n)) => n,
+                None => {
+                    let img = crate::mask::masked(&self.images[id], Some(&mask));
+                    self.images.push(img);
+                    let n = self.images.len() - 1;
+                    done.push((id, n));
+                    n
+                }
+            };
+            self.frames[f].cels[l] = new;
+        }
+        self.editing_mask = false;
         true
     }
 
@@ -360,7 +415,11 @@ impl Sprite {
                     for &l in &vis {
                         let a = self.layers[l].opacity.clamp(0.0, 1.0) as f64;
                         let pixels: Vec<(u32, u32, Px)> = self.images[self.frames[f].cels[l]].pixels().collect();
+                        let mask = self.layers[l].mask.clone();
                         for (x, y, v) in pixels {
+                            if mask.as_ref().is_some_and(|m| m.hides(x, y)) {
+                                continue;
+                            }
                             let under = out.get(x, y);
                             let value = if a >= 1.0 {
                                 v
@@ -694,5 +753,42 @@ mod tests {
         }
         let mut one = Sprite::new("t", 2, 2).unwrap();
         assert!(!one.merge_visible(&pal, "x"), "eine Ebene: nichts zu tun");
+    }
+
+    #[test]
+    fn maske_bearbeiten_anwenden_zusammenfuehren() {
+        let pal = crate::palette::Palette::grayscale();
+        let mut sp = Sprite::new("t", 3, 1).unwrap();
+        for x in 0..3 {
+            sp.active().set(x, 0, 2);
+        }
+        sp.add_frame(0, false);
+        sp.link(0, 1, 0);
+        sp.layers[0].mask = Some(crate::mask::Mask::new(3, 1));
+        sp.editing_mask = true;
+        sp.active().set(1, 0, 5); // malt in die Maske
+        assert_eq!(sp.cel(0, 0).get(1, 0), 2, "Bild bleibt");
+        assert!(sp.layers[0].mask.as_ref().unwrap().hides(1, 0));
+        let buf = crate::composite::render_rgba(&sp, &pal, 0, crate::Rect { x: 0, y: 0, w: 3, h: 1 });
+        let alpha: Vec<u8> = buf.chunks(4).map(|c| c[3]).collect();
+        assert_eq!(alpha, [255, 0, 255], "Ausgeblendetes fehlt in der Anzeige");
+        // Über eine Ebene darüber zusammenführen: das Ausgeblendete kommt nicht mit.
+        sp.add_layer(1, "oben");
+        sp.layer = 1;
+        sp.editing_mask = false;
+        sp.merge_down(&pal);
+        assert_eq!(sp.cel(0, 0).get(1, 0), 2, "unten liegt das Original");
+        // Anwenden löscht in beiden (verknüpften) Frames.
+        let mut sp2 = Sprite::new("t", 3, 1).unwrap();
+        sp2.active().set(1, 0, 2);
+        sp2.add_frame(0, false);
+        sp2.link(0, 1, 0);
+        let mut m = crate::mask::Mask::new(3, 1);
+        m.hide.set(1, 0, 1);
+        sp2.layers[0].mask = Some(m);
+        assert!(sp2.apply_mask());
+        assert!(sp2.layers[0].mask.is_none());
+        assert_eq!((sp2.cel(0, 0).get(1, 0), sp2.cel(1, 0).get(1, 0)), (0, 0));
+        assert_eq!(sp2.frames[0].cels[0], sp2.frames[1].cels[0], "Verknüpfung bleibt");
     }
 }

@@ -103,14 +103,14 @@ impl SpritebitApp {
                 Tool::Lasso => self.sel_drag = Some(SelDrag::Lasso(vec![cell])),
                 Tool::Magic => {
                     let sp = self.project.sprite();
-                    self.selection = selection::region(sp.cel(sp.frame, sp.layer), &palette, &sp.free, cell.0, cell.1, self.tolerance);
+                    self.selection = selection::region(sp.target(), &palette, &sp.free, cell.0, cell.1, self.tolerance);
                 }
                 Tool::Wand => {
                     if !self.layer_ok() {
                         return;
                     }
                     let sp = self.project.sprite();
-                    if let Some(r) = selection::region(sp.cel(sp.frame, sp.layer), &palette, &sp.free, cell.0, cell.1, self.tolerance) {
+                    if let Some(r) = selection::region(sp.target(), &palette, &sp.free, cell.0, cell.1, self.tolerance) {
                         self.record_step();
                         let n = selection::clear(self.project.sprite_mut().active(), &r);
                         if n > 0 {
@@ -178,7 +178,7 @@ impl SpritebitApp {
             Some(f) => f.clip.clone(),
             None => {
                 let sp = self.project.sprite();
-                selection::copy(sp.cel(sp.frame, sp.layer), sel)
+                selection::copy(sp.target(), sel)
             }
         });
     }

@@ -719,6 +719,14 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Neu berechnen", "Recompute", "Nei rechnen"),
     ("Alle sichtbaren Ebenen zusammenführen — in jedem Frame, auch Licht und Schatten; ausgeblendete bleiben", "Merge all visible layers — in every frame, light and shadow too; hidden ones stay", ""),
     ("Zusammengeführt", "Merged", "Zammgfiat"),
+    // ── Ebenenmaske ──
+    ("Maske hinzufügen — damit blendest du Teile der Ebene aus, ohne sie zu löschen", "Add a mask — hides parts of the layer without deleting them", "A Maskn dazua — damit blendst Teile vo da Ebene aus, ohne sie z’löschn"),
+    ("Maske bearbeiten: Malen blendet aus, Radieren blendet wieder ein.", "Editing the mask: painting hides, erasing reveals again.", "Maskn bearbeitn: Moin blendt aus, Radiern blendt wieder ei."),
+    ("Maske bearbeiten: Malen blendet aus, Radieren blendet wieder ein", "Edit the mask: painting hides, erasing reveals again", "Maskn bearbeitn: Moin blendt aus, Radiern blendt wieder ei"),
+    ("Maske ausschalten (alles sichtbar)", "Turn the mask off (everything visible)", "Maskn ausschoitn (ois sichtbar)"),
+    ("Maske einschalten", "Turn the mask on", "Maskn eischoitn"),
+    ("Maske anwenden: ausgeblendete Pixel werden gelöscht, die Maske verschwindet", "Apply the mask: hidden pixels are deleted, the mask goes away", ""),
+    ("Maske löschen — alles wieder sichtbar", "Delete the mask — everything visible again", "Maskn weg — ois wieder sichtbar"),
     // ── Werkzeuggröße per Alt + Rechts ──
     ("Größe {n}", "Size {n}", "Greß {n}"),
     ("Alt + Rechts ziehen", "Alt + right-drag", "Alt + Rechts ziehn"),

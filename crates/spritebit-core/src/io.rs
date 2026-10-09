@@ -81,6 +81,9 @@ fn layer_json(l: &Layer) -> Value {
     if let Some(fx) = &l.fx {
         v["fx"] = fx.to_json();
     }
+    if let Some(m) = &l.mask {
+        v["mask"] = m.to_json();
+    }
     v
 }
 
@@ -97,6 +100,14 @@ fn parse_layer(v: Option<&Value>, n: usize) -> Layer {
         l.fx = v.get("fx").and_then(crate::light::LayerFx::from_json);
     }
     l
+}
+
+/// Masken brauchen die Größe des Sprites — darum nach parse_layer.
+fn read_masks(sp: &mut Sprite, layers: Option<&Vec<Value>>) {
+    let (w, h) = (sp.width, sp.height);
+    for (i, l) in sp.layers.iter_mut().enumerate() {
+        l.mask = layers.and_then(|ls| ls.get(i)).and_then(|v| v.get("mask")).and_then(|m| crate::mask::Mask::from_json(m, w, h));
+    }
 }
 
 fn tag_json(t: &Tag) -> Value {
@@ -280,6 +291,7 @@ pub fn load_native(bytes: &[u8]) -> Result<Project, IoError> {
         sp.fps = s["fps"].as_u64().map_or(8, |v| v.clamp(1, 60) as u32);
         let layers = s["layers"].as_array().ok_or_else(|| IoError::Corrupt("keine Ebenen".into()))?;
         sp.layers = layers.iter().enumerate().map(|(i, l)| parse_layer(Some(l), i + 1)).collect();
+        read_masks(&mut sp, Some(layers));
         sp.free = s["free"].as_array().map_or_else(Vec::new, |f| {
             f.iter().map(|h| h.as_str().and_then(parse_hex).unwrap_or([0, 0, 0])).collect()
         });
@@ -375,6 +387,7 @@ pub fn import_web(text: &str) -> Result<Project, IoError> {
         let n_layers = all.iter().map(Vec::len).max().unwrap_or(1).max(1);
         let layer_list = s.get("layers").and_then(Value::as_array);
         sp.layers = (0..n_layers).map(|i| parse_layer(layer_list.and_then(|l| l.get(i)), i + 1)).collect();
+        read_masks(&mut sp, layer_list);
         sp.frames.clear();
         sp.images.clear();
         for (i, (cels, fv)) in all.iter().zip(frames).enumerate() {
@@ -679,5 +692,17 @@ mod tests {
         assert_eq!(web.sprites[0].layers[1].fx, want, "Web-Format");
         let native = load_native(&save_native(&p)).expect("eigenes Format");
         assert_eq!(native.sprites[0].layers[1].fx, want, "eigenes Format");
+    }
+
+    #[test]
+    fn masken_ueberstehen_web_und_eigenes_format() {
+        let mut p = Project::default();
+        let mut m = crate::mask::Mask::new(64, 64);
+        m.hide.set(3, 4, 1);
+        m.on = false;
+        p.sprites[0].layers[0].mask = Some(m);
+        let want = p.sprites[0].layers[0].mask.clone();
+        assert_eq!(import_web(&export_web(&p)).unwrap().sprites[0].layers[0].mask, want, "Web-Format");
+        assert_eq!(load_native(&save_native(&p)).unwrap().sprites[0].layers[0].mask, want, "eigenes Format");
     }
 }

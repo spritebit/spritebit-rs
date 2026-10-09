@@ -225,7 +225,9 @@ impl SpritebitApp {
     /// Ist die aktive Ebene bemalbar? Sonst Hinweis in die Statusleiste.
     pub(crate) fn layer_ok(&mut self) -> bool {
         let layer = &self.sprite().layers[self.sprite().layer];
-        self.hint = if layer.locked {
+        // Die Maske einer gesperrten Ebene darf man bearbeiten — so nimmt man
+        // z. B. Licht stellenweise weg, ohne die Licht-Ebene zu entsperren.
+        self.hint = if layer.locked && !self.sprite().editing_mask() {
             Some(trf("Ebene „{name}“ ist gesperrt — Schloss in der Timeline.", &[("name", &layer.name)]))
         } else if !layer.visible {
             Some(trf("Ebene „{name}“ ist ausgeblendet — Auge in der Timeline.", &[("name", &layer.name)]))

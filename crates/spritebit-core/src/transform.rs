@@ -177,6 +177,12 @@ fn map_images(sp: &mut Sprite, nw: u32, nh: u32, f: impl Fn(&Image) -> (Image, u
         *img = n;
         lost += l;
     }
+    // Masken wandern mit (sie sind Bilder in Sprite-Größe).
+    for layer in sp.layers.iter_mut() {
+        if let Some(m) = layer.mask.as_mut() {
+            m.hide = f(&m.hide).0;
+        }
+    }
     sp.width = nw;
     sp.height = nh;
     lost
@@ -396,5 +402,18 @@ mod tests {
         let mut v: Vec<_> = img.pixels().collect();
         v.sort();
         assert_eq!(v, vec![(64, 0, 2), (129, 69, 3)]);
+    }
+
+    #[test]
+    fn maske_wandert_beim_spiegeln_mit() {
+        let mut sp = Sprite::new("t", 4, 2).unwrap();
+        let mut m = crate::mask::Mask::new(4, 2);
+        m.hide.set(0, 0, 1);
+        sp.layers[0].mask = Some(m);
+        flip_sprite(&mut sp, true);
+        let m = sp.layers[0].mask.as_ref().unwrap();
+        assert!(m.hides(3, 0) && !m.hides(0, 0));
+        rotate_sprite90(&mut sp);
+        assert_eq!((sp.layers[0].mask.as_ref().unwrap().hide.width(), sp.layers[0].mask.as_ref().unwrap().hide.height()), (2, 4));
     }
 }

@@ -895,6 +895,22 @@ impl SpritebitApp {
         self.draw_guides(&painter, origin, zoom);
         // Form, die gerade aufgezogen wird, und der Rahmen der Auswahl.
         self.shape_preview(&painter, origin, zoom);
+        // Maske bearbeiten: Ausgeblendetes rötlich, roter Rahmen.
+        if self.sprite().editing_mask() {
+            let sp = self.sprite();
+            let m = sp.layers[sp.layer].mask.as_ref().expect("editing_mask prüft das");
+            let red = Color32::from_rgba_unmultiplied(255, 70, 70, 120);
+            let clip = painter.with_clip_rect(area);
+            for (x, y, _) in m.hide.pixels() {
+                if x < x0 || y < y0 || x >= x1 || y >= y1 {
+                    continue;
+                }
+                let r = egui::Rect::from_min_size(origin + Vec2::new(x as f32, y as f32) * zoom, Vec2::splat(zoom));
+                clip.rect_filled(r, 0.0, red);
+            }
+            let frame = egui::Rect::from_min_size(origin, Vec2::new(sw as f32, sh as f32) * zoom).expand(3.0);
+            painter.rect_stroke(frame, 0.0, Stroke::new(2.0, Color32::from_rgb(255, 107, 107)), egui::StrokeKind::Outside);
+        }
         // Umriss dessen, was Stift, Pinsel, Radierer oder Spray gleich treffen.
         self.brush_preview(&painter.with_clip_rect(area), origin, zoom);
         self.selection_overlay(&painter, origin, zoom, (x0 as i64, y0 as i64, x1 as i64, y1 as i64));
@@ -1401,6 +1417,38 @@ mod tests {
         h.key_press_modifiers(Modifiers::COMMAND, Key::W);
         h.run();
         assert_eq!(h.state().tabs.len(), 1);
+    }
+
+    #[test]
+    fn maske_auf_gesperrter_licht_ebene() {
+        let mut h = app();
+        for y in 10..14 {
+            for x in 10..14 {
+                h.state_mut().project.sprite_mut().active().set(x, y, 3);
+            }
+        }
+        h.state_mut().image.cast_on = false;
+        h.state_mut().commit_light_layers();
+        h.run();
+        let li = h.state().project.sprite().layers.iter().position(|l| l.fx.is_some()).unwrap();
+        h.state_mut().project.sprite_mut().layer = li;
+        h.run();
+        assert!(h.state().project.sprite().layers[li].locked);
+        h.get_by_label("Maske hinzufügen — damit blendest du Teile der Ebene aus, ohne sie zu löschen").click();
+        h.run();
+        assert!(h.state().project.sprite().editing_mask());
+        // Mit dem Stift über die Lichtkante oben: die Maske blendet sie aus.
+        h.state_mut().tool = Tool::Pencil;
+        drag(&mut h, (10.0, 10.0), (13.0, 10.0));
+        let sp = h.state().project.sprite();
+        assert_eq!(sp.cel(0, li).get(11, 10), 2, "Licht-Ebene selbst unverändert");
+        assert!(sp.layers[li].mask.as_ref().unwrap().hides(11, 10), "trotz Sperre in die Maske gemalt");
+        let buf = spritebit_core::render_rgba(sp, &h.state().project.current_palette(), 0, spritebit_core::Rect { x: 11, y: 10, w: 1, h: 1 });
+        assert_eq!(&buf[..3], &[0x99, 0x99, 0x99], "zu sehen ist die Figur, nicht das Licht");
+        // Rückgängig nimmt den Strich in der Maske zurück.
+        h.state_mut().undo();
+        h.run();
+        assert!(!h.state().project.sprite().layers[li].mask.as_ref().unwrap().hides(11, 10));
     }
 
     #[test]

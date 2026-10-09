@@ -65,10 +65,12 @@ pub fn render_rgba_step(sp: &Sprite, pal: &Palette, frame: usize, rect: Rect, st
         if img.allocated_tiles() == 0 {
             continue;
         }
+        let mask = layer.mask.as_ref().filter(|m| m.on);
         for y in 0..oh {
             for x in 0..ow {
-                let px = img.get(r.x + x * step, r.y + y * step);
-                if px == 0 {
+                let (sx, sy) = (r.x + x * step, r.y + y * step);
+                let px = img.get(sx, sy);
+                if px == 0 || mask.is_some_and(|m| m.hide.get(sx, sy) != 0) {
                     continue;
                 }
                 let Some(top) = color_of(px, pal, &sp.free) else { continue };

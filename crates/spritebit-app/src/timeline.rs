@@ -169,6 +169,54 @@ impl SpritebitApp {
                     s.merge_visible(&pal, name);
                 });
             }
+            // Ebenenmaske der aktiven Ebene (spritebit_core::mask).
+            ui.separator();
+            let (has_mask, mask_on, editing) = {
+                let sp = self.project.sprite();
+                let m = sp.layers[sp.layer].mask.as_ref();
+                (m.is_some(), m.is_some_and(|m| m.on), sp.editing_mask())
+            };
+            if !has_mask {
+                if icons::button(ui, icons::MASK, tr("Maske hinzufügen — damit blendest du Teile der Ebene aus, ohne sie zu löschen"), true).clicked() {
+                    self.edit_sprite(|s| {
+                        let l = s.layer;
+                        s.layers[l].mask = Some(spritebit_core::mask::Mask::new(s.width, s.height));
+                        s.editing_mask = true;
+                    });
+                    self.hint = Some(tr("Maske bearbeiten: Malen blendet aus, Radieren blendet wieder ein.").into());
+                }
+            } else {
+                let c = ui.visuals().text_color();
+                let b = egui::Button::selectable(editing, icons::image(icons::MASK, c)).wrap_mode(egui::TextWrapMode::Extend);
+                if ui.add(b).on_hover_text(tr("Maske bearbeiten: Malen blendet aus, Radieren blendet wieder ein")).clicked() {
+                    self.commit_float();
+                    let sp = self.project.sprite_mut();
+                    sp.editing_mask = !editing;
+                    self.hint = (!editing).then(|| tr("Maske bearbeiten: Malen blendet aus, Radieren blendet wieder ein.").into());
+                    self.changed();
+                }
+                let (eye, tip) = if mask_on { (icons::EYE, tr("Maske ausschalten (alles sichtbar)")) } else { (icons::EYE_OFF, tr("Maske einschalten")) };
+                if icons::button(ui, eye, tip, true).clicked() {
+                    self.edit_sprite(|s| {
+                        let l = s.layer;
+                        if let Some(m) = s.layers[l].mask.as_mut() {
+                            m.on = !m.on;
+                        }
+                    });
+                }
+                if icons::button(ui, icons::CHECK, tr("Maske anwenden: ausgeblendete Pixel werden gelöscht, die Maske verschwindet"), true).clicked() {
+                    self.edit_sprite(|s| {
+                        s.apply_mask();
+                    });
+                }
+                if icons::button(ui, icons::TRASH, tr("Maske löschen — alles wieder sichtbar"), true).clicked() {
+                    self.edit_sprite(|s| {
+                        let l = s.layer;
+                        s.layers[l].mask = None;
+                        s.editing_mask = false;
+                    });
+                }
+            }
             // Aktive Ebene frisch lesen — Verdoppeln/Zusammenlegen eben hat sie verschoben.
             let la = self.project.sprite().layer;
             let mut op = self.project.sprite().layers[la].opacity * 100.0;
