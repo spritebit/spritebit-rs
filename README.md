@@ -1,9 +1,31 @@
 # spritebit (Rust)
 
-Neubau von [spritebit](https://www.spritebit.at) als Desktop-Programm in Rust —
+Neubau von [spritebit](https://spritebit.at) als Desktop-Programm in Rust —
 später auch als Browser-Version über WebAssembly aus derselben Codebasis.
 
+[**⬇ Download für Windows**](https://github.com/spritebit/spritebit-rs/releases/latest/download/spritebit-windows-x64.zip) ·
+[Alle Versionen](https://github.com/spritebit/spritebit-rs/releases) ·
+[Web-Version](https://github.com/spritebit/sprite-editor) ·
+[Im Browser öffnen](https://spritebit.at/editor.html)
+
 © 2026 Marco Jan — freie Software unter der [MIT-Lizenz](LICENSE).
+
+## Installieren
+
+ZIP entpacken und `spritebit.exe` starten — keine Installation nötig. Windows
+warnt beim ersten Start vor einem unbekannten Herausgeber, weil die Datei nicht
+signiert ist: „Weitere Informationen“ → „Trotzdem ausführen“.
+
+## Neue Version veröffentlichen
+
+```
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+GitHub Actions (`.github/workflows/release.yml`) testet, baut und hängt
+`spritebit-windows-x64.zip` an die Release. Der Download-Link oben zeigt immer
+auf die neueste Version.
 
 ## Aufbau
 

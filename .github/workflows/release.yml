@@ -3,7 +3,7 @@
 # Ein Tag wie `v0.2.0` pushen (git tag v0.2.0 && git push origin v0.2.0):
 # GitHub baut und testet auf Windows und haengt die fertige Datei an eine
 # Release. Die Startseite verlinkt
-#   https://github.com/<user>/<repo>/releases/latest/download/spritebit-windows-x64.zip
+#   https://github.com/spritebit/spritebit-rs/releases/latest/download/spritebit-windows-x64.zip
 # — das zeigt immer auf die neueste Version (Eintrag in js/site-links.js
 # der Web-Version).
 name: Release
