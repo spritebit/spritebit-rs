@@ -19,6 +19,7 @@ mod preview_ui;
 mod selection_ui;
 mod sprites_ui;
 mod tabs;
+mod update;
 mod template_ui;
 mod timeline;
 mod tlmenu_ui;
@@ -59,6 +60,8 @@ fn main() -> eframe::Result {
             app.load_view();
             // Nach einem Absturz: die Sitzung zurückholen.
             app.start_session();
+            // Einmal bei GitHub nach einer neueren Version fragen (abschaltbar).
+            app.start_update_check(&cc.egui_ctx);
             Ok(Box::new(app))
         }),
     )
@@ -91,6 +94,8 @@ struct SpritebitApp {
     histories: Vec<History>,
     /// Reiter der geöffneten Sprites (Stellen in `project.sprites`), siehe tabs.rs.
     tabs: Vec<usize>,
+    /// Update-Hinweis (update.rs).
+    update: update::UpdateState,
     /// Wohin „Speichern" schreibt — `None`, solange nie gespeichert.
     path: Option<PathBuf>,
     dirty: bool,
@@ -202,6 +207,7 @@ impl SpritebitApp {
         let histories = project.sprites.iter().map(|_| History::default()).collect();
         SpritebitApp {
             tabs: (0..project.sprites.len()).collect(),
+            update: update::UpdateState::default(),
             project,
             histories,
             path: None,
@@ -627,6 +633,8 @@ impl SpritebitApp {
             });
             ui.menu_button(tr("Hilfe"), |ui| {
                 self.help_menu(ui);
+                ui.separator();
+                self.update_menu(ui);
                 if ui.button(tr("Über spritebit")).clicked() {
                     self.about_open = true;
                 }
@@ -974,6 +982,10 @@ impl eframe::App for SpritebitApp {
         self.tool_keys(&ctx);
         self.advance_playback(&ctx);
         egui::Panel::top("menu").show(ui, |ui| self.menu_bar(ui));
+        self.poll_update();
+        if self.update.available.is_some() {
+            egui::Panel::top("update").show(ui, |ui| self.update_banner(ui));
+        }
         egui::Panel::top("tools").show(ui, |ui| self.toolbar(ui));
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
         // Die Timeline dockt dort an, wo man sie im ⚙-Menü hinstellt.

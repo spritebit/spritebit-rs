@@ -688,6 +688,17 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("{n} Pixel in dieser Farbe", "{n} pixels in this color", "{n} Pixel in dera Farb"),
     // ── Auswahl-Leiste ──
     ("Alles", "All", "Ois"),
+    // ── Update-Hinweis ──
+    ("Neue Version {new} verfügbar", "New version {new} available", "Neiche Version {new} do"),
+    ("(du hast {old})", "(you have {old})", "(du host {old})"),
+    ("Später", "Later", "Spätta"),
+    ("Diese Version überspringen", "Skip this version", "De Version auslossn"),
+    ("Beim Start nach Updates suchen", "Check for updates on start", "Beim Start noch Updates schaun"),
+    (
+        "Fragt beim Start einmal bei GitHub nach, ob es eine neuere Version gibt. Dabei wird nur die neueste Versionsnummer abgerufen — keine Daten aus deinen Projekten.",
+        "Asks GitHub once on start whether a newer version exists. Only the latest version number is fetched — no data from your projects.",
+        "Frogt beim Start amoi bei GitHub noch, obs a neichere Version gibt. Dabei wird nur de neieste Versionsnummer gholt — kane Daten aus deine Projekte.",
+    ),
     // ── Über ──
     ("© 2026 Marco Jan · freie Software unter der MIT-Lizenz", "© 2026 Marco Jan · free software under the MIT license", "© 2026 Marco Jan · freie Software unta da MIT-Lizenz"),
     ("Neue Versionen auf GitHub", "New versions on GitHub", "Neiche Versionen auf GitHub"),
@@ -745,6 +756,7 @@ mod tests {
             include_str!("export_ui.rs"),
             include_str!("image_ui.rs"),
             include_str!("tabs.rs"),
+            include_str!("update.rs"),
             include_str!("sprites_ui.rs"),
             include_str!("preview_ui.rs"),
             include_str!("guides_ui.rs"),

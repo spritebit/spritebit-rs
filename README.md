@@ -16,6 +16,11 @@ ZIP entpacken und `spritebit.exe` starten — keine Installation nötig. Windows
 warnt beim ersten Start vor einem unbekannten Herausgeber, weil die Datei nicht
 signiert ist: „Weitere Informationen“ → „Trotzdem ausführen“.
 
+**Updates:** Beim Start fragt die App einmal bei GitHub nach, ob es eine neuere
+Version gibt, und zeigt dann oben ein Band mit „Herunterladen“, „Später“ und
+„Diese Version überspringen“. Abgerufen wird nur die neueste Versionsnummer —
+keine Daten aus deinen Projekten. Abschalten: Hilfe → „Beim Start nach Updates suchen“.
+
 ## Neue Version veröffentlichen
 
 1. In `Cargo.toml` (Abschnitt `[workspace.package]`) die Version anheben, z. B. `1.1.0`,
