@@ -152,10 +152,47 @@ pub fn ellipse_spans(x0: i64, y0: i64, x1: i64, y1: i64, filled: bool) -> Vec<Sp
     out
 }
 
-/// Füllen: die zusammenhängende Fläche gleicher Farbe um (x, y) bekommt
-/// `value` (4er-Nachbarschaft). Zeilenweise mit eigenem Stapel — keine
-/// Rekursion, die bei großen Flächen den Stack sprengt. Gibt die Zahl der
-/// geänderten Pixel zurück.
+// ── Umschalt beim Malen: nur waagerecht, senkrecht oder 45° (wie js/lock.js) ──
+
+/// Ab so vielen Pixeln Abstand wird die Richtung festgelegt.
+pub const LOCK_AFTER: i64 = 3;
+
+/// Nächste der acht Richtungen für (dx, dy) als (-1/0/1, -1/0/1) — oder
+/// `None`, solange der Zeiger noch zu nah am Start ist.
+pub fn snap_dir(dx: i64, dy: i64) -> Option<(i64, i64)> {
+    if dx.abs().max(dy.abs()) < LOCK_AFTER {
+        return None;
+    }
+    let a = (dy as f64).atan2(dx as f64);
+    let k = (a / std::f64::consts::FRAC_PI_4).round();
+    let t = k * std::f64::consts::FRAC_PI_4;
+    Some((t.cos().round() as i64, t.sin().round() as i64))
+}
+
+/// Punkt `p` auf die Linie durch `start` in Richtung `dir` legen.
+pub fn project(start: (i64, i64), dir: (i64, i64), p: (i64, i64)) -> (i64, i64) {
+    let (ux, uy) = dir;
+    let n = (ux * ux + uy * uy) as f64;
+    let t = (((p.0 - start.0) * ux + (p.1 - start.1) * uy) as f64 / n).round() as i64;
+    (start.0 + t * ux, start.1 + t * uy)
+}
+
+/// Linie mit Umschalt: Endpunkt auf 0°, 45° oder 90° einrasten.
+pub fn snap_end(start: (i64, i64), p: (i64, i64)) -> (i64, i64) {
+    match snap_dir(p.0 - start.0, p.1 - start.1) {
+        Some(d) => project(start, d, p),
+        None => p,
+    }
+}
+
+/// Rechteck und Ellipse mit Umschalt: gleich breit wie hoch.
+pub fn square_end(start: (i64, i64), p: (i64, i64)) -> (i64, i64) {
+    let (dx, dy) = (p.0 - start.0, p.1 - start.1);
+    let d = dx.abs().max(dy.abs());
+    let (sx, sy) = (if dx < 0 { -1 } else { 1 }, if dy < 0 { -1 } else { 1 });
+    (start.0 + d * sx, start.1 + d * sy)
+}
+
 /// Füllen mit Grenzen aus einer Vorlage (wie `fillRegion` im Web, js/fill.js):
 /// die zusammenhängende Fläche gleicher Werte in `key` (je Pixel ein Wert,
 /// zeilenweise, z. B. die sichtbare Farbe aller Ebenen) bestimmt, was in
@@ -187,6 +224,10 @@ pub fn flood_fill_ref(img: &mut Image, key: &[u32], x: i64, y: i64, value: Px) -
     changed
 }
 
+/// Füllen: die zusammenhängende Fläche gleicher Farbe um (x, y) bekommt
+/// `value` (4er-Nachbarschaft). Zeilenweise mit eigenem Stapel — keine
+/// Rekursion, die bei großen Flächen den Stack sprengt. Gibt die Zahl der
+/// geänderten Pixel zurück.
 pub fn flood_fill(img: &mut Image, x: i64, y: i64, value: Px) -> usize {
     let (w, h) = (img.width() as i64, img.height() as i64);
     if x < 0 || y < 0 || x >= w || y >= h {
@@ -349,6 +390,26 @@ impl PixelPerfect {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn umschalt_rastet_wie_im_web_ein() {
+        assert_eq!(snap_dir(0, 0), None);
+        assert_eq!(snap_dir(2, 1), None, "erst ab 3 Pixeln");
+        assert_eq!(snap_dir(5, 1), Some((1, 0)));
+        assert_eq!(snap_dir(-1, -6), Some((0, -1)));
+        assert_eq!(snap_dir(4, 5), Some((1, 1)));
+        assert_eq!(snap_dir(-3, 3), Some((-1, 1)));
+        let s = (10, 10);
+        assert_eq!(project(s, (1, 0), (17, 13)), (17, 10));
+        assert_eq!(project(s, (0, 1), (12, 4)), (10, 4));
+        assert_eq!(project(s, (1, 1), (15, 13)), (14, 14));
+        assert_eq!(snap_end((0, 0), (9, 2)), (9, 0));
+        assert_eq!(snap_end((0, 0), (6, 7)), (7, 7));
+        assert_eq!(snap_end((0, 0), (2, 1)), (2, 1));
+        assert_eq!(square_end((5, 5), (9, 7)), (9, 9));
+        assert_eq!(square_end((5, 5), (2, 7)), (2, 8));
+    }
+
 
     #[test]
     fn fuellen_mit_grenzen_aus_einer_vorlage() {

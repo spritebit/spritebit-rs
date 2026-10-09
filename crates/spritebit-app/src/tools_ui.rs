@@ -130,6 +130,10 @@ pub(crate) fn dragged_size(start_size: u32, dx: f32) -> u32 {
     (start_size as i64 + (dx / SIZE_STEP_PX).round() as i64).clamp(1, MAX_SIZE as i64) as u32
 }
 
+/// Umschalt beim Malen: wo die gerade Linie beginnt und ihre Richtung
+/// (`None`, bis der Strich weit genug ist).
+pub(crate) type StrokeLock = ((i64, i64), Option<(i64, i64)>);
+
 pub(crate) struct Pointer {
     pub cell: Option<(i64, i64)>,
     /// Maus über der Fläche oder ein Zug, der auf ihr begann.
@@ -365,6 +369,7 @@ impl SpritebitApp {
                 self.paint(spans, value);
             }
             self.stroke_last = None;
+            self.stroke_lock = None;
             self.pp = None;
             self.blocked = false;
             return;
@@ -373,10 +378,36 @@ impl SpritebitApp {
             return;
         }
         let Some(cell) = p.cell else { return };
-        if self.shape_start.is_some() {
-            self.shape_end = Some(cell);
+        // Umschalt: Linie rastet auf 0°/45°/90° ein, Rechteck/Ellipse werden Quadrat/Kreis.
+        let shift = self.modifiers.shift;
+        if let Some(start) = self.shape_start {
+            self.shape_end = Some(match (shift, self.tool) {
+                (true, Tool::Line) => tools::snap_end(start, cell),
+                (true, _) => tools::square_end(start, cell),
+                _ => cell,
+            });
             return;
         }
+        // Umschalt beim Malen: nur waagerecht, senkrecht oder 45° (wie im Web).
+        let cell = match (&mut self.stroke_lock, shift) {
+            (Some(l), false) => {
+                *l = (cell, None);
+                cell
+            }
+            (Some(l), true) => {
+                if l.1.is_none() {
+                    l.1 = tools::snap_dir(cell.0 - l.0 .0, cell.1 - l.0 .1);
+                }
+                match l.1 {
+                    Some(d) => tools::project(l.0, d, cell),
+                    None => match self.stroke_last {
+                        Some(last) => last,
+                        None => cell,
+                    },
+                }
+            }
+            (None, _) => cell,
+        };
         if let Some(last) = self.stroke_last {
             if self.tool == Tool::Spray {
                 self.spray_at(cell, p.secondary);
@@ -445,6 +476,7 @@ impl SpritebitApp {
             _ => {
                 self.record();
                 self.stroke_last = Some(cell);
+                self.stroke_lock = Some((cell, None));
                 // Pixel-perfekt: ein Strich, ein Pfad.
                 self.pp = self.pixel_perfect_now().then(tools::PixelPerfect::new);
                 self.stroke(cell, cell, erase);

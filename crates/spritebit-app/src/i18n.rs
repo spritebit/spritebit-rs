@@ -409,6 +409,10 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Skalieren: an den acht Anfassern ziehen — Ecken ändern Breite und Höhe, Kanten nur eine; Umschalt hält das Seitenverhältnis. Pixel bleiben scharf, gerechnet wird immer vom Original.", "Scale: drag one of the eight handles — corners change width and height, edges only one; Shift keeps the aspect ratio. Pixels stay sharp, always computed from the original.", ""),
     ("Anfasser ziehen", "Drag a handle", ""),
     ("Auswahl skalieren (Umschalt: Seitenverhältnis halten)", "Scale the selection (Shift: keep aspect ratio)", ""),
+    // ── Umschalt beim Malen (tools_ui.rs) ──
+    ("Umschalt beim Malen: nur waagerecht, senkrecht oder 45°. Bei den Formen rastet die Linie ein, Rechteck und Ellipse werden Quadrat und Kreis.", "Shift while painting: only horizontal, vertical or 45°. For shapes the line snaps, rectangle and ellipse become square and circle.", ""),
+    ("Umschalt + Malen", "Shift + paint", ""),
+    ("Nur waagerecht, senkrecht oder 45° · Formen: einrasten, Quadrat, Kreis", "Only horizontal, vertical or 45° · shapes: snap, square, circle", ""),
     // ── Kacheln (tiles_ui.rs) ──
     ("Kacheln", "Tiles", "Kachln"),
     ("Kachelgröße", "Tile size", ""),

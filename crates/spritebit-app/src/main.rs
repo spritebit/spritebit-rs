@@ -143,6 +143,8 @@ struct SpritebitApp {
     pixel_perfect: bool,
     /// Füllen: Grenzen von allen sichtbaren Ebenen (wie im Web).
     fill_visible: bool,
+    /// Umschalt beim Malen: wo die gerade Linie beginnt und ihre Richtung.
+    stroke_lock: Option<tools_ui::StrokeLock>,
     /// Skalieren der Auswahl: unskaliertes Original, seine Maske und das
     /// letzte Ergebnis (gilt nur, solange das Schwebende noch so aussieht).
     scale_base: Option<(spritebit_core::selection::Clip, Option<Vec<bool>>, spritebit_core::selection::Clip)>,
@@ -252,6 +254,7 @@ impl SpritebitApp {
             size_drag: None,
             pixel_perfect: false,
             fill_visible: false,
+            stroke_lock: None,
             scale_base: None,
             pp: None,
             filled: false,
@@ -1374,6 +1377,34 @@ mod tests {
         h.get_by_label("Vollbild beenden").click();
         h.run();
         assert!(!h.state().view.fullscreen);
+    }
+
+    #[test]
+    fn umschalt_malt_gerade_linien() {
+        let mut h = app();
+        h.state_mut().tool = Tool::Pencil;
+        let sh = Modifiers::SHIFT;
+        let pts = [(2.0, 5.0), (4.0, 6.0), (6.0, 4.0), (9.0, 6.0), (12.0, 5.0)];
+        let a = at(&h, pts[0].0, pts[0].1);
+        h.hover_at(a);
+        h.run();
+        // Umschalt die ganze Zeit gehalten (event_modifiers ließe sie gleich wieder los).
+        h.event(egui::Event::ModifiersChanged(sh));
+        h.event(egui::Event::PointerButton { pos: a, button: egui::PointerButton::Primary, pressed: true, modifiers: sh });
+        h.run();
+        for (x, y) in &pts[1..] {
+            h.event(egui::Event::PointerMoved(at(&h, *x, *y)));
+            h.run();
+        }
+        let b = at(&h, 12.0, 5.0);
+        h.event(egui::Event::PointerButton { pos: b, button: egui::PointerButton::Primary, pressed: false, modifiers: sh });
+        h.run();
+        h.event(egui::Event::ModifiersChanged(Modifiers::NONE));
+        h.run();
+        for x in 2..=12 {
+            assert_eq!(px(&h, x, 5), 5, "gerade Linie bei x = {x}");
+        }
+        assert_eq!((px(&h, 4, 6), px(&h, 6, 4), px(&h, 9, 6)), (0, 0, 0), "keine Wackler");
     }
 
     #[test]
