@@ -645,6 +645,9 @@ impl SpritebitApp {
         self.playing = !self.playing && self.project.sprite().frames.len() > 1;
         self.frame_started = ctx.input(|i| i.time);
         self.play_step = 0;
+        if self.playing {
+            self.bitty_moment("anim", tr("Es bewegt sich! Deine erste Animation läuft."));
+        }
     }
 
     /// Bei jedem Durchlauf: ist die Zeit des Frames um, kommt der nächste.

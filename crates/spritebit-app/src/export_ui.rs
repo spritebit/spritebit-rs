@@ -117,7 +117,10 @@ impl SpritebitApp {
 
     fn report_export(&mut self, r: Result<Option<String>, String>) {
         match r {
-            Ok(Some(msg)) => self.hint = Some(msg),
+            Ok(Some(msg)) => {
+                self.hint = Some(msg);
+                self.bitty_moment("export", tr("Dein erster Export — jetzt ist es draußen in der Welt! Ich bin ein bisschen stolz."));
+            }
             Ok(None) => {}
             Err(e) => self.error = Some(e),
         }

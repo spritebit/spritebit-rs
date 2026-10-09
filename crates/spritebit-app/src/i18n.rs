@@ -103,6 +103,31 @@ pub fn tr(de: &'static str) -> &'static str {
     }
 }
 
+/// Alle Sprachfassungen eines Textes, egal in welcher Sprache er vorliegt —
+/// für Bittys Suche (bitty_ui.rs), die auf Deutsch auch „layer“ finden soll.
+/// Unbekannte Texte: leer.
+pub fn variants(text: &str) -> Vec<&'static str> {
+    static REV: OnceLock<HashMap<&'static str, usize>> = OnceLock::new();
+    let rev = REV.get_or_init(|| {
+        let mut m = HashMap::new();
+        for (i, &(de, en, at)) in TEXTS.iter().enumerate() {
+            m.insert(de, i);
+            m.entry(en).or_insert(i);
+            if !at.is_empty() {
+                m.entry(at).or_insert(i);
+            }
+        }
+        m
+    });
+    match rev.get(text) {
+        Some(&i) => {
+            let (de, en, at) = TEXTS[i];
+            [de, en, at].into_iter().filter(|s| !s.is_empty()).collect()
+        }
+        None => Vec::new(),
+    }
+}
+
 /// Übersetzung mit Werten: `trf("Farbe {n}", &[("n", &5)])`.
 pub fn trf(de: &'static str, args: &[(&str, &dyn std::fmt::Display)]) -> String {
     let mut s = tr(de).to_string();
@@ -889,6 +914,32 @@ const TEXTS: &[(&str, &str, &str)] = &[
     // ── Clean Stroke (saubere 1-Pixel-Striche) ──
     ("Clean Stroke", "Clean Stroke", ""),
     ("Wie in bekannten Pixel-Art-Programmen: entfernt beim Zeichnen die doppelten Eckpixel an Treppenstufen — saubere 1-Pixel-Linien (Stift, Radierer mit Größe 1)", "As in well-known pixel art tools: removes the doubled corner pixels at stair steps while drawing — clean 1-pixel lines (pencil, eraser at size 1)", "Wia in bekanntn Pixel-Art-Programmen: haut beim Zeichnen de doppltn Eckpixel an de Stiagnstufn weg — saubere 1-Pixel-Linien (Stift, Radiergummi mit Greß 1)"),
+    // ── Bitty, der Helfer (bitty_ui.rs) ──
+    ("Bitty — Suche und Tipps (Strg+K)", "Bitty — search and tips (Ctrl+K)", "Bitty — Suach und Tipps (Strg+K)"),
+    ("Hinweise von Bitty", "Hints from Bitty", ""),
+    ("Wonach suchst du? (z. B. Lasso, Ebenen)", "What are you looking for? (e.g. lasso, layers)", "Wos suachst? (z. B. Lasso, Ebenen)"),
+    ("Dazu finde ich nichts — versuch ein anderes Wort.", "I can’t find anything for that — try another word.", "Do find i nix — probier a anders Wort."),
+    ("Nächster Tipp", "Next tip", "Nächsta Tipp"),
+    ("Danke", "Thanks", "Danke da"),
+    ("Nicht mehr zeigen", "Don’t show again", "Nimma zeign"),
+    ("Entsperren", "Unlock", "Aufsperrn"),
+    ("Einblenden", "Show it", ""),
+    ("Die Ebene „{name}“ ist gesperrt — deshalb passiert beim Malen nichts.", "The layer “{name}” is locked — that’s why painting does nothing.", "D’Ebene „{name}“ is zuagsperrt — drum passiert beim Moin nix."),
+    ("Die Ebene „{name}“ ist ausgeblendet — du würdest blind malen.", "The layer “{name}” is hidden — you’d be painting blind.", "D’Ebene „{name}“ is ausblendt — du tatst blind moin."),
+    ("Dein erster Export — jetzt ist es draußen in der Welt! Ich bin ein bisschen stolz.", "Your first export — now it’s out in the world! I’m a little proud.", "Dei easchta Export — jetzt is draußn in da Wöd! I bin a bissl stolz."),
+    ("Es bewegt sich! Deine erste Animation läuft.", "It moves! Your first animation is running.", "Es rührt si! Dei easchte Animation lauft."),
+    ("Strg + K öffnet mich überall. Tipp ein Stichwort — Enter schlägt die Hilfe an der Stelle auf.", "Ctrl + K opens me anywhere. Type a keyword — Enter opens the help right at that spot.", ""),
+    ("Erst die Silhouette: füll deine Figur einfarbig aus. Erkennt man sie dann noch, stimmt die Form.", "Silhouette first: fill your figure in one color. If it’s still recognisable, the shape works.", ""),
+    ("Licht kommt am besten von einer Seite, meist oben links — und zwar überall im Bild gleich.", "Light works best from one side, usually top left — and the same everywhere in the picture.", ""),
+    ("Schatten nicht nur dunkler machen, sondern auch kühler (Richtung Blau/Violett); Licht wärmer (Richtung Gelb). Das wirkt lebendiger.", "Don’t just make shadows darker, make them cooler too (towards blue/purple); light warmer (towards yellow). It feels more alive.", ""),
+    ("Weniger Farben wirken geschlossener: 4–8 pro Sprite reichen oft.", "Fewer colors look more unified: 4–8 per sprite are often enough.", ""),
+    ("Saubere Linien steigen in gleichmäßigen Stufen (1-1-1 oder 2-2-2). Clean Stroke entfernt die doppelten Eckpixel.", "Clean lines climb in even steps (1-1-1 or 2-2-2). Clean Stroke removes the doubled corner pixels.", ""),
+    ("Vorsicht vor „Kissen-Schattierung“: Schatten ringsum am Rand macht alles flach. Schattiere von der Lichtrichtung weg.", "Watch out for “pillow shading”: shadow all around the edge makes everything flat. Shade away from the light.", ""),
+    ("Die Kontur muss nicht schwarz sein — ein dunkler Ton der Füllfarbe wirkt weicher und passt besser.", "The outline doesn’t have to be black — a dark shade of the fill color looks softer and fits better.", ""),
+    ("Den höchsten Kontrast hebst du dir für das Wichtigste auf, meist die Augen.", "Save the strongest contrast for what matters most, usually the eyes.", ""),
+    ("Für eine Animation reichen oft 2–4 Frames. Ein Frame, der länger steht, gibt Gewicht — z. B. beim Landen.", "An animation often needs only 2–4 frames. A frame that stays longer adds weight — say, when landing.", ""),
+    ("Gleich breite Farbstreifen parallel zur Kontur („Banding“) wirken matschig. Versetz die Übergänge lieber.", "Equal-width color bands running along the outline (“banding”) look mushy. Stagger the transitions instead.", ""),
+    ("F1 öffnet die Hilfe mit allen Tastenkürzeln.", "F1 opens the help with every shortcut.", ""),
 ];
 
 /// Fehler beim Laden in der gewählten Sprache.
@@ -941,6 +992,7 @@ mod tests {
             include_str!("template_ui.rs"),
             include_str!("tlmenu_ui.rs"),
             include_str!("view_ui.rs"),
+            include_str!("bitty_ui.rs"),
         ];
         let mut missing = Vec::new();
         for src in sources {

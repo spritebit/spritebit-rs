@@ -9,6 +9,7 @@
 // Im Release kein Konsolenfenster neben dem Programm.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod bitty_ui;
 mod export_ui;
 mod guides_ui;
 mod i18n;
@@ -190,6 +191,8 @@ struct SpritebitApp {
     tl_cache: tlmenu_ui::TlCache,
     /// Hintergrund, Vollbild, „Farbe zeigen“, Hilfe, Sitzungssicherung.
     view: view_ui::ViewState,
+    /// Bitty, der Helfer: Blase, Suche, Hinweise (bitty_ui.rs).
+    bitty: bitty_ui::BittyState,
     /// In der Kopfzeile markierte Frames und der Ausgangspunkt für Umschalt+Klick.
     frame_sel: Vec<usize>,
     frame_anchor: Option<usize>,
@@ -284,6 +287,7 @@ impl SpritebitApp {
             tl_menu_open: false,
             tl_cache: tlmenu_ui::TlCache::default(),
             view: view_ui::ViewState::default(),
+            bitty: bitty_ui::BittyState::default(),
             frame_sel: Vec::new(),
             frame_anchor: None,
             tl_drag: None,
@@ -659,6 +663,7 @@ impl SpritebitApp {
             });
             ui.menu_button(tr("Hilfe"), |ui| {
                 self.help_menu(ui);
+                self.bitty_menu(ui);
                 ui.separator();
                 self.update_menu(ui);
                 ui.separator();
@@ -674,9 +679,14 @@ impl SpritebitApp {
                     self.about_open = true;
                 }
             });
-            // Immer sichtbar, rechts in der Leiste (wie im Web): Hintergrund
-            // und Vollbild. Im Menü „Ansicht“ gibt es beides auch.
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| self.view_quick(ui));
+            // Immer sichtbar, rechts in der Leiste (wie im Web): ganz rechts
+            // Bitty, daneben Hintergrund und Vollbild. Im Menü „Ansicht“ gibt
+            // es die beiden auch.
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                self.bitty_button(ui);
+                ui.add_space(8.0);
+                self.view_quick(ui);
+            });
         });
     }
 
@@ -1056,6 +1066,8 @@ impl eframe::App for SpritebitApp {
         self.view_keys(&ctx);
         self.guide_keys(&ctx);
         self.selection_keys(&ctx);
+        // Vor den Werkzeugen: Strg+K gehört Bitty, K allein der Farbwahl.
+        self.bitty_keys(&ctx);
         self.tool_keys(&ctx);
         self.advance_playback(&ctx);
         egui::Panel::top("menu").show(ui, |ui| self.menu_bar(ui));
@@ -1094,6 +1106,7 @@ impl eframe::App for SpritebitApp {
         self.import_window(&ctx);
         self.tl_menu(&ctx);
         self.help_window(&ctx);
+        self.bitty_bubble(&ctx);
         self.autosave(&ctx);
         // Sauber beendet (ohne oder nach der Rückfrage): die Sitzung ist erledigt.
         if ctx.input(|i| i.viewport().close_requested()) && (!self.dirty || self.allow_close) {
@@ -1206,6 +1219,22 @@ mod tests {
         drag(&mut h, (10.0, 10.0), (12.0, 10.0));
         assert_eq!(px(&h, 10, 10), 0);
         assert!(h.state().hint.as_deref().is_some_and(|t| t.contains("gesperrt")));
+    }
+
+    #[test]
+    fn bitty_bietet_entsperren_an() {
+        let mut h = app();
+        h.state_mut().project.sprite_mut().layers[0].locked = true;
+        drag(&mut h, (10.0, 10.0), (12.0, 10.0));
+        assert_eq!(h.state().bitty.hint_id(), Some("layerLocked"));
+        h.get_by_label("Entsperren").click();
+        h.run();
+        assert!(!h.state().project.sprite().layers[0].locked);
+        assert_eq!(h.state().bitty.hint_id(), None);
+        // Einmal pro Sitzung: wieder sperren und malen — kein zweiter Hinweis.
+        h.state_mut().project.sprite_mut().layers[0].locked = true;
+        drag(&mut h, (10.0, 10.0), (12.0, 10.0));
+        assert_eq!(h.state().bitty.hint_id(), None);
     }
 
     #[test]

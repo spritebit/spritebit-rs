@@ -224,6 +224,8 @@ impl SpritebitApp {
         }
         let mut open = true;
         let (mut save_backup, mut restore_backup) = (false, false);
+        // Bittys Suche hat hierher geführt: diese Zeile wird gezeigt (bitty_ui.rs).
+        let mut focus = self.bitty.help_focus;
         egui::Window::new(tr("Hilfe")).open(&mut open).default_size([560.0, 620.0]).show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.weak(format!("spritebit {}", crate::VERSION));
@@ -232,7 +234,8 @@ impl SpritebitApp {
                     ui.add_space(8.0);
                     ui.strong(title);
                     for l in lines {
-                        ui.label(format!("• {l}"));
+                        let r = ui.label(format!("• {l}"));
+                        crate::bitty_ui::mark_help_line(ui, &r, l, &mut focus);
                     }
                 }
                 ui.add_space(8.0);
@@ -240,7 +243,8 @@ impl SpritebitApp {
                 egui::Grid::new("keys").num_columns(2).striped(true).show(ui, |ui| {
                     for (k, what) in help_keys() {
                         ui.monospace(k);
-                        ui.label(what);
+                        let r = ui.label(what);
+                        crate::bitty_ui::mark_help_line(ui, &r, what, &mut focus);
                         ui.end_row();
                     }
                 });
@@ -261,6 +265,7 @@ impl SpritebitApp {
                 }
             });
         });
+        self.bitty.help_focus = focus;
         if !open {
             self.view.help_open = false;
         }
@@ -405,7 +410,7 @@ fn civil(z: i64) -> (i64, u32, u32) {
     (yoe + era * 400 + i64::from(m <= 2), m, d)
 }
 
-fn help_sections() -> Vec<(&'static str, Vec<&'static str>)> {
+pub(crate) fn help_sections() -> Vec<(&'static str, Vec<&'static str>)> {
     vec![
         (tr("Arbeitsfläche"), vec![
             tr("Reiter über der Zeichenfläche zeigen die geöffneten Sprites: Klick wechselt, × oder Mittelklick schließt, Ziehen ordnet."),
@@ -475,7 +480,7 @@ fn help_sections() -> Vec<(&'static str, Vec<&'static str>)> {
     ]
 }
 
-fn help_keys() -> Vec<(&'static str, &'static str)> {
+pub(crate) fn help_keys() -> Vec<(&'static str, &'static str)> {
     vec![
         (tr("Klick"), tr("Malen")),
         (tr("Rechtsklick"), tr("Löschen (gedrückt halten = durchgehend)")),
