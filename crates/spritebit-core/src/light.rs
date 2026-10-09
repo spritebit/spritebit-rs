@@ -265,6 +265,248 @@ pub fn drop_shadow(img: &mut Image, dir: LightDir, value: Px, distance: u32, ins
     n
 }
 
+// ── Licht und Schatten als eigene Ebene ─────────────────────────────
+//
+// Nicht-destruktiv wie in der Web-Version (`light.js`): das Original
+// bleibt, die Effekt-Ebene hält nur die Pixel, die das Licht ändert
+// (Licht-Ebene über der Figur) bzw. die der Schatten belegt (Schatten-
+// Ebene unter ihr). Die Einstellungen stehen in [`Layer::fx`]; ändert man
+// sie, wird die Ebene aus dem Original neu berechnet.
+//
+// Eine Licht-Ebene gehört zur nächsten normalen Ebene darunter, eine
+// Schatten-Ebene zur nächsten normalen darüber.
+
+use crate::sprite::{Layer, Sprite};
+use serde_json::{json, Value};
+
+/// Farbe des Schlagschattens: Palettennummer oder feste Farbe (wird beim
+/// Berechnen zur Palettenfarbe, wenn es sie gibt, sonst zur freien Farbe).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FxColor {
+    Index(Px),
+    Rgb(Rgb),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum FxKind {
+    Light(LightOpts),
+    Shadow { color: FxColor, distance: u32 },
+}
+
+/// Effekt einer Ebene — `src` ist die Prüfsumme der Quell-Zellen beim
+/// letzten Berechnen (wie im Web gerechnet, damit beide Versionen dieselbe
+/// Datei als aktuell erkennen).
+#[derive(Clone, Debug, PartialEq)]
+pub struct LayerFx {
+    pub kind: FxKind,
+    pub dir: LightDir,
+    pub src: String,
+}
+
+impl LayerFx {
+    pub fn is_light(&self) -> bool {
+        matches!(self.kind, FxKind::Light(_))
+    }
+
+    /// Wie `layer.fx` im Web-Projekt.
+    pub fn to_json(&self) -> Value {
+        let dir = json!({ "dx": self.dir.0, "dy": self.dir.1 });
+        match &self.kind {
+            FxKind::Light(o) => json!({
+                "kind": "light", "dir": dir, "src": self.src,
+                "width": o.width, "amount": o.amount,
+                "highlight": o.highlight, "shadow": o.shadow, "allowHex": o.allow_free,
+            }),
+            FxKind::Shadow { color, distance } => json!({
+                "kind": "shadow", "dir": dir, "src": self.src, "distance": distance,
+                "color": match color {
+                    FxColor::Index(i) => json!(i),
+                    FxColor::Rgb(c) => json!(format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])),
+                },
+            }),
+        }
+    }
+
+    /// Aus fremden Daten — Werte begrenzt wie `normalizeFx` im Web.
+    pub fn from_json(v: &Value) -> Option<LayerFx> {
+        let kind = v.get("kind")?.as_str()?;
+        let comp = |k: &str| v.get("dir").and_then(|d| d.get(k)).and_then(Value::as_i64).filter(|n| (-1..=1).contains(n)).unwrap_or(-1) as i32;
+        let (dx, dy) = (comp("dx"), comp("dy"));
+        let dir = if dx == 0 && dy == 0 { (-1, -1) } else { (dx, dy) };
+        let src = v.get("src").and_then(Value::as_str).unwrap_or("").to_string();
+        let int = |k: &str, lo: u32, hi: u32, d: u32| v.get(k).and_then(Value::as_u64).map_or(d, |n| (n as u32).clamp(lo, hi));
+        let kind = match kind {
+            "light" => FxKind::Light(LightOpts {
+                width: int("width", 1, 3, 1),
+                amount: v.get("amount").and_then(Value::as_f64).map_or(0.15, |a| a.clamp(0.01, 1.0)),
+                highlight: v.get("highlight").and_then(Value::as_bool) != Some(false),
+                shadow: v.get("shadow").and_then(Value::as_bool) != Some(false),
+                allow_free: v.get("allowHex").and_then(Value::as_bool) == Some(true),
+            }),
+            "shadow" => {
+                let color = match v.get("color") {
+                    Some(Value::Number(n)) => n.as_u64().map_or(FxColor::Rgb([0x1a; 3]), |i| FxColor::Index(i as Px)),
+                    Some(Value::String(s)) => crate::palette::parse_hex(s).map_or(FxColor::Rgb([0x1a; 3]), FxColor::Rgb),
+                    _ => FxColor::Rgb([0x1a; 3]),
+                };
+                FxKind::Shadow { color, distance: int("distance", 1, 3, 1) }
+            }
+            _ => return None,
+        };
+        Some(LayerFx { kind, dir, src })
+    }
+}
+
+/// Zu welcher Ebene gehört die Effekt-Ebene `i`? Licht: nächste normale
+/// darunter, Schatten: nächste normale darüber.
+pub fn fx_source(layers: &[Layer], i: usize) -> Option<usize> {
+    let light = layers.get(i)?.fx.as_ref()?.is_light();
+    if light {
+        (0..i).rev().find(|&j| layers[j].fx.is_none())
+    } else {
+        (i + 1..layers.len()).find(|&j| layers[j].fx.is_none())
+    }
+}
+
+/// Licht- (`light = true`) bzw. Schatten-Ebene zur Ebene `base`.
+pub fn fx_for(layers: &[Layer], base: usize, light: bool) -> Option<usize> {
+    (0..layers.len()).find(|&i| layers[i].fx.as_ref().is_some_and(|f| f.is_light() == light) && fx_source(layers, i) == Some(base))
+}
+
+/// Prüfsumme über eine Ebene in allen Frames — genau wie `celsHash` im
+/// Web (FNV-1a über die Pixel als Text: Nummer, „#rrggbb“ oder leer).
+pub fn cels_hash(sp: &Sprite, layer: usize) -> String {
+    let mut h: u32 = 2166136261;
+    let mut mix = |s: &str| {
+        for b in s.bytes() {
+            h = (h ^ b as u32).wrapping_mul(16777619);
+        }
+    };
+    for f in 0..sp.frames.len() {
+        let img = sp.cel(f, layer);
+        mix(&format!("{}x{};", sp.height, sp.width));
+        for y in 0..sp.height {
+            for x in 0..sp.width {
+                let v = img.get(x, y);
+                if v == 0 {
+                    mix(",");
+                } else if v >= FREE_BASE {
+                    match sp.free.get((v - FREE_BASE) as usize) {
+                        Some(c) => mix(&format!("#{:02x}{:02x}{:02x},", c[0], c[1], c[2])),
+                        None => mix(","),
+                    }
+                } else {
+                    mix(&format!("{v},"));
+                }
+            }
+        }
+    }
+    base36(h)
+}
+
+fn base36(mut n: u32) -> String {
+    if n == 0 {
+        return "0".into();
+    }
+    let digits = b"0123456789abcdefghijklmnopqrstuvwxyz";
+    let mut out = Vec::new();
+    while n > 0 {
+        out.push(digits[(n % 36) as usize]);
+        n /= 36;
+    }
+    out.reverse();
+    String::from_utf8(out).expect("ASCII")
+}
+
+/// Effekt-Ebene `i` in allen Frames neu berechnen. Verknüpfte Quell-Zellen
+/// ergeben dieselbe Effekt-Zelle. `false` = keine Quelle.
+pub fn recompute_fx(sp: &mut Sprite, i: usize, pal: &Palette) -> bool {
+    let (Some(fx), Some(src)) = (sp.layers.get(i).and_then(|l| l.fx.clone()), fx_source(&sp.layers, i)) else { return false };
+    let shadow_value = match fx.kind {
+        FxKind::Shadow { color: FxColor::Index(i), .. } => Some(i),
+        FxKind::Shadow { color: FxColor::Rgb(c), .. } => Some(match pal.colors.iter().position(|&p| p == c) {
+            Some(k) => k as Px + 1,
+            None => sp.free_color(c),
+        }),
+        FxKind::Light(_) => None,
+    };
+    let mut memo: Vec<(usize, usize)> = Vec::new();
+    for f in 0..sp.frames.len() {
+        let base_id = sp.frames[f].cels[src];
+        let id = match memo.iter().find(|(b, _)| *b == base_id) {
+            Some(&(_, id)) => id,
+            None => {
+                let base = sp.images[base_id].clone();
+                let mut copy = base.clone();
+                let mut out = Image::new(base.width(), base.height());
+                match &fx.kind {
+                    FxKind::Light(o) => {
+                        let mut free = std::mem::take(&mut sp.free);
+                        light(&mut copy, pal, &mut free, fx.dir, *o, |_, _| true);
+                        sp.free = free;
+                        for (x, y, v) in copy.pixels() {
+                            if v != base.get(x, y) {
+                                out.set(x, y, v);
+                            }
+                        }
+                    }
+                    FxKind::Shadow { distance, .. } => {
+                        drop_shadow(&mut copy, fx.dir, shadow_value.unwrap_or(0), *distance, |_, _| true);
+                        for (x, y, v) in copy.pixels() {
+                            if base.get(x, y) == 0 {
+                                out.set(x, y, v);
+                            }
+                        }
+                    }
+                }
+                sp.images.push(out);
+                let id = sp.images.len() - 1;
+                memo.push((base_id, id));
+                id
+            }
+        };
+        sp.frames[f].cels[i] = id;
+    }
+    let hash = cels_hash(sp, src);
+    if let Some(fx) = sp.layers[i].fx.as_mut() {
+        fx.src = hash;
+    }
+    true
+}
+
+/// Wurde an der Figur seit dem Berechnen weitergemalt?
+pub fn fx_stale(sp: &Sprite, i: usize) -> bool {
+    match (sp.layers.get(i).and_then(|l| l.fx.as_ref()), fx_source(&sp.layers, i)) {
+        (Some(fx), Some(src)) => fx.src != cels_hash(sp, src),
+        _ => false,
+    }
+}
+
+/// Effekt-Ebene zur Ebene `base` anlegen (oder, wenn es sie gibt, mit
+/// neuen Einstellungen versehen) und berechnen. Gibt ihre Stelle zurück.
+/// Die aktive Ebene bleibt dieselbe (ihr Index rückt nach, wenn darunter
+/// eingefügt wird).
+pub fn upsert_fx(sp: &mut Sprite, base: usize, fx: LayerFx, name: impl Into<String>, pal: &Palette) -> usize {
+    let light = fx.is_light();
+    let idx = match fx_for(&sp.layers, base, light) {
+        Some(i) => {
+            sp.layers[i].fx = Some(fx);
+            i
+        }
+        None => {
+            let at = if light { base + 1 } else { base };
+            let active = sp.layer;
+            sp.add_layer(at, name);
+            sp.layers[at].locked = true;
+            sp.layers[at].fx = Some(fx);
+            sp.layer = if active >= at { active + 1 } else { active };
+            at
+        }
+    };
+    recompute_fx(sp, idx, pal);
+    idx
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -409,5 +651,89 @@ mod tests {
         let mut img = block(2, 5, 5);
         assert_eq!(light(&mut img, &pal(), &mut vec![], (0, 0), LightOpts::default(), ALL), (0, 0));
         assert_eq!(drop_shadow(&mut img, (0, 0), 6, 1, ALL), 0);
+    }
+
+    // ── Effekt-Ebenen ──────────────────────────────────────────────
+
+    fn sprite_with_block() -> Sprite {
+        let mut sp = Sprite::new("t", 7, 7).unwrap();
+        for y in 1..=5 {
+            for x in 1..=5 {
+                sp.active().set(x, y, 2);
+            }
+        }
+        sp
+    }
+
+    fn light_fx(dir: LightDir) -> LayerFx {
+        LayerFx { kind: FxKind::Light(LightOpts::default()), dir, src: String::new() }
+    }
+
+    #[test]
+    fn licht_ebene_ueber_der_figur_original_bleibt() {
+        let mut sp = sprite_with_block();
+        let before = sp.cel(0, 0).clone();
+        let i = upsert_fx(&mut sp, 0, light_fx(TOP_LEFT), "Licht", &pal());
+        assert_eq!(i, 1);
+        assert_eq!(sp.layers.len(), 2);
+        assert!(sp.layers[1].locked);
+        assert!(sp.cel(0, 0).same_pixels(&before), "Original unverändert");
+        assert_eq!(sp.cel(0, 1).get(1, 1), 3, "Lichtkante");
+        assert_eq!(sp.cel(0, 1).get(5, 5), 1, "Schattenkante");
+        assert_eq!(sp.cel(0, 1).get(3, 3), 0, "unveränderte Pixel leer");
+        assert_eq!(sp.layer, 0, "aktive Ebene bleibt die Figur");
+    }
+
+    #[test]
+    fn neue_richtung_ersetzt_das_alte_licht() {
+        let mut sp = sprite_with_block();
+        upsert_fx(&mut sp, 0, light_fx(TOP_LEFT), "Licht", &pal());
+        let i = upsert_fx(&mut sp, 0, light_fx((1, 1)), "Licht", &pal());
+        assert_eq!(sp.layers.len(), 2, "keine zweite Licht-Ebene");
+        assert_eq!(sp.cel(0, i).get(1, 1), 1, "oben links jetzt dunkel");
+        assert_eq!(sp.cel(0, i).get(5, 5), 3, "unten rechts jetzt hell");
+    }
+
+    #[test]
+    fn schatten_ebene_unter_der_figur() {
+        let mut sp = Sprite::new("t", 5, 5).unwrap();
+        sp.active().set(1, 1, 2);
+        let fx = LayerFx { kind: FxKind::Shadow { color: FxColor::Index(6), distance: 1 }, dir: TOP_LEFT, src: String::new() };
+        let i = upsert_fx(&mut sp, 0, fx, "Schatten", &pal());
+        assert_eq!(i, 0);
+        assert_eq!(sp.layer, 1, "die Figur ist nach oben gerückt und bleibt aktiv");
+        assert_eq!(sp.cel(0, 0).get(2, 2), 6);
+        assert_eq!(sp.cel(0, 0).get(1, 1), 0);
+        assert_eq!(fx_source(&sp.layers, 0), Some(1));
+    }
+
+    #[test]
+    fn weitermalen_macht_es_veraltet() {
+        let mut sp = sprite_with_block();
+        let i = upsert_fx(&mut sp, 0, light_fx(TOP_LEFT), "Licht", &pal());
+        assert!(!fx_stale(&sp, i));
+        sp.cel_mut(0, 0).set(3, 3, 4);
+        assert!(fx_stale(&sp, i));
+        recompute_fx(&mut sp, i, &pal());
+        assert!(!fx_stale(&sp, i));
+    }
+
+    #[test]
+    fn pruefsumme_wie_im_web() {
+        // Web: celsHash([[[0, 2], ["#ff0000", 0]]]) — von Hand mit Node gerechnet.
+        let mut sp = Sprite::new("t", 2, 2).unwrap();
+        sp.active().set(1, 0, 2);
+        let red = sp.free_color([255, 0, 0]);
+        sp.active().set(0, 1, red);
+        assert_eq!(cels_hash(&sp, 0), "1pan53j");
+    }
+
+    #[test]
+    fn fx_als_json_hin_und_zurueck() {
+        let a = LayerFx { kind: FxKind::Shadow { color: FxColor::Rgb([0x12, 0x34, 0x56]), distance: 2 }, dir: (1, -1), src: "abc".into() };
+        assert_eq!(LayerFx::from_json(&a.to_json()), Some(a));
+        let b = light_fx((0, 1));
+        assert_eq!(LayerFx::from_json(&b.to_json()), Some(b));
+        assert_eq!(LayerFx::from_json(&json!({ "kind": "blur" })), None);
     }
 }

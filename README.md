@@ -92,7 +92,7 @@ cargo build --release           # schnelle Fassung (target/release)
 | Strg+E | Export: PNG (Frame oder alle), GIF (ganz oder je Tag), Spritesheet + JSON-Atlas |
 | Ansicht → Sprache | Deutsch, English, Österreichisch (wird gemerkt) |
 | Reiter | Geöffnete Sprites über der Zeichenfläche: Klick wechselt, × / Mittelklick / Strg+W schließt, Strg+Tab schaltet weiter, Ziehen ordnet |
-| Rechte Leiste | Vorschau, Palette (Bibliothek), Bild, Aufräumen, Licht (Lichtquelle, Kantenlicht, Schlagschatten), Hilfslinien, Schablone, Code & Export |
+| Rechte Leiste | Vorschau, Palette (Bibliothek), Bild, Aufräumen, Licht (Lichtquelle, Kantenlicht, Schlagschatten — als eigene Ebenen, jederzeit umstellbar), Hilfslinien, Schablone, Code & Export |
 | 0 – 9 | Farbe mit dieser Nummer |
 | Alt + Ziehen in der Auswahl | Kopie verschieben |
 | Umschalt + Alt | Schablone: halten = vorn, ziehen = verschieben, Klick = Farbe |

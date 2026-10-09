@@ -23,11 +23,13 @@ pub struct Layer {
     pub opacity: f32,
     /// Durchgehend: neue Frames verknüpfen hier mit dem vorigen.
     pub continuous: bool,
+    /// Licht- oder Schatten-Ebene (siehe [`crate::light`]); `None` = normale Ebene.
+    pub fx: Option<crate::light::LayerFx>,
 }
 
 impl Layer {
     pub fn new(name: impl Into<String>) -> Self {
-        Layer { name: name.into(), visible: true, locked: false, opacity: 1.0, continuous: false }
+        Layer { name: name.into(), visible: true, locked: false, opacity: 1.0, continuous: false, fx: None }
     }
 }
 
@@ -336,6 +338,65 @@ impl Sprite {
         true
     }
 
+    /// Alle sichtbaren Ebenen in jedem Frame zu einer zusammenführen — auch
+    /// Licht und Schatten, die damit fest im Bild landen. Ausgeblendete
+    /// bleiben, wie sie sind; die neue Ebene sitzt auf dem Platz der
+    /// untersten sichtbaren. Deckkraft wie bei [`Self::merge_down`].
+    /// Weniger als zwei sichtbare: `false`.
+    pub fn merge_visible(&mut self, pal: &crate::palette::Palette, name: impl Into<String>) -> bool {
+        let vis: Vec<usize> = (0..self.layers.len()).filter(|&i| self.layers[i].visible && self.layers[i].opacity > 0.0).collect();
+        if vis.len() < 2 {
+            return false;
+        }
+        let at = vis[0];
+        // Dieselbe Kombination von Bildern ergibt dasselbe, wieder geteilte Bild.
+        let mut done: Vec<(Vec<ImageId>, ImageId)> = Vec::new();
+        for f in 0..self.frames.len() {
+            let key: Vec<ImageId> = vis.iter().map(|&l| self.frames[f].cels[l]).collect();
+            let merged = match done.iter().find(|(k, _)| *k == key) {
+                Some((_, m)) => *m,
+                None => {
+                    let mut out = Image::new(self.width, self.height);
+                    for &l in &vis {
+                        let a = self.layers[l].opacity.clamp(0.0, 1.0) as f64;
+                        let pixels: Vec<(u32, u32, Px)> = self.images[self.frames[f].cels[l]].pixels().collect();
+                        for (x, y, v) in pixels {
+                            let under = out.get(x, y);
+                            let value = if a >= 1.0 {
+                                v
+                            } else {
+                                let tc = crate::selection::rgb_of(v, pal, &self.free).unwrap_or([0, 0, 0]);
+                                match crate::selection::rgb_of(under, pal, &self.free) {
+                                    Some(bc) if under != 0 => {
+                                        let mix = |i: usize| (bc[i] as f64 * (1.0 - a) + tc[i] as f64 * a).round() as u8;
+                                        self.free_color([mix(0), mix(1), mix(2)])
+                                    }
+                                    _ => self.free_color(tc),
+                                }
+                            };
+                            out.set(x, y, value);
+                        }
+                    }
+                    self.images.push(out);
+                    let m = self.images.len() - 1;
+                    done.push((key, m));
+                    m
+                }
+            };
+            let cels = &mut self.frames[f].cels;
+            cels[at] = merged;
+            for &l in vis.iter().skip(1).rev() {
+                cels.remove(l);
+            }
+        }
+        for &l in vis.iter().skip(1).rev() {
+            self.layers.remove(l);
+        }
+        self.layers[at] = Layer::new(name);
+        self.layer = at;
+        true
+    }
+
     /// Frame von Stelle `from` nach `to` verschieben.
     pub fn move_frame(&mut self, from: usize, to: usize) {
         let n = self.frames.len();
@@ -607,5 +668,31 @@ mod tests {
         sp.active().set(4000, 4000, 1);
         let tiles: usize = sp.images.iter().map(|i| i.allocated_tiles()).sum();
         assert_eq!(tiles, 1, "nur die eine bemalte Kachel belegt Speicher");
+    }
+
+    #[test]
+    fn alle_sichtbaren_zusammenfuehren() {
+        let pal = crate::palette::Palette::grayscale();
+        let mut sp = Sprite::new("t", 4, 4).unwrap();
+        sp.active().set(0, 0, 1);
+        sp.add_layer(1, "B");
+        sp.active().set(1, 1, 2);
+        sp.add_layer(2, "versteckt");
+        sp.active().set(2, 2, 3);
+        sp.layers[2].visible = false;
+        sp.add_layer(3, "C");
+        sp.active().set(0, 0, 4); // überdeckt A
+        sp.add_frame(0, true);
+        assert!(sp.merge_visible(&pal, "Zusammen"));
+        assert_eq!(sp.layers.iter().map(|l| l.name.as_str()).collect::<Vec<_>>(), ["Zusammen", "versteckt"]);
+        assert_eq!(sp.layer, 0);
+        for f in 0..2 {
+            assert_eq!(sp.cel(f, 0).get(0, 0), 4, "obere deckt untere");
+            assert_eq!(sp.cel(f, 0).get(1, 1), 2);
+            assert_eq!(sp.cel(f, 0).get(2, 2), 0, "Ausgeblendetes nicht mit drin");
+            assert_eq!(sp.cel(f, 1).get(2, 2), 3, "ausgeblendete Ebene bleibt");
+        }
+        let mut one = Sprite::new("t", 2, 2).unwrap();
+        assert!(!one.merge_visible(&pal, "x"), "eine Ebene: nichts zu tun");
     }
 }

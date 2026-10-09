@@ -77,7 +77,11 @@ fn parse_dir(s: Option<&str>) -> Direction {
 }
 
 fn layer_json(l: &Layer) -> Value {
-    json!({ "name": l.name, "visible": l.visible, "locked": l.locked, "opacity": l.opacity, "continuous": l.continuous })
+    let mut v = json!({ "name": l.name, "visible": l.visible, "locked": l.locked, "opacity": l.opacity, "continuous": l.continuous });
+    if let Some(fx) = &l.fx {
+        v["fx"] = fx.to_json();
+    }
+    v
 }
 
 fn parse_layer(v: Option<&Value>, n: usize) -> Layer {
@@ -90,6 +94,7 @@ fn parse_layer(v: Option<&Value>, n: usize) -> Layer {
         l.locked = v.get("locked").and_then(Value::as_bool).unwrap_or(false);
         l.opacity = v.get("opacity").and_then(Value::as_f64).map_or(1.0, |o| o.clamp(0.0, 1.0) as f32);
         l.continuous = v.get("continuous").and_then(Value::as_bool).unwrap_or(false);
+        l.fx = v.get("fx").and_then(crate::light::LayerFx::from_json);
     }
     l
 }
@@ -655,5 +660,24 @@ mod tests {
         let doc: Value = serde_json::from_str(&export_web(&p)).unwrap();
         let keys: Vec<_> = doc["sprites"].as_object().unwrap().keys().cloned().collect();
         assert_eq!(keys, vec!["Held", "Held_2"]);
+    }
+
+    #[test]
+    fn effekt_ebenen_ueberstehen_web_und_eigenes_format() {
+        let mut p = Project::default();
+        let sp = &mut p.sprites[0];
+        sp.active().set(3, 3, 2);
+        let fx = crate::light::LayerFx {
+            kind: crate::light::FxKind::Light(crate::light::LightOpts { width: 2, ..Default::default() }),
+            dir: (1, -1),
+            src: "xyz".into(),
+        };
+        crate::light::upsert_fx(sp, 0, fx, "Licht", &Palette::grayscale());
+        let want = p.sprites[0].layers[1].fx.clone();
+        assert!(want.is_some());
+        let web = import_web(&export_web(&p)).expect("Web-Format");
+        assert_eq!(web.sprites[0].layers[1].fx, want, "Web-Format");
+        let native = load_native(&save_native(&p)).expect("eigenes Format");
+        assert_eq!(native.sprites[0].layers[1].fx, want, "eigenes Format");
     }
 }

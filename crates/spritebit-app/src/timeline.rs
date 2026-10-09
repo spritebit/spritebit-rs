@@ -41,7 +41,7 @@ const TAG_COLORS: [[u8; 3]; 6] = [[0xe5, 0x53, 0x4b], [0xe0, 0x82, 0x3d], [0xc9,
 
 impl SpritebitApp {
     /// Strukturänderung am aktuellen Sprite — als ein Undo-Schritt.
-    fn edit_sprite(&mut self, f: impl FnOnce(&mut spritebit_core::Sprite)) {
+    pub(crate) fn edit_sprite(&mut self, f: impl FnOnce(&mut spritebit_core::Sprite)) {
         self.deselect();
         let cur = self.project.current;
         self.histories[cur].record(&self.project.sprites[cur]);
@@ -159,6 +159,14 @@ impl SpritebitApp {
                 let pal = self.project.current_palette();
                 self.edit_sprite(|s| {
                     s.merge_down(&pal);
+                });
+            }
+            let visible = self.project.sprite().layers.iter().filter(|l| l.visible && l.opacity > 0.0).count();
+            if icons::button(ui, icons::MERGE_ALL, tr("Alle sichtbaren Ebenen zusammenführen — in jedem Frame, auch Licht und Schatten; ausgeblendete bleiben"), visible >= 2).clicked() {
+                let pal = self.project.current_palette();
+                let name = tr("Zusammengeführt");
+                self.edit_sprite(|s| {
+                    s.merge_visible(&pal, name);
                 });
             }
             // Aktive Ebene frisch lesen — Verdoppeln/Zusammenlegen eben hat sie verschoben.

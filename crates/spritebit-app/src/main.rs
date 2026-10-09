@@ -1398,7 +1398,7 @@ mod tests {
     }
 
     #[test]
-    fn licht_und_schlagschatten() {
+    fn licht_und_schlagschatten_als_ebenen() {
         let mut h = app();
         // 4×4-Block aus Farbe 3 (#999999) bei (10,10)
         for y in 10..14 {
@@ -1409,24 +1409,36 @@ mod tests {
         h.run();
         h.get_by_label("Licht").click();
         h.run();
-        h.get_by_label("Licht anwenden").click();
+        h.get_by_label("Licht-Ebene anlegen").click();
         h.run();
-        assert_eq!(px(&h, 10, 10), 2, "oben links heller (#CCCCCC)");
-        assert_ne!(px(&h, 13, 13), 3, "unten rechts dunkler");
-        assert_eq!(px(&h, 11, 11), 3, "Mitte bleibt");
+        let cel = |h: &Harness<'_, SpritebitApp>, l: usize, x: u32, y: u32| h.state().project.sprite().cel(0, l).get(x, y);
+        let sp = h.state().project.sprite();
+        assert_eq!(sp.layers.len(), 2, "Licht-Ebene dazu");
+        assert!(sp.layers[1].fx.is_some() && sp.layers[1].locked);
+        assert_eq!(sp.layer, 0, "aktiv bleibt die Figur");
+        assert_eq!(cel(&h, 0, 10, 10), 3, "Original unverändert");
+        assert_eq!(cel(&h, 1, 10, 10), 2, "oben links heller (#CCCCCC)");
+        assert_ne!(cel(&h, 1, 13, 13), 0, "unten rechts dunkler");
+        assert_eq!(cel(&h, 1, 11, 11), 0, "Mitte bleibt");
+
+        // Andere Richtung: die alten Kanten verschwinden, neu gerechnet.
+        h.get_by_label("↘").click();
+        h.run();
+        assert_eq!(h.state().project.sprite().layers.len(), 2);
+        assert_eq!(cel(&h, 1, 13, 13), 2, "unten rechts jetzt hell");
+        assert_ne!(cel(&h, 1, 10, 10), 2, "oben links nicht mehr hell");
         h.state_mut().undo();
-        assert_eq!(px(&h, 10, 10), 3);
+        assert_eq!(cel(&h, 1, 10, 10), 2, "Rückgängig holt das vorige Licht");
 
-        // Mit Auswahl nur darin.
-        h.state_mut().selection = Some(Selection::rect(10, 10, 11, 13));
-        h.state_mut().apply_light();
-        assert_eq!(px(&h, 10, 10), 2);
-        assert_eq!(px(&h, 13, 13), 3, "außerhalb der Auswahl unberührt");
-        h.state_mut().deselect();
-
-        h.state_mut().apply_drop_shadow();
-        assert_ne!(px(&h, 14, 14), 0, "Schatten fällt nach unten rechts");
-        assert_eq!(px(&h, 9, 9), 0);
+        // Schatten-Ebene unter der Figur.
+        h.get_by_label("Werfen").click();
+        h.run();
+        let sp = h.state().project.sprite();
+        assert_eq!(sp.layers.len(), 3);
+        assert_eq!(sp.layer, 1, "die Figur ist nach oben gerückt und bleibt aktiv");
+        // Licht von oben links (nach dem Rückgängig) → Schatten fällt nach unten rechts.
+        assert_ne!(cel(&h, 0, 14, 14), 0, "Schatten unten rechts neben der Figur");
+        assert_eq!(cel(&h, 0, 9, 9), 0, "nicht auf der Lichtseite");
     }
 
     #[test]

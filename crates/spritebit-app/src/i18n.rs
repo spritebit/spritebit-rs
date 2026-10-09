@@ -688,6 +688,29 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("{n} Pixel in dieser Farbe", "{n} pixels in this color", "{n} Pixel in dera Farb"),
     // ── Auswahl-Leiste ──
     ("Alles", "All", "Ois"),
+    // ── Licht als Ebene ──
+    ("Keine Ebene, auf die das Licht wirken kann.", "No layer the light could act on.", "Ka Ebene, auf de des Liacht wirkn kau."),
+    ("Licht · {name}", "Light · {name}", "Liacht · {name}"),
+    ("Schatten · {name}", "Shadow · {name}", "Schottn · {name}"),
+    ("Licht neu berechnen", "Recompute light", "Liacht nei rechnen"),
+    ("Licht-Ebene anlegen", "Add light layer", "Liacht-Ebene aulegn"),
+    (
+        "Legt über der aktiven Ebene eine Licht-Ebene an: Kanten zur Lichtquelle hin heller, abgewandte dunkler. Das Original bleibt unverändert; Richtung, Stärke und Breite ändern rechnet die Ebene sofort neu",
+        "Adds a light layer above the active layer: edges facing the light get brighter, edges facing away darker. The original stays untouched; changing direction, strength or width recomputes the layer right away",
+        "",
+    ),
+    ("Neu werfen", "Cast again", "Nei werfn"),
+    (
+        "Legt unter der aktiven Ebene eine Schatten-Ebene an: die Silhouette, von der Lichtquelle weg versetzt",
+        "Adds a shadow layer below the active layer: the silhouette, offset away from the light",
+        "",
+    ),
+    ("Licht für „{name}“ ist eine eigene Ebene — Änderungen hier rechnen sie neu.", "Light for “{name}” is a separate layer — changes here recompute it.", ""),
+    ("Wirkt auf „{name}“ — als eigene Ebene, das Original bleibt.", "Acts on “{name}” — as a separate layer, the original stays.", ""),
+    ("An der Figur wurde weitergemalt.", "The figure has changed since.", "Da Figur is weitagmoit wordn."),
+    ("Neu berechnen", "Recompute", "Nei rechnen"),
+    ("Alle sichtbaren Ebenen zusammenführen — in jedem Frame, auch Licht und Schatten; ausgeblendete bleiben", "Merge all visible layers — in every frame, light and shadow too; hidden ones stay", ""),
+    ("Zusammengeführt", "Merged", "Zammgfiat"),
     // ── Werkzeuggröße per Alt + Rechts ──
     ("Größe {n}", "Size {n}", "Greß {n}"),
     ("Alt + Rechts ziehen", "Alt + right-drag", "Alt + Rechts ziehn"),

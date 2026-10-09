@@ -43,6 +43,7 @@ pub const LOCK: ImageSource<'static> = include_image!("../assets/icons/lock.svg"
 pub const MAGIC: ImageSource<'static> = include_image!("../assets/icons/magic.svg");
 pub const MENU: ImageSource<'static> = include_image!("../assets/icons/menu.svg");
 pub const MERGE_DOWN: ImageSource<'static> = include_image!("../assets/icons/mergeDown.svg");
+pub const MERGE_ALL: ImageSource<'static> = include_image!("../assets/icons/mergeAll.svg");
 pub const MIRROR_X: ImageSource<'static> = include_image!("../assets/icons/mirrorX.svg");
 pub const MIRROR_Y: ImageSource<'static> = include_image!("../assets/icons/mirrorY.svg");
 pub const LEFT: ImageSource<'static> = include_image!("../assets/icons/left.svg");
