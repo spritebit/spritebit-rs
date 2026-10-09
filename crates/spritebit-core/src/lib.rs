@@ -46,6 +46,7 @@ pub mod project;
 pub mod selection;
 pub mod sprite;
 pub mod template;
+pub mod tilemap;
 pub mod transform;
 pub mod tools;
 

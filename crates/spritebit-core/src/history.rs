@@ -17,6 +17,8 @@ use crate::sprite::Sprite;
 struct Step {
     sprite: Sprite,
     palettes: Option<Vec<Palette>>,
+    /// Laufende Nummer beim Anlegen (siehe [`History::last_step`]).
+    serial: u64,
 }
 
 #[derive(Debug)]
@@ -24,6 +26,9 @@ pub struct History {
     undo: Vec<Step>,
     redo: Vec<Step>,
     max: usize,
+    serial: u64,
+    /// Bis zu welchem Schritt [`History::unseen_step`] schon geliefert hat.
+    seen: u64,
 }
 
 impl Default for History {
@@ -34,20 +39,22 @@ impl Default for History {
 
 impl History {
     pub fn new(max: usize) -> Self {
-        History { undo: Vec::new(), redo: Vec::new(), max: max.max(1) }
+        History { undo: Vec::new(), redo: Vec::new(), max: max.max(1), serial: 0, seen: 0 }
     }
 
     /// Vor einer Änderung aufrufen (Beginn eines Strichs, einer Aktion).
     pub fn record(&mut self, before: &Sprite) {
-        self.push(Step { sprite: before.clone(), palettes: None });
+        self.push(Step { sprite: before.clone(), palettes: None, serial: 0 });
     }
 
     /// Wie [`History::record`], sichert aber auch die eigenen Paletten.
     pub fn record_with_palettes(&mut self, before: &Sprite, palettes: &[Palette]) {
-        self.push(Step { sprite: before.clone(), palettes: Some(palettes.to_vec()) });
+        self.push(Step { sprite: before.clone(), palettes: Some(palettes.to_vec()), serial: 0 });
     }
 
-    fn push(&mut self, step: Step) {
+    fn push(&mut self, mut step: Step) {
+        self.serial += 1;
+        step.serial = self.serial;
         self.undo.push(step);
         if self.undo.len() > self.max {
             self.undo.remove(0);
@@ -65,7 +72,7 @@ impl History {
     fn swap(from: &mut Vec<Step>, to: &mut Vec<Step>, current: &mut Sprite, palettes: &mut Vec<Palette>) -> bool {
         let Some(step) = from.pop() else { return false };
         let now_pals = step.palettes.map(|p| std::mem::replace(palettes, p));
-        to.push(Step { sprite: std::mem::replace(current, step.sprite), palettes: now_pals });
+        to.push(Step { sprite: std::mem::replace(current, step.sprite), palettes: now_pals, serial: step.serial });
         true
     }
 
@@ -76,6 +83,18 @@ impl History {
 
     pub fn redo(&mut self, current: &mut Sprite, palettes: &mut Vec<Palette>) -> bool {
         Self::swap(&mut self.redo, &mut self.undo, current, palettes)
+    }
+
+    /// Der Stand vor dem neuesten Schritt — aber nur einmal: ist er schon
+    /// abgeholt worden (oder wurde seither rückgängig gemacht/wiederholt),
+    /// kommt `None`. Für den Tilemap-Abgleich nach einer Änderung (App).
+    pub fn unseen_step(&mut self) -> Option<&Sprite> {
+        let s = self.undo.last()?;
+        if s.serial <= self.seen {
+            return None;
+        }
+        self.seen = s.serial;
+        Some(&s.sprite)
     }
 
     pub fn can_undo(&self) -> bool {
@@ -125,6 +144,24 @@ mod tests {
         pals[0].colors[0] = [5, 5, 5];
         h.undo(&mut sp, &mut pals);
         assert_eq!(pals[0].colors[0], [5, 5, 5]);
+    }
+
+    #[test]
+    fn neuer_schritt_wird_einmal_gemeldet() {
+        let mut sp = Sprite::new("a", 4, 4).unwrap();
+        let mut h = History::default();
+        let mut pals: Vec<Palette> = Vec::new();
+        assert!(h.unseen_step().is_none());
+        h.record(&sp);
+        sp.active().set(0, 0, 1);
+        assert!(h.unseen_step().is_some_and(|b| b.cel(0, 0).get(0, 0) == 0));
+        assert!(h.unseen_step().is_none(), "nur einmal");
+        h.undo(&mut sp, &mut pals);
+        h.redo(&mut sp, &mut pals);
+        assert!(h.unseen_step().is_none(), "Rückgängig/Wiederholen sind kein neuer Schritt");
+        h.record(&sp);
+        h.drop_last();
+        assert!(h.unseen_step().is_none(), "verworfener Schritt");
     }
 
     #[test]

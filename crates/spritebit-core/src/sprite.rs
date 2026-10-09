@@ -27,11 +27,13 @@ pub struct Layer {
     pub fx: Option<crate::light::LayerFx>,
     /// Ebenenmaske (siehe [`crate::mask`]), gilt für alle Frames.
     pub mask: Option<crate::mask::Mask>,
+    /// Tilemap-Ebene: Kachelsatz (siehe [`crate::tilemap`]); `None` = normale Ebene.
+    pub tileset: Option<crate::tilemap::Tileset>,
 }
 
 impl Layer {
     pub fn new(name: impl Into<String>) -> Self {
-        Layer { name: name.into(), visible: true, locked: false, opacity: 1.0, continuous: false, fx: None, mask: None }
+        Layer { name: name.into(), visible: true, locked: false, opacity: 1.0, continuous: false, fx: None, mask: None, tileset: None }
     }
 }
 

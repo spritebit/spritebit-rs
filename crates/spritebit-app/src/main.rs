@@ -21,6 +21,7 @@ mod sprites_ui;
 mod tabs;
 mod update;
 mod template_ui;
+mod tiles_ui;
 mod timeline;
 mod tlmenu_ui;
 mod tools_ui;
@@ -195,6 +196,8 @@ struct SpritebitApp {
     allow_close: bool,
     /// Panels „Bild“ und „Aufräumen“.
     image: image_ui::ImagePanel,
+    /// Panel „Kacheln“ (Tilemap-Ebenen).
+    tiles: tiles_ui::TileState,
 }
 
 /// Was nach der Rückfrage „Ungespeicherte Änderungen" passieren soll.
@@ -275,6 +278,7 @@ impl SpritebitApp {
             unsaved_ask: None,
             allow_close: false,
             image: image_ui::ImagePanel::default(),
+            tiles: tiles_ui::TileState::default(),
             rng: spritebit_core::tools::Rng::new(
                 std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64),
             ),
@@ -769,7 +773,12 @@ impl SpritebitApp {
             && !self.template_pointer(pointer, pressed, released, p.over, origin, zoom)
             && !self.guide_pointer(pointer, pressed, released, p.over, origin, zoom)
         {
-            self.use_tool(&p, ui.ctx());
+            // Tilemap im Modus „Kacheln“: setzen statt malen (tiles_ui.rs).
+            if self.tile_mode_on() && !p.panning && self.tool != Tool::Pan {
+                self.use_tile_tool(&p);
+            } else {
+                self.use_tool(&p, ui.ctx());
+            }
         }
 
         // Sichtbarer Ausschnitt in Sprite-Pixeln.
@@ -894,6 +903,7 @@ impl SpritebitApp {
             painter.line_segment([Pos2::new(origin.x, y), Pos2::new(origin.x + sw as f32 * zoom, y)], axis);
         }
         self.draw_guides(&painter, origin, zoom);
+        self.draw_tiles(&painter.with_clip_rect(area), origin, zoom);
         // Form, die gerade aufgezogen wird, und der Rahmen der Auswahl.
         self.shape_preview(&painter, origin, zoom);
         // Maske bearbeiten: Ausgeblendetes rötlich, roter Rahmen.
@@ -913,7 +923,9 @@ impl SpritebitApp {
             painter.rect_stroke(frame, 0.0, Stroke::new(2.0, Color32::from_rgb(255, 107, 107)), egui::StrokeKind::Outside);
         }
         // Umriss dessen, was Stift, Pinsel, Radierer oder Spray gleich treffen.
-        self.brush_preview(&painter.with_clip_rect(area), origin, zoom);
+        if !self.tile_mode_on() {
+            self.brush_preview(&painter.with_clip_rect(area), origin, zoom);
+        }
         self.selection_overlay(&painter, origin, zoom, (x0 as i64, y0 as i64, x1 as i64, y1 as i64));
         // Rand der Fläche.
         let border = egui::Rect::from_min_size(origin, Vec2::new(sw as f32, sh as f32) * zoom);
@@ -1038,6 +1050,9 @@ impl eframe::App for SpritebitApp {
             self.sprite_tabs(ui);
             self.canvas(ui);
         });
+        // Nach einem Strich (Maus los): Kachelsätze abgleichen.
+        let down = ctx.input(|i| i.pointer.any_down());
+        self.tile_sync(down);
         self.dialogs(&ctx);
         self.import_window(&ctx);
         self.tl_menu(&ctx);
@@ -1231,6 +1246,44 @@ mod tests {
         drag(&mut h, (2.0, 5.0), (2.0, 5.0));
         assert_eq!(px(&h, 2, 5), 5);
         assert_eq!(px(&h, 61, 5), 5, "64 - 1 - 2");
+    }
+
+    #[test]
+    fn kacheln_malen_setzen_und_mitziehen() {
+        use spritebit_core::tilemap::Tileset;
+        let mut h = app();
+        h.state_mut().project.sprite_mut().layers[0].tileset = Some(Tileset::new(8, 8));
+        h.state_mut().tool = Tool::Pencil;
+        let n_tiles = |h: &Harness<'_, SpritebitApp>| h.state().sprite().layers[0].tileset.as_ref().unwrap().tiles.len();
+        // Pixel malen in eine leere Zelle (Auto): neue Kachel.
+        drag(&mut h, (1.0, 1.0), (1.0, 1.0));
+        assert_eq!(n_tiles(&h), 1);
+        // Kacheln setzen: Kachel 1 in die Zelle (2, 0).
+        h.state_mut().tiles.mode = tiles_ui::TileMode::Tiles;
+        h.state_mut().tiles.tile = 1;
+        drag(&mut h, (17.0, 1.0), (17.0, 1.0));
+        assert_eq!(px(&h, 17, 1), 5, "gesetzt");
+        assert_eq!(n_tiles(&h), 1, "Setzen legt keine Kachel an");
+        // Pixel malen in der Kopie: das Original zieht mit.
+        h.state_mut().tiles.mode = tiles_ui::TileMode::Pixel;
+        drag(&mut h, (20.0, 4.0), (20.0, 4.0));
+        assert_eq!(px(&h, 4, 4), 5, "Original mitgezogen");
+        assert_eq!(n_tiles(&h), 1);
+        // Ein Undo nimmt Strich und Mitziehen zusammen zurück.
+        h.state_mut().undo();
+        h.run();
+        assert_eq!((px(&h, 4, 4), px(&h, 20, 4)), (0, 0));
+        // Rechtsklick im Modus „Kacheln“ leert die Zelle.
+        h.state_mut().tiles.mode = tiles_ui::TileMode::Tiles;
+        let a = at(&h, 17.0, 1.0);
+        h.hover_at(a);
+        h.run();
+        h.event(egui::Event::PointerButton { pos: a, button: egui::PointerButton::Secondary, pressed: true, modifiers: Modifiers::NONE });
+        h.run();
+        h.event(egui::Event::PointerButton { pos: a, button: egui::PointerButton::Secondary, pressed: false, modifiers: Modifiers::NONE });
+        h.run();
+        assert_eq!(px(&h, 17, 1), 0, "geleert");
+        assert_eq!(px(&h, 1, 1), 5, "die andere Stelle bleibt");
     }
 
     #[test]

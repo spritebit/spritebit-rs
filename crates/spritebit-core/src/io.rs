@@ -76,7 +76,9 @@ fn parse_dir(s: Option<&str>) -> Direction {
     }
 }
 
-fn layer_json(l: &Layer) -> Value {
+/// `px` schreibt ein Pixel einer Kachel: im eigenen Format als Zahl, fürs
+/// Web als Zahl bzw. Hex (freie Farbe).
+fn layer_json(l: &Layer, px: &dyn Fn(Px) -> Value) -> Value {
     let mut v = json!({ "name": l.name, "visible": l.visible, "locked": l.locked, "opacity": l.opacity, "continuous": l.continuous });
     if let Some(fx) = &l.fx {
         v["fx"] = fx.to_json();
@@ -84,7 +86,25 @@ fn layer_json(l: &Layer) -> Value {
     if let Some(m) = &l.mask {
         v["mask"] = m.to_json();
     }
+    if let Some(ts) = &l.tileset {
+        v["tileset"] = ts.to_json(px);
+    }
     v
+}
+
+/// Kachelsätze der Tilemap-Ebenen. `web`: Werte als Zahl (Palette) oder Hex
+/// (freie Farbe, landet in `sp.free`); sonst rohe Pixelwerte.
+fn read_tilesets(sp: &mut Sprite, layers: Option<&Vec<Value>>, web: bool) {
+    for i in 0..sp.layers.len() {
+        let Some(v) = layers.and_then(|ls| ls.get(i)).and_then(|v| v.get("tileset")) else { continue };
+        let ts = crate::tilemap::Tileset::from_json(v, |p| match p {
+            Value::Number(n) if web => n.as_u64().filter(|&n| n < FREE_BASE as u64).unwrap_or(0) as Px,
+            Value::Number(n) => n.as_u64().filter(|&n| n <= Px::MAX as u64).unwrap_or(0) as Px,
+            Value::String(s) if web => parse_hex(s).map_or(0, |c| sp.free_color(c)),
+            _ => 0,
+        });
+        sp.layers[i].tileset = ts;
+    }
 }
 
 fn parse_layer(v: Option<&Value>, n: usize) -> Layer {
@@ -200,7 +220,7 @@ pub fn save_native(p: &Project) -> Vec<u8> {
         "sprites": sprites.iter().map(|s| json!({
             "name": s.name, "width": s.width, "height": s.height, "palette": s.palette, "fps": s.fps,
             "frame": s.frame, "layer": s.layer,
-            "layers": s.layers.iter().map(layer_json).collect::<Vec<_>>(),
+            "layers": s.layers.iter().map(|l| layer_json(l, &|p| json!(p))).collect::<Vec<_>>(),
             "free": s.free.iter().map(|&c| hex(c)).collect::<Vec<_>>(),
             "tags": s.tags.iter().map(tag_json).collect::<Vec<_>>(),
             "guides": guides_json(&s.guides),
@@ -292,6 +312,7 @@ pub fn load_native(bytes: &[u8]) -> Result<Project, IoError> {
         let layers = s["layers"].as_array().ok_or_else(|| IoError::Corrupt("keine Ebenen".into()))?;
         sp.layers = layers.iter().enumerate().map(|(i, l)| parse_layer(Some(l), i + 1)).collect();
         read_masks(&mut sp, Some(layers));
+        read_tilesets(&mut sp, Some(layers), false);
         sp.free = s["free"].as_array().map_or_else(Vec::new, |f| {
             f.iter().map(|h| h.as_str().and_then(parse_hex).unwrap_or([0, 0, 0])).collect()
         });
@@ -388,6 +409,7 @@ pub fn import_web(text: &str) -> Result<Project, IoError> {
         let layer_list = s.get("layers").and_then(Value::as_array);
         sp.layers = (0..n_layers).map(|i| parse_layer(layer_list.and_then(|l| l.get(i)), i + 1)).collect();
         read_masks(&mut sp, layer_list);
+        read_tilesets(&mut sp, layer_list, true);
         sp.frames.clear();
         sp.images.clear();
         for (i, (cels, fv)) in all.iter().zip(frames).enumerate() {
@@ -499,7 +521,7 @@ pub fn export_web(p: &Project) -> String {
             id,
             json!({
                 "name": sp.name, "palette": sp.palette, "fps": sp.fps, "frame": sp.frame, "layer": sp.layer,
-                "layers": sp.layers.iter().map(layer_json).collect::<Vec<_>>(),
+                "layers": sp.layers.iter().map(|l| layer_json(l, &px_json)).collect::<Vec<_>>(),
                 "tags": sp.tags.iter().map(tag_json).collect::<Vec<_>>(),
                 "guides": guides_json(&sp.guides),
                 "frames": frames,
@@ -692,6 +714,22 @@ mod tests {
         assert_eq!(web.sprites[0].layers[1].fx, want, "Web-Format");
         let native = load_native(&save_native(&p)).expect("eigenes Format");
         assert_eq!(native.sprites[0].layers[1].fx, want, "eigenes Format");
+    }
+
+    #[test]
+    fn kachelsaetze_ueberstehen_web_und_eigenes_format() {
+        let mut p = sample();
+        let free = p.sprites[0].free_color([1, 2, 3]);
+        let mut ts = crate::tilemap::Tileset::new(2, 2);
+        ts.tiles = vec![vec![1, 0, 0, free], vec![2, 2, 2, 2]];
+        p.sprites[0].layers[0].tileset = Some(ts);
+        let want = p.sprites[0].layers[0].tileset.clone();
+        assert_eq!(load_native(&save_native(&p)).unwrap().sprites[0].layers[0].tileset, want, "eigenes Format");
+        let back = import_web(&export_web(&p)).unwrap();
+        let ts = back.sprites[0].layers[0].tileset.clone().unwrap();
+        assert_eq!(ts.tiles[1], vec![2, 2, 2, 2], "Web-Format");
+        let v = ts.tiles[0][3];
+        assert_eq!(back.sprites[0].free[(v - FREE_BASE) as usize], [1, 2, 3], "freie Farbe als Hex");
     }
 
     #[test]

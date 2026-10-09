@@ -92,6 +92,19 @@ pub fn png(sp: &Sprite, pal: &Palette, f: usize, scale: u32) -> Result<Vec<u8>, 
     encode_png(&upscale(&frame_rgba(sp, pal, f), sp.width, sp.height, scale), w, h)
 }
 
+/// Kachelbild eines Kachelsatzes (Tilemap-Ebene) als PNG, 1:1.
+pub fn tileset_png(sp: &Sprite, pal: &Palette, ts: &crate::tilemap::Tileset) -> Result<Vec<u8>, ExportError> {
+    let (w, h, px) = ts.atlas();
+    let (w, h) = check(w as u64, h as u64)?;
+    let mut rgba = vec![0u8; px.len() * 4];
+    for (i, &v) in px.iter().enumerate() {
+        if let Some(c) = crate::selection::rgb_of(v, pal, &sp.free) {
+            rgba[i * 4..i * 4 + 4].copy_from_slice(&[c[0], c[1], c[2], 255]);
+        }
+    }
+    encode_png(&rgba, w, h)
+}
+
 /// Reihenfolge der Frames eines Tags beim Abspielen (eine Runde).
 pub fn tag_frames(t: &Tag) -> Vec<usize> {
     let fwd: Vec<usize> = (t.from..=t.to).collect();
