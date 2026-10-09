@@ -1657,7 +1657,7 @@ export const HELD = [[0,1],[2,1]];".into(),
     #[test]
     fn pixel_perfekt_zieht_saubere_diagonalen() {
         let mut h = app();
-        h.get_by_label("Pixel-perfekt").click();
+        h.get_by_label("Clean Stroke").click();
         h.run();
         assert!(h.state().pixel_perfect);
         // Treppe von Hand: (2,2) → (3,2) → (3,3) → (4,3) → (4,4)

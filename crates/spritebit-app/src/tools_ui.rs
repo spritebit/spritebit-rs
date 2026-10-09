@@ -157,7 +157,7 @@ impl SpritebitApp {
             }
             if matches!(self.tool, Tool::Pencil | Tool::Eraser) {
                 let r = ui
-                    .checkbox(&mut self.pixel_perfect, tr("Pixel-perfekt"))
+                    .checkbox(&mut self.pixel_perfect, tr("Clean Stroke"))
                     .on_hover_text(tr("Wie in bekannten Pixel-Art-Programmen: entfernt beim Zeichnen die doppelten Eckpixel an Treppenstufen — saubere 1-Pixel-Linien (Stift, Radierer mit Größe 1)"));
                 if r.changed() {
                     self.save_view();
