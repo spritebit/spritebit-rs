@@ -141,8 +141,12 @@ pub(crate) struct Pointer {
 }
 
 impl SpritebitApp {
+    /// Zwei Zeilen wie im Web: oben die Werkzeuge, darunter Symmetrie, die
+    /// Einstellungen des Werkzeugs, die Auswahl und Rückgängig/Wiederholen.
+    /// Beide brechen um, wenn das Fenster schmal ist — sonst liefe die Leiste
+    /// rechts hinaus und ihre Knöpfe wären nicht mehr zu erreichen.
     pub(crate) fn toolbar(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             for t in Tool::ALL {
                 let key = format!("{:?}", t.key());
                 let on = self.tool == t;
@@ -154,6 +158,17 @@ impl SpritebitApp {
                 if matches!(t, Tool::Pan | Tool::Eraser | Tool::Ellipse) {
                     ui.separator();
                 }
+            }
+        });
+        ui.horizontal_wrapped(|ui| {
+            let c = ui.visuals().text_color();
+            let mx = egui::Button::selectable(self.mirror_x, icons::image(icons::MIRROR_X, c));
+            if ui.add(mx).on_hover_text(tr("Symmetrie: links ↔ rechts")).clicked() {
+                self.mirror_x = !self.mirror_x;
+            }
+            let my = egui::Button::selectable(self.mirror_y, icons::image(icons::MIRROR_Y, c));
+            if ui.add(my).on_hover_text(tr("Symmetrie: oben ↔ unten")).clicked() {
+                self.mirror_y = !self.mirror_y;
             }
             ui.separator();
             if self.tool.sized() {
@@ -179,27 +194,16 @@ impl SpritebitApp {
                     self.save_view();
                 }
             }
-            ui.separator();
-            let c = ui.visuals().text_color();
-            let mx = egui::Button::selectable(self.mirror_x, icons::image(icons::MIRROR_X, c));
-            if ui.add(mx).on_hover_text(tr("Symmetrie: links ↔ rechts")).clicked() {
-                self.mirror_x = !self.mirror_x;
-            }
-            let my = egui::Button::selectable(self.mirror_y, icons::image(icons::MIRROR_Y, c));
-            if ui.add(my).on_hover_text(tr("Symmetrie: oben ↔ unten")).clicked() {
-                self.mirror_y = !self.mirror_y;
-            }
             self.selection_bar(ui);
             // Rückgängig/Wiederholen griffbereit, wie an der Fläche im Web.
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let (can_redo, can_undo) = (self.history().can_redo(), self.history().can_undo());
-                if icons::button(ui, icons::REDO, &format!("{} ({})", tr("Wiederholen"), keys("Strg+Y")), can_redo).clicked() {
-                    self.redo();
-                }
-                if icons::button(ui, icons::UNDO, &format!("{} ({})", tr("Rückgängig"), keys("Strg+Z")), can_undo).clicked() {
-                    self.undo();
-                }
-            });
+            ui.separator();
+            let (can_undo, can_redo) = (self.history().can_undo(), self.history().can_redo());
+            if icons::button(ui, icons::UNDO, &format!("{} ({})", tr("Rückgängig"), keys("Strg+Z")), can_undo).clicked() {
+                self.undo();
+            }
+            if icons::button(ui, icons::REDO, &format!("{} ({})", tr("Wiederholen"), keys("Strg+Y")), can_redo).clicked() {
+                self.redo();
+            }
         });
     }
 
