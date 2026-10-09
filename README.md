@@ -18,13 +18,13 @@ signiert ist: „Weitere Informationen“ → „Trotzdem ausführen“.
 
 ## Neue Version veröffentlichen
 
-1. In `Cargo.toml` (Abschnitt `[workspace.package]`) die Version anheben, z. B. `0.2.0`,
+1. In `Cargo.toml` (Abschnitt `[workspace.package]`) die Version anheben, z. B. `1.1.0`,
    und committen. Sie steht in Titelleiste, Hilfe, „Über spritebit“ und den
    Dateieigenschaften der .exe.
 2. Den passenden Tag pushen:
    ```
-   git tag v0.2.0
-   git push origin v0.2.0
+   git tag v1.1.0
+   git push origin v1.1.0
    ```
 
 Passt der Tag nicht zur Version in `Cargo.toml`, bricht der Release-Lauf ab.

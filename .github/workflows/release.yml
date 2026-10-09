@@ -1,6 +1,6 @@
 # Release der Desktop-App — ganz ohne eigenen Server.
 #
-# Ein Tag wie `v0.2.0` pushen (git tag v0.2.0 && git push origin v0.2.0):
+# Ein Tag wie `v1.1.0` pushen (git tag v1.1.0 && git push origin v1.1.0):
 # GitHub baut und testet auf Windows und haengt die fertige Datei an eine
 # Release. Die Startseite verlinkt
 #   https://github.com/spritebit/spritebit-rs/releases/latest/download/spritebit-windows-x64.zip
