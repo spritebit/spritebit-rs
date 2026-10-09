@@ -1035,7 +1035,9 @@ impl eframe::App for SpritebitApp {
         self.poll_update();
         self.poll_install();
         if self.update.available.is_some() || !matches!(self.update.install, selfupdate::Install::Idle) {
-            egui::Panel::top("update").show(ui, |ui| self.update_banner(ui));
+            // Auffällig: farbige Fläche statt grau in grau (update.rs banner_frame).
+            let frame = self.banner_frame();
+            egui::Panel::top("update").frame(frame).show(ui, |ui| self.update_banner(ui));
         }
         egui::Panel::top("tools").show(ui, |ui| self.toolbar(ui));
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));

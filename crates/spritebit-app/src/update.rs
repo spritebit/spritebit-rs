@@ -15,7 +15,7 @@
 use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
-use eframe::egui;
+use eframe::egui::{self, Color32};
 
 use crate::i18n::{tr, trf};
 use crate::{SpritebitApp, VERSION};
@@ -133,6 +133,14 @@ impl SpritebitApp {
         if self.update.check {
             self.spawn_update_check(ctx);
         }
+        // Nur Entwickler-Fassung: SPRITEBIT_FAKE_UPDATE=9.9.9 zeigt das Band, ohne
+        // dass es eine neue Release braucht (zum Ansehen und Gestalten).
+        if cfg!(debug_assertions) {
+            if let Ok(v) = std::env::var("SPRITEBIT_FAKE_UPDATE") {
+                self.update.available = Some(v);
+                self.update.rx = None;
+            }
+        }
     }
 
     fn spawn_update_check(&mut self, ctx: &egui::Context) {
@@ -168,16 +176,46 @@ impl SpritebitApp {
         }
     }
 
+    /// Rahmen des Bands: Blau für „neu da“ und „installiert“, Rot bei einem Fehler.
+    pub(crate) fn banner_frame(&self) -> egui::Frame {
+        let failed = matches!(self.update.install, crate::selfupdate::Install::Failed(_));
+        let (fill, line) = if failed {
+            (Color32::from_rgb(92, 34, 40), Color32::from_rgb(224, 108, 117))
+        } else {
+            (Color32::from_rgb(28, 58, 110), Color32::from_rgb(110, 168, 254))
+        };
+        egui::Frame::new().fill(fill).stroke(egui::Stroke::new(1.0, line)).inner_margin(egui::Margin::symmetric(14, 10))
+    }
+
+    /// Hauptknopf im Band: hell gefüllt, damit man ihn sofort sieht.
+    fn banner_button(ui: &mut egui::Ui, text: &str, tip: &str) -> bool {
+        let label = egui::RichText::new(text).strong().size(15.0).color(Color32::from_rgb(16, 32, 64));
+        ui.add(egui::Button::new(label).fill(Color32::from_rgb(170, 205, 255)).corner_radius(6.0).min_size(egui::vec2(0.0, 28.0)))
+            .on_hover_text(tip)
+            .clicked()
+    }
+
+    /// Nebenknopf im Band (Später, Überspringen, Schließen): dezent.
+    fn banner_link(ui: &mut egui::Ui, text: &str) -> bool {
+        ui.add(egui::Button::new(egui::RichText::new(text).color(Color32::from_rgb(214, 226, 245))).frame(false)).clicked()
+    }
+
+    fn banner_title(ui: &mut egui::Ui, icon: &str, text: &str) {
+        ui.label(egui::RichText::new(icon).size(20.0).color(Color32::WHITE));
+        ui.label(egui::RichText::new(text).strong().size(16.0).color(Color32::WHITE));
+    }
+
     /// Inhalt des Bands oben (ui() legt das Panel nur an, solange eine
-    /// neuere Version da ist).
+    /// neuere Version da ist oder ein Update läuft).
     pub(crate) fn update_banner(&mut self, ui: &mut egui::Ui) {
         use crate::selfupdate::Install;
+        let soft = Color32::from_rgb(196, 212, 238);
         // Läuft schon ein Update (oder ist fertig), zeigt das Band dessen Stand.
         match &self.update.install {
             Install::Running(_) => {
                 ui.horizontal(|ui| {
-                    ui.spinner();
-                    ui.label(tr("Neue Version wird geladen und geprüft …"));
+                    ui.add(egui::Spinner::new().size(18.0).color(Color32::WHITE));
+                    Self::banner_title(ui, "", tr("Neue Version wird geladen und geprüft …"));
                 });
                 return;
             }
@@ -185,10 +223,10 @@ impl SpritebitApp {
                 let (version, exe) = (version.clone(), exe.clone());
                 let (mut restart, mut later) = (false, false);
                 ui.horizontal(|ui| {
-                    ui.colored_label(ui.visuals().selection.stroke.color, "✔");
-                    ui.strong(trf("spritebit {new} ist installiert.", &[("new", &version)]));
-                    restart = ui.button(tr("Jetzt neu starten")).on_hover_text(tr("Die App startet neu und macht genau hier weiter — auch Ungespeichertes bleibt.")).clicked();
-                    later = ui.button(tr("Später")).on_hover_text(tr("Beim nächsten Start läuft die neue Version.")).clicked();
+                    Self::banner_title(ui, "✔", &trf("spritebit {new} ist installiert.", &[("new", &version)]));
+                    ui.add_space(8.0);
+                    restart = Self::banner_button(ui, tr("Jetzt neu starten"), tr("Die App startet neu und macht genau hier weiter — auch Ungespeichertes bleibt."));
+                    later = Self::banner_link(ui, tr("Später")) ;
                 });
                 if restart {
                     self.restart_after_update(&version, &exe);
@@ -202,11 +240,11 @@ impl SpritebitApp {
             Install::Failed(e) => {
                 let e = e.clone();
                 let mut close = false;
-                ui.horizontal(|ui| {
-                    ui.colored_label(ui.visuals().warn_fg_color, "⚠");
-                    ui.label(trf("Aktualisieren hat nicht geklappt: {e}", &[("e", &e)]));
-                    ui.hyperlink_to(tr("Von Hand herunterladen"), LATEST_PAGE);
-                    close = ui.button(tr("Schließen")).clicked();
+                ui.horizontal_wrapped(|ui| {
+                    Self::banner_title(ui, "⚠", &trf("Aktualisieren hat nicht geklappt: {e}", &[("e", &e)]));
+                    ui.add_space(8.0);
+                    ui.hyperlink_to(egui::RichText::new(tr("Von Hand herunterladen")).strong().color(Color32::WHITE), LATEST_PAGE);
+                    close = Self::banner_link(ui, tr("Schließen"));
                 });
                 if close {
                     self.update.install = Install::Idle;
@@ -218,21 +256,19 @@ impl SpritebitApp {
         }
         let Some(v) = self.update.available.clone() else { return };
         let (mut later, mut skip, mut install) = (false, false, false);
-        ui.horizontal(|ui| {
-            ui.colored_label(ui.visuals().selection.stroke.color, "⬆");
-            ui.strong(trf("Neue Version {new} verfügbar", &[("new", &v)]));
-            ui.weak(trf("(du hast {old})", &[("old", &VERSION)]));
-            if crate::selfupdate::supported() {
-                install = ui
-                    .button(tr("Jetzt aktualisieren"))
-                    .on_hover_text(tr("Lädt die neue Version, prüft sie und tauscht die App aus — ohne ZIP und ohne Entpacken."))
-                    .clicked();
-                ui.hyperlink_to(tr("Was ist neu?"), LATEST_PAGE);
+        ui.horizontal_wrapped(|ui| {
+            Self::banner_title(ui, "⬆", &trf("Neue Version {new} verfügbar", &[("new", &v)]));
+            ui.label(egui::RichText::new(trf("(du hast {old})", &[("old", &VERSION)])).color(soft));
+            ui.add_space(8.0);
+            if crate::selfupdate::supported() || (cfg!(debug_assertions) && std::env::var_os("SPRITEBIT_FAKE_UPDATE").is_some()) {
+                install = Self::banner_button(ui, tr("Jetzt aktualisieren"), tr("Lädt die neue Version, prüft sie und tauscht die App aus — ohne ZIP und ohne Entpacken."));
+                ui.hyperlink_to(egui::RichText::new(tr("Was ist neu?")).color(Color32::WHITE), LATEST_PAGE);
             } else {
-                ui.hyperlink_to(tr("Herunterladen"), LATEST_PAGE);
+                ui.hyperlink_to(egui::RichText::new(tr("Herunterladen")).strong().color(Color32::WHITE), LATEST_PAGE);
             }
-            later = ui.button(tr("Später")).clicked();
-            skip = ui.button(tr("Diese Version überspringen")).clicked();
+            ui.add_space(8.0);
+            later = Self::banner_link(ui, tr("Später"));
+            skip = Self::banner_link(ui, tr("Diese Version überspringen"));
         });
         if install {
             self.start_install(v.clone(), ui.ctx());
