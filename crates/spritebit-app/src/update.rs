@@ -48,17 +48,44 @@ pub(crate) fn version_from_release(json: &str) -> Option<String> {
     Some(format!("{a}.{b}.{c}"))
 }
 
+/// Version aus der Weiterleitung von `/releases/latest`
+/// (`…/releases/tag/v1.2.3`).
+pub(crate) fn version_from_location(location: &str) -> Option<String> {
+    let tag = location.trim().rsplit_once("/releases/tag/")?.1;
+    let (a, b, c) = parse_version(tag.split(['?', '#']).next()?)?;
+    Some(format!("{a}.{b}.{c}"))
+}
+
 /// Ob ein Band gezeigt wird: neuer als diese Version und nicht übersprungen.
 pub(crate) fn worth_showing(latest: &str, current: &str, skipped: Option<&str>) -> bool {
     is_newer(latest, current) && skipped != Some(latest)
 }
 
 /// Die Abfrage selbst (blockierend — läuft im eigenen Thread).
+///
+/// Zuerst die normale Release-Seite: sie leitet auf `…/tag/vX.Y.Z` weiter,
+/// und diese Weiterleitung zählt nicht zum Kontingent der GitHub-API (ohne
+/// Anmeldung 60 Abfragen je Stunde und Internetanschluss — ist es
+/// aufgebraucht, käme sonst nie ein Hinweis). Die API nur als Rückfall.
 fn fetch_latest() -> Option<String> {
-    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(8))).build().into();
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(8)))
+        .max_redirects(0)
+        .build()
+        .into();
+    let ua = format!("spritebit/{VERSION}");
+    let from_page = agent
+        .get(LATEST_PAGE)
+        .header("User-Agent", &ua)
+        .call()
+        .ok()
+        .and_then(|r| r.headers().get("location").and_then(|l| l.to_str().ok()).and_then(version_from_location));
+    if from_page.is_some() {
+        return from_page;
+    }
     let mut resp = agent
         .get(LATEST_API)
-        .header("User-Agent", &format!("spritebit/{VERSION}"))
+        .header("User-Agent", &ua)
         .header("Accept", "application/vnd.github+json")
         .call()
         .ok()?;
@@ -211,6 +238,14 @@ mod tests {
     fn echte_abfrage_bei_github() {
         let v = fetch_latest().expect("Antwort von GitHub");
         assert!(parse_version(&v).is_some(), "{v}");
+    }
+
+    #[test]
+    fn version_aus_der_weiterleitung() {
+        assert_eq!(version_from_location("https://github.com/spritebit/spritebit-rs/releases/tag/v1.0.5").as_deref(), Some("1.0.5"));
+        assert_eq!(version_from_location("/spritebit/spritebit-rs/releases/tag/v2.10.0?x=1").as_deref(), Some("2.10.0"));
+        assert_eq!(version_from_location("https://github.com/spritebit/spritebit-rs/releases"), None, "ohne Release");
+        assert_eq!(version_from_location("https://github.com/x/releases/tag/nightly"), None);
     }
 
     #[test]
