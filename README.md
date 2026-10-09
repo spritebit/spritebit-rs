@@ -20,9 +20,16 @@ warnt beim ersten Start vor einem unbekannten Herausgeber, weil die Datei nicht
 signiert ist: „Weitere Informationen“ → „Trotzdem ausführen“.
 
 **Updates:** Beim Start fragt die App einmal bei GitHub nach, ob es eine neuere
-Version gibt, und zeigt dann oben ein Band mit „Herunterladen“, „Später“ und
-„Diese Version überspringen“. Abgerufen wird nur die neueste Versionsnummer —
+Version gibt, und zeigt dann oben ein Band mit **„Jetzt aktualisieren“**, „Später“
+und „Diese Version überspringen“. Abgerufen wird nur die neueste Versionsnummer —
 keine Daten aus deinen Projekten. Abschalten: Hilfe → „Beim Start nach Updates suchen“.
+
+„Jetzt aktualisieren“ lädt die neue `spritebit.exe` direkt von der Release, prüft sie
+gegen die mitveröffentlichte SHA-256-Prüfsumme und tauscht die App an Ort und Stelle
+aus (die alte wird zu `spritebit.old.exe` und beim nächsten Start gelöscht) — kein ZIP,
+kein Entpacken. „Jetzt neu starten“ macht genau dort weiter, wo du warst, auch mit
+Ungespeichertem. Liegt die App in einem schreibgeschützten Ordner, bleibt es beim
+Download von Hand.
 
 ## Neue Version veröffentlichen
 
@@ -38,7 +45,8 @@ keine Daten aus deinen Projekten. Abschalten: Hilfe → „Beim Start nach Updat
 Passt der Tag nicht zur Version in `Cargo.toml`, bricht der Release-Lauf ab.
 
 GitHub Actions (`.github/workflows/release.yml`) testet, baut und hängt
-`spritebit-windows-x64.zip` an die Release. Der Download-Link oben zeigt immer
+`spritebit-windows-x64.zip` an die Release — dazu `spritebit.exe` und
+`spritebit.exe.sha256` für das Aktualisieren aus der App. Der Download-Link oben zeigt immer
 auf die neueste Version.
 
 ## Aufbau

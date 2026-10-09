@@ -104,11 +104,15 @@ pub(crate) struct UpdateState {
     rx: Option<Receiver<Option<String>>>,
     /// Erst nach dem Laden speichern (Tests schreiben nichts).
     persist: bool,
+    /// „Jetzt aktualisieren“ (selfupdate.rs).
+    pub install: crate::selfupdate::Install,
+    /// Welche Version wohin — solange geladen wird.
+    pub install_target: Option<(String, std::path::PathBuf)>,
 }
 
 impl Default for UpdateState {
     fn default() -> Self {
-        UpdateState { check: true, skipped: None, available: None, rx: None, persist: false }
+        UpdateState { check: true, skipped: None, available: None, rx: None, persist: false, install: Default::default(), install_target: None }
     }
 }
 
@@ -167,16 +171,73 @@ impl SpritebitApp {
     /// Inhalt des Bands oben (ui() legt das Panel nur an, solange eine
     /// neuere Version da ist).
     pub(crate) fn update_banner(&mut self, ui: &mut egui::Ui) {
+        use crate::selfupdate::Install;
+        // Läuft schon ein Update (oder ist fertig), zeigt das Band dessen Stand.
+        match &self.update.install {
+            Install::Running(_) => {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(tr("Neue Version wird geladen und geprüft …"));
+                });
+                return;
+            }
+            Install::Done { version, exe } => {
+                let (version, exe) = (version.clone(), exe.clone());
+                let (mut restart, mut later) = (false, false);
+                ui.horizontal(|ui| {
+                    ui.colored_label(ui.visuals().selection.stroke.color, "✔");
+                    ui.strong(trf("spritebit {new} ist installiert.", &[("new", &version)]));
+                    restart = ui.button(tr("Jetzt neu starten")).on_hover_text(tr("Die App startet neu und macht genau hier weiter — auch Ungespeichertes bleibt.")).clicked();
+                    later = ui.button(tr("Später")).on_hover_text(tr("Beim nächsten Start läuft die neue Version.")).clicked();
+                });
+                if restart {
+                    self.restart_after_update(&version, &exe);
+                }
+                if later {
+                    self.update.install = Install::Idle;
+                    self.update.available = None;
+                }
+                return;
+            }
+            Install::Failed(e) => {
+                let e = e.clone();
+                let mut close = false;
+                ui.horizontal(|ui| {
+                    ui.colored_label(ui.visuals().warn_fg_color, "⚠");
+                    ui.label(trf("Aktualisieren hat nicht geklappt: {e}", &[("e", &e)]));
+                    ui.hyperlink_to(tr("Von Hand herunterladen"), LATEST_PAGE);
+                    close = ui.button(tr("Schließen")).clicked();
+                });
+                if close {
+                    self.update.install = Install::Idle;
+                    self.update.available = None;
+                }
+                return;
+            }
+            Install::Idle => {}
+        }
         let Some(v) = self.update.available.clone() else { return };
-        let (mut later, mut skip) = (false, false);
+        let (mut later, mut skip, mut install) = (false, false, false);
         ui.horizontal(|ui| {
             ui.colored_label(ui.visuals().selection.stroke.color, "⬆");
             ui.strong(trf("Neue Version {new} verfügbar", &[("new", &v)]));
             ui.weak(trf("(du hast {old})", &[("old", &VERSION)]));
-            ui.hyperlink_to(tr("Herunterladen"), LATEST_PAGE);
+            if crate::selfupdate::supported() {
+                install = ui
+                    .button(tr("Jetzt aktualisieren"))
+                    .on_hover_text(tr("Lädt die neue Version, prüft sie und tauscht die App aus — ohne ZIP und ohne Entpacken."))
+                    .clicked();
+                ui.hyperlink_to(tr("Was ist neu?"), LATEST_PAGE);
+            } else {
+                ui.hyperlink_to(tr("Herunterladen"), LATEST_PAGE);
+            }
             later = ui.button(tr("Später")).clicked();
             skip = ui.button(tr("Diese Version überspringen")).clicked();
         });
+        if install {
+            self.start_install(v.clone(), ui.ctx());
+            return;
+        }
         if skip {
             self.update.skipped = Some(v);
             self.save_update_settings();

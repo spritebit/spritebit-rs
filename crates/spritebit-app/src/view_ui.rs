@@ -293,12 +293,23 @@ impl SpritebitApp {
         self.view.persist = true;
         let Some(d) = dir() else { return };
         let _ = std::fs::create_dir_all(&d);
+        // Nach einem Update übergibt die alte Version Datei und Speichern-Status.
+        let handoff = crate::selfupdate::take_handoff();
         if let Ok(bytes) = std::fs::read(d.join("session.spritebit")) {
             if let Ok(p) = load_native(&bytes) {
                 let _ = std::fs::write(d.join("backup.spritebit"), &bytes);
-                self.replace_project(p, None);
-                self.dirty = true;
-                self.hint = Some(tr("Die letzte Sitzung wurde nicht sauber beendet — ihr Stand ist wiederhergestellt.").into());
+                match handoff {
+                    Some(h) => {
+                        self.replace_project(p, h.path);
+                        self.dirty = h.dirty;
+                        self.hint = Some(trf("Aktualisiert auf spritebit {v} — alles ist wieder da.", &[("v", &crate::VERSION)]));
+                    }
+                    None => {
+                        self.replace_project(p, None);
+                        self.dirty = true;
+                        self.hint = Some(tr("Die letzte Sitzung wurde nicht sauber beendet — ihr Stand ist wiederhergestellt.").into());
+                    }
+                }
             }
         }
         self.view.saved_version = self.version;
@@ -327,6 +338,17 @@ impl SpritebitApp {
                 ctx.request_repaint_after(Duration::from_secs(2));
             }
         }
+    }
+
+    /// Die Sitzung sofort schreiben (vor dem Neustart nach einem Update).
+    pub(crate) fn write_session_now(&mut self) -> bool {
+        let Some(d) = dir() else { return false };
+        let _ = std::fs::create_dir_all(&d);
+        let ok = std::fs::write(d.join("session.spritebit"), save_native(&self.project)).is_ok();
+        if ok {
+            self.view.saved_version = self.version;
+        }
+        ok
     }
 
     /// Sauber beendet: die laufende Sitzung braucht keine Rettung.

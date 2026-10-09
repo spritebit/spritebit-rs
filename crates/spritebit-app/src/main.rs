@@ -17,6 +17,7 @@ mod image_ui;
 mod palette_ui;
 mod preview_ui;
 mod selection_ui;
+mod selfupdate;
 mod sprites_ui;
 mod tabs;
 mod update;
@@ -60,7 +61,9 @@ fn main() -> eframe::Result {
             app.load_tl_opts();
             app.load_view();
             app.load_guide_layouts();
-            // Nach einem Absturz: die Sitzung zurückholen.
+            // Die abgelöste Datei vom letzten Update wegräumen (selfupdate.rs).
+            selfupdate::cleanup_old();
+            // Nach einem Absturz (oder einem Update): die Sitzung zurückholen.
             app.start_session();
             // Einmal bei GitHub nach einer neueren Version fragen (abschaltbar).
             app.start_update_check(&cc.egui_ctx);
@@ -1027,7 +1030,8 @@ impl eframe::App for SpritebitApp {
         self.advance_playback(&ctx);
         egui::Panel::top("menu").show(ui, |ui| self.menu_bar(ui));
         self.poll_update();
-        if self.update.available.is_some() {
+        self.poll_install();
+        if self.update.available.is_some() || !matches!(self.update.install, selfupdate::Install::Idle) {
             egui::Panel::top("update").show(ui, |ui| self.update_banner(ui));
         }
         egui::Panel::top("tools").show(ui, |ui| self.toolbar(ui));
