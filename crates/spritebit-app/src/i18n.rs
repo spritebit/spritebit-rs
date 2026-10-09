@@ -729,6 +729,7 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Maske löschen — alles wieder sichtbar", "Delete the mask — everything visible again", "Maskn weg — ois wieder sichtbar"),
     // ── Werkzeuggröße per Alt + Rechts ──
     ("Größe {n}", "Size {n}", "Greß {n}"),
+    ("Größe von Pinsel, Radierer und Spray — auch mit Alt + rechter Maustaste ziehen", "Size of brush, eraser and spray — or Alt + right-drag", "Greß vom Pinsl, Radiergummi und Spray — a mit Alt + rechta Maustastn ziehn"),
     ("Alt + Rechts ziehen", "Alt + right-drag", "Alt + Rechts ziehn"),
     ("Größe von Pinsel, Radierer und Spray", "Size of brush, eraser and spray", "Greß vom Pinsl, Radiergummi und Spray"),
     // ── Update-Hinweis ──

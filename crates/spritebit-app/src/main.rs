@@ -1248,12 +1248,12 @@ mod tests {
         h.run();
         h.event_modifiers(btn(a, true), alt);
         h.run();
-        // 3 Stufen nach rechts (je 12 Bildschirmpixel), in kleinen Schritten.
+        // 36 Bildschirmpixel nach rechts (je 6 px eine Stufe), in kleinen Schritten.
         for k in 1..=6 {
             h.event_modifiers(egui::Event::PointerMoved(a + Vec2::new(6.0 * k as f32, 0.0)), alt);
             h.run();
         }
-        assert_eq!(h.state().size, 6, "3 + 3 Stufen");
+        assert_eq!(h.state().size, 9, "3 + 6 Stufen (36 px, je 6 px)");
         // Weit nach links: nie unter 1.
         h.event_modifiers(egui::Event::PointerMoved(a - Vec2::new(400.0, 0.0)), alt);
         h.run();

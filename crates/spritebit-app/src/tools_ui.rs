@@ -111,8 +111,11 @@ impl Tool {
 }
 
 /// Was die Zeichenfläche über die Maus weiß.
-/// Alt + rechte Maustaste ziehen: so viele Bildschirmpixel je Größenstufe.
-const SIZE_STEP_PX: f32 = 12.0;
+/// Alt + rechte Maustaste ziehen: so viele Bildschirmpixel je Größenstufe
+/// (fein genug, dass auch große Größen ohne meterlangen Mausweg gehen).
+const SIZE_STEP_PX: f32 = 6.0;
+/// Größte Größe von Pinsel, Radierer und Spray — wie im Web.
+pub(crate) const MAX_SIZE: u32 = 64;
 
 /// Laufendes Größe-Ziehen: Startpunkt, Größe beim Start und die Zelle, an
 /// der die Vorschau stehen bleibt.
@@ -122,9 +125,9 @@ pub(crate) struct SizeDrag {
     cell: Option<(i64, i64)>,
 }
 
-/// Neue Größe aus dem Mausweg seit dem Start (1–9).
+/// Neue Größe aus dem Mausweg seit dem Start (1–64).
 pub(crate) fn dragged_size(start_size: u32, dx: f32) -> u32 {
-    (start_size as i64 + (dx / SIZE_STEP_PX).round() as i64).clamp(1, 9) as u32
+    (start_size as i64 + (dx / SIZE_STEP_PX).round() as i64).clamp(1, MAX_SIZE as i64) as u32
 }
 
 pub(crate) struct Pointer {
@@ -173,11 +176,10 @@ impl SpritebitApp {
             ui.separator();
             if self.tool.sized() {
                 ui.label(tr("Größe"));
-                for n in 1..=9u32 {
-                    if ui.selectable_label(self.size == n, n.to_string()).clicked() {
-                        self.size = n;
-                    }
-                }
+                // 1–64: Regler und Zahlenfeld (auch Alt + Rechts ziehen).
+                ui.add(egui::Slider::new(&mut self.size, 1..=MAX_SIZE).show_value(false))
+                    .on_hover_text(tr("Größe von Pinsel, Radierer und Spray — auch mit Alt + rechter Maustaste ziehen"));
+                ui.add(egui::DragValue::new(&mut self.size).range(1..=MAX_SIZE).speed(0.2).suffix(" px"));
             }
             if matches!(self.tool, Tool::Brush | Tool::Spray | Tool::Eraser) {
                 ui.label(tr("Stärke")).on_hover_text(tr("Pinsel und Radierer: Dichte — Spray: Menge je Schritt"));
@@ -522,9 +524,10 @@ mod size_tests {
     #[test]
     fn groesse_aus_dem_mausweg() {
         assert_eq!(dragged_size(3, 0.0), 3);
-        assert_eq!(dragged_size(3, 24.0), 5, "zwei Stufen");
-        assert_eq!(dragged_size(3, 5.0), 3, "unter einer halben Stufe bleibt es");
+        assert_eq!(dragged_size(3, 12.0), 5, "zwei Stufen");
+        assert_eq!(dragged_size(3, 2.0), 3, "unter einer halben Stufe bleibt es");
         assert_eq!(dragged_size(3, -100.0), 1);
-        assert_eq!(dragged_size(3, 500.0), 9);
+        assert_eq!(dragged_size(3, 5000.0), 64);
+        assert_eq!(dragged_size(10, 60.0), 20, "auch über 9 hinaus");
     }
 }
