@@ -119,6 +119,110 @@ impl Selection {
     }
 }
 
+/// Die acht Anfasser einer Auswahl (wie js/scale.js).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Handle {
+    Nw,
+    N,
+    Ne,
+    E,
+    Se,
+    S,
+    Sw,
+    W,
+}
+
+impl Handle {
+    pub const ALL: [Handle; 8] = [Handle::Nw, Handle::N, Handle::Ne, Handle::E, Handle::Se, Handle::S, Handle::Sw, Handle::W];
+
+    fn west(self) -> bool {
+        matches!(self, Handle::Nw | Handle::W | Handle::Sw)
+    }
+    fn east(self) -> bool {
+        matches!(self, Handle::Ne | Handle::E | Handle::Se)
+    }
+    fn north(self) -> bool {
+        matches!(self, Handle::Nw | Handle::N | Handle::Ne)
+    }
+    fn south(self) -> bool {
+        matches!(self, Handle::Sw | Handle::S | Handle::Se)
+    }
+    fn corner(self) -> bool {
+        matches!(self, Handle::Nw | Handle::Ne | Handle::Se | Handle::Sw)
+    }
+
+    /// Lage am Rechteck (x, y, w, h) — in Zellen, auf den Zellkanten.
+    pub fn pos(self, r: (i64, i64, u32, u32)) -> (f32, f32) {
+        let (x, y, w, h) = (r.0 as f32, r.1 as f32, r.2 as f32, r.3 as f32);
+        let px = if self.west() { x } else if self.east() { x + w } else { x + w / 2.0 };
+        let py = if self.north() { y } else if self.south() { y + h } else { y + h / 2.0 };
+        (px, py)
+    }
+
+    /// Neues Rechteck, wenn der Anfasser auf die Gitterlinie (gx, gy) gezogen
+    /// wird; die Gegenseite bleibt, nie kleiner als 1 × 1, kein Umklappen.
+    /// `keep` hält das Seitenverhältnis (an der Ecke gewinnt die stärker
+    /// gezogene Richtung, an einer Kante wächst die andere Seite mittig mit).
+    pub fn drag(self, r: (i64, i64, u32, u32), gx: f32, gy: f32, keep: bool) -> (i64, i64, u32, u32) {
+        let (mut x0, mut y0) = (r.0, r.1);
+        let (mut x1, mut y1) = (r.0 + r.2 as i64, r.1 + r.3 as i64);
+        if self.west() {
+            x0 = (gx.round() as i64).min(x1 - 1);
+        }
+        if self.east() {
+            x1 = (gx.round() as i64).max(x0 + 1);
+        }
+        if self.north() {
+            y0 = (gy.round() as i64).min(y1 - 1);
+        }
+        if self.south() {
+            y1 = (gy.round() as i64).max(y0 + 1);
+        }
+        let (mut w, mut h) = ((x1 - x0) as f64, (y1 - y0) as f64);
+        if keep && r.2 > 0 && r.3 > 0 {
+            let (rw, rh) = (r.2 as f64, r.3 as f64);
+            let k = if self.corner() {
+                (w / rw).max(h / rh)
+            } else if matches!(self, Handle::N | Handle::S) {
+                h / rh
+            } else {
+                w / rw
+            };
+            w = (rw * k).round().max(1.0);
+            h = (rh * k).round().max(1.0);
+            if self.west() {
+                x0 = x1 - w as i64;
+            } else if !self.east() {
+                x0 = (r.0 as f64 + (rw - w) / 2.0).round() as i64;
+            }
+            if self.north() {
+                y0 = y1 - h as i64;
+            } else if !self.south() {
+                y0 = (r.1 as f64 + (rh - h) / 2.0).round() as i64;
+            }
+        }
+        (x0, y0, w as u32, h as u32)
+    }
+}
+
+/// Zeilenweises Raster auf `w × h` bringen — nächster Nachbar.
+pub fn scale_nearest<T: Copy>(data: &[T], sw: u32, sh: u32, w: u32, h: u32) -> Vec<T> {
+    let mut out = Vec::with_capacity((w * h) as usize);
+    for y in 0..h {
+        let sy = (((y as u64 * 2 + 1) * sh as u64) / (2 * h as u64)).min(sh as u64 - 1) as u32;
+        for x in 0..w {
+            let sx = (((x as u64 * 2 + 1) * sw as u64) / (2 * w as u64)).min(sw as u64 - 1) as u32;
+            out.push(data[(sy * sw + sx) as usize]);
+        }
+    }
+    out
+}
+
+/// Ausgeschnittene Pixel auf `w × h` skalieren (nächster Nachbar).
+pub fn scale_clip(clip: &Clip, w: u32, h: u32) -> Clip {
+    Clip { w, h, data: scale_nearest(&clip.data, clip.w, clip.h, w, h) }
+}
+
 /// RGB eines Pixels; `None` für transparent.
 pub fn rgb_of(px: Px, pal: &Palette, free: &[Rgb]) -> Option<Rgb> {
     if px >= FREE_BASE {
@@ -234,6 +338,32 @@ pub fn paste(img: &mut Image, clip: &Clip, x: i64, y: i64) {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn anfasser_wie_im_web() {
+        let r = (2, 3, 4, 2);
+        assert_eq!(Handle::Se.drag(r, 10.0, 7.0, false), (2, 3, 8, 4));
+        assert_eq!(Handle::E.drag(r, 9.0, 99.0, false), (2, 3, 7, 2));
+        assert_eq!(Handle::N.drag(r, 99.0, 1.0, false), (2, 1, 4, 4));
+        assert_eq!(Handle::Se.drag(r, -5.0, -5.0, false), (2, 3, 1, 1), "nie kleiner als 1 × 1");
+        assert_eq!(Handle::Nw.drag(r, 50.0, 50.0, false), (5, 4, 1, 1), "kein Umklappen");
+        assert_eq!(Handle::Se.drag(r, 10.0, 5.0, true), (2, 3, 8, 4), "Seitenverhältnis");
+        assert_eq!(Handle::E.drag(r, 10.0, 0.0, true), (2, 2, 8, 4));
+        assert_eq!(Handle::Nw.drag(r, -2.0, 1.0, true), (-2, 1, 8, 4));
+        assert_eq!(Handle::Nw.drag(r, -2.0, 0.0, true), (-4, 0, 10, 5));
+        assert_eq!(Handle::S.pos(r), (4.0, 5.0));
+    }
+
+    #[test]
+    fn naechster_nachbar_wie_im_web() {
+        let c = Clip { w: 2, h: 2, data: vec![1, 2, 3, 4] };
+        let big = scale_clip(&c, 4, 4);
+        assert_eq!(big.data, vec![1, 1, 2, 2, 1, 1, 2, 2, 3, 3, 4, 4, 3, 3, 4, 4]);
+        assert_eq!(scale_clip(&big, 2, 2), c, "zurück ergibt das Original");
+        assert_eq!(scale_nearest(&[1, 2, 3], 3, 1, 1, 1), vec![2]);
+        assert_eq!(scale_nearest(&[true, false], 2, 1, 4, 1), vec![true, true, false, false]);
+    }
+
     use super::*;
 
     #[test]

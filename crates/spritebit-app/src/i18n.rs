@@ -402,6 +402,13 @@ const TEXTS: &[(&str, &str, &str)] = &[
     // ── Unterstützen (Ko-fi) ──
     ("spritebit unterstützen (Ko-fi)", "Support spritebit (Ko-fi)", "spritebit unterstützn (Ko-fi)"),
     ("Kostenlos bleibt spritebit sowieso. Spenden fließen in ein Code-Signatur-Zertifikat, damit Windows bei der Desktop-App nicht mehr warnt.", "spritebit stays free either way. Donations go towards a code-signing certificate so Windows stops warning about the desktop app.", ""),
+    // ── Füllen mit Grenzen aus allen Ebenen (tools_ui.rs) ──
+    ("Grenzen: alle Ebenen", "Edges: all layers", ""),
+    ("Die Grenzen der Füllung kommen von allen sichtbaren Ebenen — gemalt wird in die aktive. So malst du eine Vorlage, die auf einer eigenen Ebene liegt, Fläche für Fläche aus.", "The edges of the fill come from all visible layers — the paint goes into the active one. That way you colour in a template that sits on a layer of its own, area by area.", ""),
+    ("Füllen mit „Grenzen: alle Ebenen“: die Fläche endet, wo sich im sichtbaren Bild etwas ändert — gemalt wird in die aktive Ebene. So malst du eine Vorlage auf eigener Ebene aus.", "Fill with “Edges: all layers”: the area ends wherever the visible image changes — the paint goes into the active layer. That way you colour in a template on its own layer.", ""),
+    ("Skalieren: an den acht Anfassern ziehen — Ecken ändern Breite und Höhe, Kanten nur eine; Umschalt hält das Seitenverhältnis. Pixel bleiben scharf, gerechnet wird immer vom Original.", "Scale: drag one of the eight handles — corners change width and height, edges only one; Shift keeps the aspect ratio. Pixels stay sharp, always computed from the original.", ""),
+    ("Anfasser ziehen", "Drag a handle", ""),
+    ("Auswahl skalieren (Umschalt: Seitenverhältnis halten)", "Scale the selection (Shift: keep aspect ratio)", ""),
     // ── Kacheln (tiles_ui.rs) ──
     ("Kacheln", "Tiles", "Kachln"),
     ("Kachelgröße", "Tile size", ""),

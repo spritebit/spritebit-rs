@@ -86,6 +86,8 @@ cargo build --release           # schnelle Fassung (target/release)
 | H P B S F E I R O | Hand, Stift, Pinsel, Spray, Füllen, Radierer, Linie, Rechteck, Ellipse |
 | A L K W | Auswahl, Lasso, Farbwahl, Zauberstab |
 | Strg+A / C / X / V, Entf, Esc, Pfeile | Alles, Kopieren, Ausschneiden, Einfügen, Leeren, Aufheben, Verschieben |
+| Anfasser an der Auswahl | skalieren (Ecken/Kanten, Umschalt hält das Seitenverhältnis, Pixel bleiben scharf) |
+| Füllen → Grenzen: alle Ebenen | Vorlage auf eigener Ebene ausmalen — die sichtbaren Ebenen geben die Grenzen vor |
 | Mittlere Taste oder Leertaste + Ziehen | Fläche verschieben |
 | Strg+Z / Strg+Y | Rückgängig / Wiederholen (je Sprite) |
 | Strg+O / Strg+S / Strg+Umschalt+S | Öffnen / Speichern / Speichern unter |

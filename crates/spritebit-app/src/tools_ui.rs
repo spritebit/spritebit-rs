@@ -141,6 +141,8 @@ pub(crate) struct Pointer {
     pub panning: bool,
     /// Alt gedrückt: Pipette statt Malen.
     pub alt: bool,
+    /// Zeiger in Bildschirm-Koordinaten (Anfasser der Auswahl treffen).
+    pub pos: Option<Pos2>,
 }
 
 impl SpritebitApp {
@@ -187,6 +189,14 @@ impl SpritebitApp {
             }
             if matches!(self.tool, Tool::Rect | Tool::Ellipse) {
                 ui.checkbox(&mut self.filled, tr("Gefüllt"));
+            }
+            if self.tool == Tool::Fill {
+                let r = ui
+                    .checkbox(&mut self.fill_visible, tr("Grenzen: alle Ebenen"))
+                    .on_hover_text(tr("Die Grenzen der Füllung kommen von allen sichtbaren Ebenen — gemalt wird in die aktive. So malst du eine Vorlage, die auf einer eigenen Ebene liegt, Fläche für Fläche aus."));
+                if r.changed() {
+                    self.save_view();
+                }
             }
             if matches!(self.tool, Tool::Pencil | Tool::Eraser) {
                 let r = ui
@@ -398,8 +408,26 @@ impl SpritebitApp {
                 // Mit Symmetrie auch an den gespiegelten Stellen füllen.
                 let (w, h) = (self.sprite().width, self.sprite().height);
                 let points = tools::mirror_spans(vec![(cell.1, cell.0, cell.0)], w, h, self.mirror_x, self.mirror_y);
+                // „Grenzen: alle Ebenen“: die sichtbare Farbe aller Ebenen bestimmt,
+                // wo die Fläche endet — gemalt wird in die aktive (wie im Web).
+                let key: Option<Vec<u32>> = (self.fill_visible && !self.sprite().editing_mask()).then(|| {
+                    let pal = self.project.current_palette();
+                    let sp = self.sprite();
+                    spritebit_core::export::frame_rgba(sp, &pal, sp.frame)
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .map(|c| u32::from_le_bytes(*c))
+                        .collect()
+                });
                 let img = self.project.sprite_mut().active();
-                let n: usize = points.iter().map(|&(y, x, _)| tools::flood_fill(img, x, y, value)).sum();
+                let n: usize = points
+                    .iter()
+                    .map(|&(y, x, _)| match &key {
+                        Some(k) => tools::flood_fill_ref(img, k, x, y, value),
+                        None => tools::flood_fill(img, x, y, value),
+                    })
+                    .sum();
                 if n > 0 {
                     self.changed();
                 }

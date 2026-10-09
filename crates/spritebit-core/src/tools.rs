@@ -156,6 +156,37 @@ pub fn ellipse_spans(x0: i64, y0: i64, x1: i64, y1: i64, filled: bool) -> Vec<Sp
 /// `value` (4er-Nachbarschaft). Zeilenweise mit eigenem Stapel — keine
 /// Rekursion, die bei großen Flächen den Stack sprengt. Gibt die Zahl der
 /// geänderten Pixel zurück.
+/// Füllen mit Grenzen aus einer Vorlage (wie `fillRegion` im Web, js/fill.js):
+/// die zusammenhängende Fläche gleicher Werte in `key` (je Pixel ein Wert,
+/// zeilenweise, z. B. die sichtbare Farbe aller Ebenen) bestimmt, was in
+/// `img` gefüllt wird. Gibt zurück, wie viele Pixel sich geändert haben.
+pub fn flood_fill_ref(img: &mut Image, key: &[u32], x: i64, y: i64, value: Px) -> usize {
+    let (w, h) = (img.width() as i64, img.height() as i64);
+    if x < 0 || y < 0 || x >= w || y >= h || key.len() != (w * h) as usize {
+        return 0;
+    }
+    let target = key[(y * w + x) as usize];
+    let mut seen = vec![false; key.len()];
+    let mut stack = vec![(x, y)];
+    let mut changed = 0;
+    while let Some((cx, cy)) = stack.pop() {
+        if cx < 0 || cy < 0 || cx >= w || cy >= h {
+            continue;
+        }
+        let i = (cy * w + cx) as usize;
+        if seen[i] || key[i] != target {
+            continue;
+        }
+        seen[i] = true;
+        if img.get(cx as u32, cy as u32) != value {
+            img.set(cx as u32, cy as u32, value);
+            changed += 1;
+        }
+        stack.extend([(cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)]);
+    }
+    changed
+}
+
 pub fn flood_fill(img: &mut Image, x: i64, y: i64, value: Px) -> usize {
     let (w, h) = (img.width() as i64, img.height() as i64);
     if x < 0 || y < 0 || x >= w || y >= h {
@@ -318,6 +349,21 @@ impl PixelPerfect {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn fuellen_mit_grenzen_aus_einer_vorlage() {
+        // Vorlage 4×3: eine Linie (7) trennt links oben ab.
+        let key: Vec<u32> = vec![0, 0, 7, 0, 0, 0, 7, 0, 7, 7, 7, 0];
+        let mut img = Image::new(4, 3);
+        assert_eq!(flood_fill_ref(&mut img, &key, 0, 0, 3), 4);
+        assert_eq!((img.get(1, 1), img.get(3, 0), img.get(0, 2)), (3, 0, 0));
+        // Hat das Bild dort schon die Farbe, wird trotzdem weitergesucht.
+        let mut img = Image::new(3, 1);
+        img.set(0, 0, 4);
+        assert_eq!(flood_fill_ref(&mut img, &[0, 0, 0], 0, 0, 4), 2);
+        assert_eq!(flood_fill_ref(&mut img, &[0, 0], 0, 0, 4), 0, "falsche Länge");
+    }
+
     use super::*;
 
     fn painted(spans: &[Span]) -> std::collections::BTreeSet<(i64, i64)> {

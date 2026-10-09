@@ -7,7 +7,7 @@
 //! Verschieben ist ein Undo-Schritt.
 
 use eframe::egui::{self, Color32, Key, Modifiers, Pos2, Stroke, Vec2};
-use spritebit_core::selection::{self, Clip, Selection};
+use spritebit_core::selection::{self, Clip, Handle, Selection};
 
 use crate::tools_ui::{Pointer, Tool};
 use crate::SpritebitApp;
@@ -28,6 +28,8 @@ pub(crate) enum SelDrag {
     Lasso(Vec<(i64, i64)>),
     /// Schwebenden Inhalt schieben: Startpunkt und Lage zu Beginn.
     Move { start: (i64, i64), from: (i64, i64) },
+    /// An einem Anfasser skalieren: welcher und das Rechteck beim Anfassen.
+    Scale { handle: Handle, start: (i64, i64, u32, u32) },
 }
 
 impl SpritebitApp {
@@ -80,8 +82,76 @@ impl SpritebitApp {
         matches!(self.tool, Tool::Select | Tool::Lasso | Tool::Magic | Tool::Wand)
     }
 
+    /// Liegt `pos` (Bildschirm) auf einem Anfasser der Auswahl?
+    pub(crate) fn handle_at(&self, pos: Pos2) -> Option<Handle> {
+        let s = self.selection.as_ref()?;
+        if self.sel_drag.is_some() || self.tool == Tool::Wand {
+            return None;
+        }
+        let origin = self.canvas_rect.min + self.pan;
+        let r = (s.x, s.y, s.w, s.h);
+        // In der Auswahl gewinnt das Verschieben — sonst ließe sich eine
+        // winzige Auswahl nicht mehr anfassen. Dort zählt ein Anfasser nur
+        // ganz nah (3 px), außerhalb großzügig (7 px). Wie im Web.
+        let g = (pos - origin) / self.zoom;
+        let tol = if s.contains(g.x.floor() as i64, g.y.floor() as i64) { 3.0 } else { 7.0 };
+        Handle::ALL.into_iter().find(|h| {
+            let (hx, hy) = h.pos(r);
+            let p = origin + Vec2::new(hx, hy) * self.zoom;
+            (p.x - pos.x).abs() <= tol && (p.y - pos.y).abs() <= tol
+        })
+    }
+
+    /// Anfasser greifen: Inhalt anheben, das Original merken (wie js/selection.js).
+    fn start_scale(&mut self, handle: Handle) {
+        self.lift();
+        let (Some(f), Some(s)) = (&self.float, &self.selection) else { return };
+        let fresh = !self.scale_base.as_ref().is_some_and(|(_, _, res)| *res == f.clip);
+        if fresh {
+            self.scale_base = Some((f.clip.clone(), s.mask.clone(), f.clip.clone()));
+        }
+        self.sel_drag = Some(SelDrag::Scale { handle, start: (s.x, s.y, s.w, s.h) });
+    }
+
+    fn update_scale(&mut self, handle: Handle, start: (i64, i64, u32, u32), pos: Pos2) {
+        let origin = self.canvas_rect.min + self.pan;
+        let g = (pos - origin) / self.zoom;
+        let keep = self.modifiers.shift;
+        let (x, y, w, h) = handle.drag(start, g.x, g.y, keep);
+        let (w, h) = (w.min(spritebit_core::MAX_SIDE), h.min(spritebit_core::MAX_SIDE));
+        if self.selection.as_ref().is_some_and(|s| (s.x, s.y, s.w, s.h) == (x, y, w, h)) {
+            return;
+        }
+        let Some((base, mask, _)) = self.scale_base.clone() else { return };
+        let clip = selection::scale_clip(&base, w, h);
+        let mask = mask.map(|m| selection::scale_nearest(&m, base.w, base.h, w, h));
+        self.float = Some(Float { clip: clip.clone(), x, y });
+        self.selection = Some(Selection { x, y, w, h, mask });
+        if let Some(b) = &mut self.scale_base {
+            b.2 = clip;
+        }
+        self.version = self.version.wrapping_add(1);
+    }
+
     /// Ein Durchlauf eines Auswahl-Werkzeugs.
     pub(crate) fn use_select_tool(&mut self, p: &Pointer) {
+        // Anfasser an Ecken und Kanten: skalieren.
+        if p.pressed && p.over && !p.secondary {
+            if let Some(h) = p.pos.and_then(|q| self.handle_at(q)) {
+                if self.layer_ok() {
+                    self.start_scale(h);
+                }
+                return;
+            }
+        }
+        if let (Some(SelDrag::Scale { handle, start }), Some(pos)) = (&self.sel_drag, p.pos) {
+            let (handle, start) = (*handle, *start);
+            self.update_scale(handle, start, pos);
+            if !p.primary {
+                self.sel_drag = None;
+            }
+            return;
+        }
         let Some(cell) = p.cell else { return };
         if p.pressed && p.over && !p.secondary {
             let inside = self.selection.as_ref().is_some_and(|s| s.contains(cell.0, cell.1));
@@ -160,7 +230,7 @@ impl SpritebitApp {
                     self.sel_drag = None;
                 }
             }
-            None => {}
+            Some(SelDrag::Scale { .. }) | None => {}
         }
     }
 
@@ -354,6 +424,31 @@ impl SpritebitApp {
             painter.add(egui::Shape::line(pts, light));
         }
         let Some(s) = &self.selection else { return };
+        // Anfasser zum Skalieren — solange ein Auswahl-Werkzeug aktiv ist.
+        if self.is_select_tool() && self.tool != Tool::Wand && !matches!(self.sel_drag, Some(SelDrag::Rect(_) | SelDrag::Lasso(_))) {
+            let r = (s.x, s.y, s.w, s.h);
+            for h in Handle::ALL {
+                let (hx, hy) = h.pos(r);
+                let c = origin + Vec2::new(hx, hy) * zoom;
+                let sq = egui::Rect::from_center_size(c, Vec2::splat(8.0));
+                painter.rect_filled(sq, 0.0, Color32::WHITE);
+                painter.rect_stroke(sq, 0.0, Stroke::new(1.0, Color32::from_black_alpha(220)), egui::StrokeKind::Inside);
+            }
+            // Zeiger über einem Anfasser: Pfeil in die Zieh-Richtung.
+            let hover = painter.ctx().pointer_hover_pos().and_then(|q| self.handle_at(q));
+            let dragging = match &self.sel_drag {
+                Some(SelDrag::Scale { handle, .. }) => Some(*handle),
+                _ => None,
+            };
+            if let Some(h) = dragging.or(hover) {
+                painter.ctx().set_cursor_icon(match h {
+                    Handle::Nw | Handle::Se => egui::CursorIcon::ResizeNwSe,
+                    Handle::Ne | Handle::Sw => egui::CursorIcon::ResizeNeSw,
+                    Handle::N | Handle::S => egui::CursorIcon::ResizeVertical,
+                    Handle::E | Handle::W => egui::CursorIcon::ResizeHorizontal,
+                });
+            }
+        }
         match &s.mask {
             None => {
                 let r = egui::Rect::from_min_max(to(s.x, s.y), to(s.x + s.w as i64, s.y + s.h as i64));

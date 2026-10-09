@@ -141,6 +141,11 @@ struct SpritebitApp {
     size_drag: Option<tools_ui::SizeDrag>,
     /// Pixel-perfekt (Stift, Radierer 1 px) und der Pfad des laufenden Strichs.
     pixel_perfect: bool,
+    /// Füllen: Grenzen von allen sichtbaren Ebenen (wie im Web).
+    fill_visible: bool,
+    /// Skalieren der Auswahl: unskaliertes Original, seine Maske und das
+    /// letzte Ergebnis (gilt nur, solange das Schwebende noch so aussieht).
+    scale_base: Option<(spritebit_core::selection::Clip, Option<Vec<bool>>, spritebit_core::selection::Clip)>,
     pp: Option<spritebit_core::tools::PixelPerfect>,
     /// Rechteck und Ellipse gefüllt.
     filled: bool,
@@ -246,6 +251,8 @@ impl SpritebitApp {
             strength: 100,
             size_drag: None,
             pixel_perfect: false,
+            fill_visible: false,
+            scale_base: None,
             pp: None,
             filled: false,
             shape_start: None,
@@ -783,6 +790,7 @@ impl SpritebitApp {
             released,
             panning,
             alt,
+            pos: pointer,
         };
         // Umschalt+Alt gehört der Schablone, im Hilfslinien-Modus gehört
         // der Zeiger den Linien.
@@ -1366,6 +1374,51 @@ mod tests {
         h.get_by_label("Vollbild beenden").click();
         h.run();
         assert!(!h.state().view.fullscreen);
+    }
+
+    #[test]
+    fn fuellen_mit_grenzen_aus_allen_ebenen() {
+        let mut h = app();
+        // Ebene 1: senkrechte Linie bei x = 8 als Vorlage; gemalt wird auf Ebene 2.
+        for y in 0..64 {
+            h.state_mut().project.sprite_mut().active().set(8, y, 3);
+        }
+        h.state_mut().project.sprite_mut().add_layer(1, "Farbe");
+        h.state_mut().tool = Tool::Fill;
+        h.state_mut().fill_visible = true;
+        drag(&mut h, (2.0, 2.0), (2.0, 2.0));
+        let sp = h.state().sprite();
+        assert_eq!(sp.cel(0, 1).get(2, 2), 5, "links der Linie gefüllt");
+        assert_eq!(sp.cel(0, 1).get(7, 40), 5);
+        assert_eq!(sp.cel(0, 1).get(10, 2), 0, "rechts der Linie nicht");
+        assert_eq!(sp.cel(0, 0).get(2, 2), 0, "die Vorlage bleibt unberührt");
+        // Ohne die Option füllt es die ganze (leere) Ebene 2.
+        h.state_mut().fill_visible = false;
+        h.state_mut().undo();
+        h.run();
+        drag(&mut h, (2.0, 2.0), (2.0, 2.0));
+        assert_eq!(h.state().sprite().cel(0, 1).get(10, 2), 5);
+    }
+
+    #[test]
+    fn auswahl_mit_anfasser_skalieren() {
+        let mut h = app();
+        for y in 12..16 {
+            for x in 12..16 {
+                h.state_mut().project.sprite_mut().active().set(x, y, ((x + y) % 2 + 2) as u16);
+            }
+        }
+        h.state_mut().tool = Tool::Select;
+        h.state_mut().selection = Some(spritebit_core::selection::Selection::rect(12, 12, 15, 15));
+        h.run();
+        // at() zielt auf Zellmitten: 15.5 + 0.5 liegt auf der Ecke (16, 16).
+        drag(&mut h, (15.5, 15.5), (19.5, 19.5));
+        let s = h.state().selection.clone().unwrap();
+        assert_eq!((s.x, s.y, s.w, s.h), (12, 12, 8, 8));
+        assert_eq!(h.state().float.as_ref().map(|f| (f.clip.w, f.clip.h)), Some((8, 8)));
+        h.state_mut().deselect();
+        assert_eq!((px(&h, 12, 12), px(&h, 13, 12), px(&h, 14, 12)), (2, 2, 3), "jedes Pixel verdoppelt");
+        assert_eq!(px(&h, 19, 19), 2);
     }
 
     #[test]

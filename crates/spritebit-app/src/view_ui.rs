@@ -64,12 +64,13 @@ impl SpritebitApp {
         let Some(v) = dir().and_then(|d| std::fs::read_to_string(d.join("view.json")).ok()).and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok()) else { return };
         self.view.light = v["bg"].as_str() == Some("light");
         self.pixel_perfect = v["pixelPerfect"].as_bool().unwrap_or(false);
+        self.fill_visible = v["fillVisible"].as_bool().unwrap_or(false);
     }
 
     pub(crate) fn save_view(&self) {
         if let (true, Some(d)) = (self.view.persist, dir()) {
             let _ = std::fs::create_dir_all(&d);
-            let v = serde_json::json!({ "bg": if self.view.light { "light" } else { "dark" }, "pixelPerfect": self.pixel_perfect });
+            let v = serde_json::json!({ "bg": if self.view.light { "light" } else { "dark" }, "pixelPerfect": self.pixel_perfect, "fillVisible": self.fill_visible });
             let _ = std::fs::write(d.join("view.json"), v.to_string());
         }
     }
@@ -419,6 +420,7 @@ fn help_sections() -> Vec<(&'static str, Vec<&'static str>)> {
         (tr("Werkzeuge"), vec![
             tr("Stift — einzelne Pixel. Pinsel — Fläche; Stärke = Dichte, Größe = Kantenlänge. Spray — zufällige Pixel; Stärke = Menge."),
             tr("Füllen — zusammenhängende gleiche Fläche. Radierer — setzt auf transparent. Zauberstab — löscht zusammenhängende ähnliche Fläche."),
+            tr("Füllen mit „Grenzen: alle Ebenen“: die Fläche endet, wo sich im sichtbaren Bild etwas ändert — gemalt wird in die aktive Ebene. So malst du eine Vorlage auf eigener Ebene aus."),
             tr("Größe 1–64 per Regler oder Zahlenfeld; Alt + rechte Maustaste ziehen verstellt sie direkt auf der Fläche. Ein Umriss zeigt, was Pinsel, Radierer und Spray gleich treffen."),
             tr("Clean Stroke — beim Stift (und beim Radierer mit Größe 1) verschwinden die L-Ecken einer freihändigen Linie: saubere 1-Pixel-Linien."),
             tr("Linie · Rechteck · Ellipse — aufziehen, Loslassen zeichnet. „Gefüllt“ schaltet zwischen Kontur und Fläche."),
@@ -429,6 +431,7 @@ fn help_sections() -> Vec<(&'static str, Vec<&'static str>)> {
             tr("Auswahl (A) zieht ein Rechteck auf, Lasso (L) umfährt eine freie Form, Farbwahl (K) nimmt die zusammenhängende ähnliche Fläche."),
             tr("In die Auswahl fassen und ziehen hebt den Inhalt an — er schwebt, bis du ihn absetzt. Alt+Ziehen verschiebt eine Kopie."),
             tr("Pfeiltasten verschieben pixelweise. Esc oder ein Klick daneben hebt die Auswahl auf."),
+            tr("Skalieren: an den acht Anfassern ziehen — Ecken ändern Breite und Höhe, Kanten nur eine; Umschalt hält das Seitenverhältnis. Pixel bleiben scharf, gerechnet wird immer vom Original."),
         ]),
         (tr("Bild"), vec![
             tr("Spiegeln und Drehen wirken auf die Auswahl, wenn es eine gibt — sonst auf den ganzen Sprite."),
@@ -487,6 +490,7 @@ fn help_keys() -> Vec<(&'static str, &'static str)> {
         (tr("Strg + Mausrad"), tr("Zoomen auf den Mauszeiger")),
         (tr("Leertaste + Ziehen"), tr("Bild verschieben (auch mit mittlerer Maustaste)")),
         (tr("Pfeiltasten"), tr("Auswahl pixelweise verschieben")),
+        (tr("Anfasser ziehen"), tr("Auswahl skalieren (Umschalt: Seitenverhältnis halten)")),
         (tr("Strg + A / C / X / V"), tr("Alles · Kopieren · Ausschneiden · Einfügen")),
         (tr("Entf"), tr("Auswahl leeren")),
         ("Enter", tr("Drehung übernehmen · sonst Animation abspielen / anhalten")),
