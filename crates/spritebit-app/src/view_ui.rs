@@ -423,6 +423,8 @@ fn help_keys() -> Vec<(&'static str, &'static str)> {
         ("G", tr("Hilfslinien ein / aus")),
         (tr("Strg + Z / Y"), tr("Rückgängig / Wiederholen")),
         (tr("Strg + S / O / E"), tr("Speichern / Öffnen / Exportieren")),
+        (tr("Strg + Tab"), tr("Nächster Reiter (mit Umschalt: voriger)")),
+        (tr("Strg + W"), tr("Reiter schließen")),
         ("F1", tr("Hilfe")),
         ("F11", tr("Vollbild")),
         ("Esc", tr("Auswahl aufheben, Drehung verwerfen oder Vollbild beenden")),

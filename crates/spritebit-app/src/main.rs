@@ -18,6 +18,7 @@ mod palette_ui;
 mod preview_ui;
 mod selection_ui;
 mod sprites_ui;
+mod tabs;
 mod template_ui;
 mod timeline;
 mod tlmenu_ui;
@@ -77,10 +78,15 @@ struct CanvasTexture {
 }
 
 /// Dialog „Neuer Sprite".
+/// Hintergrund der Zeichenfläche — auch der aktive Reiter (tabs.rs) hat ihn.
+pub(crate) const STAGE_BG: Color32 = Color32::from_rgb(0x14, 0x14, 0x18);
+
 struct SpritebitApp {
     project: Project,
     /// Undo je Sprite, gleiche Reihenfolge wie `project.sprites`.
     histories: Vec<History>,
+    /// Reiter der geöffneten Sprites (Stellen in `project.sprites`), siehe tabs.rs.
+    tabs: Vec<usize>,
     /// Wohin „Speichern" schreibt — `None`, solange nie gespeichert.
     path: Option<PathBuf>,
     dirty: bool,
@@ -191,6 +197,7 @@ impl SpritebitApp {
         let project = Project::default();
         let histories = project.sprites.iter().map(|_| History::default()).collect();
         SpritebitApp {
+            tabs: (0..project.sprites.len()).collect(),
             project,
             histories,
             path: None,
@@ -317,6 +324,8 @@ impl SpritebitApp {
     fn replace_project(&mut self, project: Project, path: Option<PathBuf>) {
         self.drop_selection();
         self.histories = project.sprites.iter().map(|_| History::default()).collect();
+        // Ein anderes Projekt: alle seine Sprites sind offen.
+        self.tabs = (0..project.sprites.len()).collect();
         self.project = project;
         self.path = path;
         self.dirty = false;
@@ -748,7 +757,7 @@ impl SpritebitApp {
         let y0 = lo.y.floor().clamp(0.0, sh as f32) as u32;
         let x1 = hi.x.ceil().clamp(0.0, sw as f32) as u32;
         let y1 = hi.y.ceil().clamp(0.0, sh as f32) as u32;
-        painter.rect_filled(area, 0.0, Color32::from_rgb(0x14, 0x14, 0x18));
+        painter.rect_filled(area, 0.0, STAGE_BG);
         if x1 <= x0 || y1 <= y0 {
             return;
         }
@@ -952,6 +961,7 @@ impl eframe::App for SpritebitApp {
         let ctx = ui.ctx().clone();
         self.guard_close(&ctx);
         self.shortcuts(&ctx);
+        self.tab_keys(&ctx);
         self.modifiers = ctx.input(|i| i.modifiers);
         self.view_keys(&ctx);
         self.guide_keys(&ctx);
@@ -974,7 +984,12 @@ impl eframe::App for SpritebitApp {
         egui::Panel::right("panels").resizable(true).default_size(230.0).show(ui, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| self.right_panels(ui));
         });
-        egui::CentralPanel::default().show(ui, |ui| self.canvas(ui));
+        egui::CentralPanel::default().show(ui, |ui| {
+            // Reiter direkt auf der Zeichenfläche, ohne Spalt dazwischen.
+            ui.spacing_mut().item_spacing.y = 0.0;
+            self.sprite_tabs(ui);
+            self.canvas(ui);
+        });
         self.dialogs(&ctx);
         self.import_window(&ctx);
         self.tl_menu(&ctx);
@@ -1270,6 +1285,51 @@ mod tests {
         assert_eq!(h.state().sprite().width, 64);
         let n = h.state_mut().clean_for_test_outline();
         assert_eq!(n, 4);
+    }
+
+    #[test]
+    fn reiter_der_geoeffneten_sprites() {
+        let mut h = app();
+        for n in ["Held", "Baum"] {
+            h.state_mut().create_sprite(n.into(), "graustufen".into(), 16, 16);
+            h.run(); // jedes Anlegen ist ein eigener Klick, also ein eigener Frame
+        }
+        assert_eq!(h.state().tabs, vec![0, 1, 2]);
+        assert_eq!(h.state().project.current, 2);
+        // Klick auf den Reiter wechselt.
+        h.get_by_label("Held").click();
+        h.run();
+        assert_eq!(h.state().project.current, 1);
+        // Strg+Tab rundum weiter, Strg+Umschalt+Tab zurück.
+        h.key_press_modifiers(Modifiers::COMMAND, Key::Tab);
+        h.run();
+        assert_eq!(h.state().project.current, 2);
+        h.key_press_modifiers(Modifiers::COMMAND, Key::Tab);
+        h.run();
+        assert_eq!(h.state().project.current, 0);
+        h.key_press_modifiers(Modifiers::COMMAND | Modifiers::SHIFT, Key::Tab);
+        h.run();
+        assert_eq!(h.state().project.current, 2);
+        // Strg+W schließt den Reiter, der Sprite bleibt; der linke wird aktiv.
+        h.key_press_modifiers(Modifiers::COMMAND, Key::W);
+        h.run();
+        assert_eq!(h.state().tabs, vec![0, 1]);
+        assert_eq!(h.state().project.current, 1);
+        assert_eq!(h.state().project.sprites.len(), 3);
+        // Duplizieren schiebt die Reiter dahinter mit.
+        h.state_mut().tabs = vec![2, 1, 0];
+        h.state_mut().duplicate_sprite(0);
+        h.run();
+        assert_eq!(h.state().tabs, vec![3, 2, 0, 1], "Kopie an Stelle 1, Reiter hinten dran");
+        // Löschen nimmt den Reiter mit.
+        h.state_mut().delete_sprite(3);
+        h.run();
+        assert_eq!(h.state().tabs, vec![2, 0, 1]);
+        // Der letzte Reiter lässt sich nicht schließen.
+        h.state_mut().tabs = vec![h.state().project.current];
+        h.key_press_modifiers(Modifiers::COMMAND, Key::W);
+        h.run();
+        assert_eq!(h.state().tabs.len(), 1);
     }
 
     #[test]

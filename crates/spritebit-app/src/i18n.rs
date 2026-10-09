@@ -688,6 +688,12 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("{n} Pixel in dieser Farbe", "{n} pixels in this color", "{n} Pixel in dera Farb"),
     // ── Auswahl-Leiste ──
     ("Alles", "All", "Ois"),
+    // ── Reiter ──
+    ("Reiter schließen (Mittelklick) — der Sprite bleibt im Projekt", "Close tab (middle click) — the sprite stays in the project", "Reiter zuamochn (Mittelklick) — da Sprite bleibt im Projekt"),
+    ("Reiter schließen", "Close tab", "Reiter zuamochn"),
+    ("Strg + Tab", "Ctrl + Tab", ""),
+    ("Strg + W", "Ctrl + W", ""),
+    ("Nächster Reiter (mit Umschalt: voriger)", "Next tab (with Shift: previous)", "Nächsta Reiter (mit Umschoit: voriga)"),
     // ── Pixel-perfekt ──
     ("Pixel-perfekt", "Pixel-perfect", "Pixel-perfekt"),
     ("Wie in Aseprite: entfernt beim Zeichnen die doppelten Eckpixel an Treppenstufen — saubere 1-Pixel-Linien (Stift, Radierer mit Größe 1)", "Like in Aseprite: removes the doubled corner pixels at stair steps while drawing — clean 1-pixel lines (pencil, eraser at size 1)", "Wia in Aseprite: haut beim Zeichnen de doppltn Eckpixel an de Stiagnstufn weg — saubere 1-Pixel-Linien (Stift, Radiergummi mit Greß 1)"),
@@ -735,6 +741,7 @@ mod tests {
             include_str!("palette_ui.rs"),
             include_str!("export_ui.rs"),
             include_str!("image_ui.rs"),
+            include_str!("tabs.rs"),
             include_str!("sprites_ui.rs"),
             include_str!("preview_ui.rs"),
             include_str!("guides_ui.rs"),

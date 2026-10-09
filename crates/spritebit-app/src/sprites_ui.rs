@@ -32,7 +32,7 @@ impl SpritebitApp {
         });
     }
 
-    fn create_sprite(&mut self, name: String, palette: String, w: u32, h: u32) {
+    pub(crate) fn create_sprite(&mut self, name: String, palette: String, w: u32, h: u32) {
         let name = if name.trim().is_empty() { self.project.fresh_name() } else { name.trim().to_string() };
         if let Ok(mut sp) = Sprite::new(name, w, h) {
             sp.palette = palette;
@@ -43,23 +43,25 @@ impl SpritebitApp {
         }
     }
 
-    fn duplicate_sprite(&mut self, i: usize) {
+    pub(crate) fn duplicate_sprite(&mut self, i: usize) {
         self.finish_rotate();
         self.deselect();
         let mut copy = self.project.sprites[i].clone();
         copy.name = trf("{name} Kopie", &[("name", &copy.name)]);
         self.project.sprites.insert(i + 1, copy);
         self.histories.insert(i + 1, History::default());
+        crate::tabs::on_insert(&mut self.tabs, i + 1);
         self.project.current = i; // damit select_sprite wirklich wechselt
         self.select_sprite(i + 1);
         self.changed();
     }
 
-    fn delete_sprite(&mut self, i: usize) {
+    pub(crate) fn delete_sprite(&mut self, i: usize) {
         self.finish_rotate();
         self.deselect();
         self.project.sprites.remove(i);
         self.histories.remove(i);
+        crate::tabs::on_remove(&mut self.tabs, i);
         if self.project.sprites.is_empty() {
             self.project.sprites.push(Sprite::new(self.project.fresh_name(), 64, 64).expect("gültige Größe"));
             self.histories.push(History::default());
