@@ -315,8 +315,11 @@ impl SpritebitApp {
                 self.tolerance = pct as f64 / 100.0;
             }
         }
-        if self.selection.is_some() || self.clipboard.is_some() {
+        if self.is_select_tool() || self.selection.is_some() || self.clipboard.is_some() {
             ui.separator();
+            if ui.button(tr("Alles")).on_hover_text(keys("Strg+A")).clicked() {
+                self.select_all();
+            }
             let has = self.selection.is_some();
             if ui.add_enabled(has, egui::Button::new(tr("Ausschneiden"))).on_hover_text(keys("Strg+X")).clicked() {
                 self.cut_selection();

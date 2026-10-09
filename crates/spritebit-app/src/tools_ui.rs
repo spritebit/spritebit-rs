@@ -10,7 +10,7 @@ use spritebit_core::tools::{self, Span};
 use spritebit_core::Px;
 
 use crate::{icons, SpritebitApp};
-use crate::i18n::{tr, trf};
+use crate::i18n::{keys, tr, trf};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Tool {
@@ -166,6 +166,16 @@ impl SpritebitApp {
                 self.mirror_y = !self.mirror_y;
             }
             self.selection_bar(ui);
+            // Rückgängig/Wiederholen griffbereit, wie an der Fläche im Web.
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let (can_redo, can_undo) = (self.history().can_redo(), self.history().can_undo());
+                if icons::button(ui, icons::REDO, &format!("{} ({})", tr("Wiederholen"), keys("Strg+Y")), can_redo).clicked() {
+                    self.redo();
+                }
+                if icons::button(ui, icons::UNDO, &format!("{} ({})", tr("Rückgängig"), keys("Strg+Z")), can_undo).clicked() {
+                    self.undo();
+                }
+            });
         });
     }
 

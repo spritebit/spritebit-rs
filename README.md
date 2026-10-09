@@ -42,7 +42,6 @@ cargo build --release           # schnelle Fassung (target/release)
 | H P B S F E I R O | Hand, Stift, Pinsel, Spray, Füllen, Radierer, Linie, Rechteck, Ellipse |
 | A L K W | Auswahl, Lasso, Farbwahl, Zauberstab |
 | Strg+A / C / X / V, Entf, Esc, Pfeile | Alles, Kopieren, Ausschneiden, Einfügen, Leeren, Aufheben, Verschieben |
-| Mausrad / Strg+Mausrad | zoomen um den Mauszeiger |
 | Mittlere Taste oder Leertaste + Ziehen | Fläche verschieben |
 | Strg+Z / Strg+Y | Rückgängig / Wiederholen (je Sprite) |
 | Strg+O / Strg+S / Strg+Umschalt+S | Öffnen / Speichern / Speichern unter |
@@ -59,6 +58,15 @@ cargo build --release           # schnelle Fassung (target/release)
 | Doppelklick auf einen Ebenen-Namen | umbenennen; Pfeile verschieben die Ebene |
 | Strg+E | Export: PNG (Frame oder alle), GIF (ganz oder je Tag), Spritesheet + JSON-Atlas |
 | Ansicht → Sprache | Deutsch, English, Österreichisch (wird gemerkt) |
+| Rechte Leiste | Vorschau, Palette (Bibliothek), Bild, Aufräumen, Hilfslinien, Schablone, Code & Export |
+| 0 – 9 | Farbe mit dieser Nummer |
+| Alt + Ziehen in der Auswahl | Kopie verschieben |
+| Umschalt + Alt | Schablone: halten = vorn, ziehen = verschieben, Klick = Farbe |
+| Mausrad / Strg + Mausrad | scrollen / zoomen |
+| Strg/Umschalt + Klick auf Frame-Nummern | mehrere Frames markieren (Löschen, PNG/PDF/GIF) |
+| Ziehen in der Timeline | Frames bzw. Ebenen umsortieren |
+| Zahnrad in der Timeline | Lage, Zählung, Vorschaubilder, Dauer, Onion Skin |
+| G · F1 · F11 | Hilfslinien · Hilfe · Vollbild |
 
 Die Statusleiste zeigt, wie viele Kacheln tatsächlich Speicher belegen.
 
@@ -77,3 +85,15 @@ Die Statusleiste zeigt, wie viele Kacheln tatsächlich Speicher belegen.
   sich öffnen und exportieren. `crates/spritebit-core/tests/fixtures/web-projekt.json`
   wurde mit den Funktionen der Web-Version erzeugt; der Test dazu fällt auf, wenn
   sich eines der Formate verschiebt.
+
+## Sicherung
+
+Die laufende Sitzung wird im Einstellungsordner (`%APPDATA%\spritebit`)
+gesichert. Stürzt die App ab, ist beim nächsten Start alles wieder da; der
+Stand vom Sitzungsstart bleibt als Sicherung (Hilfe → Sicherung). Dort
+liegen auch Sprache, Timeline-Einstellungen, Hintergrund und die Schablone.
+
+## Schriften
+
+Für die Farb-Legende im Export wird Hack verwendet (aus `epaint_default_fonts`,
+MIT/Bitstream Vera License).

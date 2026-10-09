@@ -639,6 +639,8 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Zum ersten / letzten Frame", "To the first / last frame", "Zum erstn / letztn Frame"),
     ("Zuschneiden, Zentrieren, Leinwand (ohne zu skalieren) und ×2 / ÷2 wirken auf alle Frames.", "Trim, center, canvas (without scaling) and ×2 / ÷2 act on all frames.", "Zuaschneidn, Zentriern, Leinwaund (ohne Skaliern) und ×2 / ÷2 wirkn auf olle Frames."),
     ("{n} Pixel in dieser Farbe", "{n} pixels in this color", "{n} Pixel in dera Farb"),
+    // ── Auswahl-Leiste ──
+    ("Alles", "All", "Ois"),
 ];
 
 /// Fehler beim Laden in der gewählten Sprache.
