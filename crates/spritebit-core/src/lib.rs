@@ -27,6 +27,7 @@
 //! * [`builtin`] — die eingebauten Paletten der Web-Version
 
 pub mod builtin;
+pub mod calc;
 pub mod cels;
 pub mod cleanup;
 pub mod codegen;

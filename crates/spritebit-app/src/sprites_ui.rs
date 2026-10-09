@@ -149,9 +149,9 @@ impl SpritebitApp {
                         ui.end_row();
                         ui.label(tr("Größe"));
                         ui.horizontal(|ui| {
-                            ui.add(egui::DragValue::new(w).range(1..=MAX_SIDE));
+                            ui.add(egui::DragValue::new(w).range(1..=MAX_SIDE).custom_parser(spritebit_core::calc::eval));
                             ui.label("×");
-                            ui.add(egui::DragValue::new(h).range(1..=MAX_SIDE));
+                            ui.add(egui::DragValue::new(h).range(1..=MAX_SIDE).custom_parser(spritebit_core::calc::eval));
                         });
                         ui.end_row();
                     });
@@ -182,9 +182,9 @@ impl SpritebitApp {
                     ui.heading(tr("Leinwand ändern"));
                     ui.horizontal(|ui| {
                         ui.label(tr("Breite"));
-                        ui.add(egui::DragValue::new(w).range(1..=MAX_SIDE));
+                        ui.add(egui::DragValue::new(w).range(1..=MAX_SIDE).custom_parser(spritebit_core::calc::eval));
                         ui.label(tr("Höhe"));
-                        ui.add(egui::DragValue::new(h).range(1..=MAX_SIDE));
+                        ui.add(egui::DragValue::new(h).range(1..=MAX_SIDE).custom_parser(spritebit_core::calc::eval));
                     });
                     ui.horizontal(|ui| {
                         ui.label(tr("Anker"));

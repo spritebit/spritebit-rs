@@ -303,9 +303,9 @@ impl SpritebitApp {
         }
         ui.label(tr("Leinwand"));
         ui.horizontal(|ui| {
-            ui.add(egui::DragValue::new(&mut self.image.resize_w).range(1..=spritebit_core::MAX_SIDE));
+            ui.add(egui::DragValue::new(&mut self.image.resize_w).range(1..=spritebit_core::MAX_SIDE).custom_parser(spritebit_core::calc::eval));
             ui.label("×");
-            ui.add(egui::DragValue::new(&mut self.image.resize_h).range(1..=spritebit_core::MAX_SIDE));
+            ui.add(egui::DragValue::new(&mut self.image.resize_h).range(1..=spritebit_core::MAX_SIDE).custom_parser(spritebit_core::calc::eval));
             ui.label("px");
         });
         ui.horizontal(|ui| {
