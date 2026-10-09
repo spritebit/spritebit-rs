@@ -231,8 +231,20 @@ impl SpritebitApp {
     /// Zeiger im Verschieben-Modus. Gibt `true` zurück, wenn der Modus den
     /// Zeiger genommen hat (dann wird nicht gemalt).
     pub(crate) fn guide_pointer(&mut self, pointer: Option<Pos2>, pressed: bool, released: bool, over: bool, origin: Pos2, zoom: f32) -> bool {
+        // Hand-Werkzeug: eine Linie unter dem Zeiger lässt sich auch ohne den
+        // Verschieben-Modus greifen (wie im Web). Daneben verschiebt die Hand.
         if !self.guides.edit {
-            return false;
+            if self.tool != crate::tools_ui::Tool::Pan || !self.guides.show {
+                return false;
+            }
+            if pressed && over {
+                if let Some(p) = pointer {
+                    self.guides.drag = self.guide_hit(p, origin, zoom);
+                }
+            }
+            if self.guides.drag.is_none() {
+                return false;
+            }
         }
         let (w, h) = (self.sprite().width as i64, self.sprite().height as i64);
         if pressed && over {

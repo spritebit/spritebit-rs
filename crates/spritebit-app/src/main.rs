@@ -737,7 +737,8 @@ impl SpritebitApp {
                 self.pan += scroll;
             }
         }
-        let panning = middle || (space && primary) || (self.tool == Tool::Pan && primary);
+        // Hand auf einer Hilfslinie zieht die Linie, nicht die Ansicht (guides_ui.rs).
+        let panning = middle || (space && primary) || (self.tool == Tool::Pan && primary && self.guides.drag.is_none());
         if panning && (resp.hovered() || resp.dragged()) {
             self.pan += delta;
         }
@@ -1230,6 +1231,23 @@ mod tests {
         drag(&mut h, (2.0, 5.0), (2.0, 5.0));
         assert_eq!(px(&h, 2, 5), 5);
         assert_eq!(px(&h, 61, 5), 5, "64 - 1 - 2");
+    }
+
+    #[test]
+    fn hand_zieht_hilfslinie() {
+        let mut h = app();
+        h.state_mut().tool = Tool::Pan;
+        h.state_mut().project.sprite_mut().guides.v = vec![10];
+        h.state_mut().guides.show = true;
+        let pan = h.state().pan;
+        // at() zielt auf die Zellmitte: 9.5 + 0.5 liegt genau auf der Linie bei x = 10.
+        drag(&mut h, (9.5, 5.0), (14.5, 5.0));
+        assert_eq!(h.state().sprite().guides.v, vec![15], "Linie mitgezogen");
+        assert_eq!(h.state().pan, pan, "Ansicht nicht verschoben");
+        // Neben einer Linie verschiebt die Hand wie gewohnt.
+        drag(&mut h, (30.0, 30.0), (34.0, 30.0));
+        assert_ne!(h.state().pan, pan);
+        assert_eq!(h.state().sprite().guides.v, vec![15]);
     }
 
     #[test]
