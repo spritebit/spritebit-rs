@@ -18,10 +18,16 @@ signiert ist: „Weitere Informationen“ → „Trotzdem ausführen“.
 
 ## Neue Version veröffentlichen
 
-```
-git tag v0.2.0
-git push origin v0.2.0
-```
+1. In `Cargo.toml` (Abschnitt `[workspace.package]`) die Version anheben, z. B. `0.2.0`,
+   und committen. Sie steht in Titelleiste, Hilfe, „Über spritebit“ und den
+   Dateieigenschaften der .exe.
+2. Den passenden Tag pushen:
+   ```
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+
+Passt der Tag nicht zur Version in `Cargo.toml`, bricht der Release-Lauf ab.
 
 GitHub Actions (`.github/workflows/release.yml`) testet, baut und hängt
 `spritebit-windows-x64.zip` an die Release. Der Download-Link oben zeigt immer

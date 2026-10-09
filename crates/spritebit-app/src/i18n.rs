@@ -688,6 +688,9 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("{n} Pixel in dieser Farbe", "{n} pixels in this color", "{n} Pixel in dera Farb"),
     // ── Auswahl-Leiste ──
     ("Alles", "All", "Ois"),
+    // ── Über ──
+    ("© 2026 Marco Jan · freie Software unter der MIT-Lizenz", "© 2026 Marco Jan · free software under the MIT license", "© 2026 Marco Jan · freie Software unta da MIT-Lizenz"),
+    ("Neue Versionen auf GitHub", "New versions on GitHub", "Neiche Versionen auf GitHub"),
     // ── Reiter ──
     ("Reiter schließen (Mittelklick) — der Sprite bleibt im Projekt", "Close tab (middle click) — the sprite stays in the project", "Reiter zuamochn (Mittelklick) — da Sprite bleibt im Projekt"),
     ("Reiter schließen", "Close tab", "Reiter zuamochn"),

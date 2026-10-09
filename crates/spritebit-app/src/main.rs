@@ -39,7 +39,7 @@ fn main() -> eframe::Result {
     i18n::load();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("spritebit")
+            .with_title(format!("spritebit {VERSION}"))
             // Fenster- und Taskleisten-Icon; das der .exe bettet build.rs ein.
             .with_icon(eframe::icon_data::from_png_bytes(include_bytes!("../assets/app/spritebit-256.png")).expect("gültiges PNG"))
             .with_inner_size([1280.0, 800.0])
@@ -71,6 +71,8 @@ pub(crate) const ZOOM_MAX: f32 = 64.0;
 const GRID_FROM: f32 = 8.0;
 /// Dateiendung des eigenen Formats.
 const EXT: &str = "spritebit";
+/// Version aus Cargo.toml — steht in Titelleiste, Hilfe und „Über“.
+pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Die Textur der Zeichenfläche und wofür sie gerechnet wurde. Ändert sich
 /// nichts davon, wird sie nicht neu gerechnet.
@@ -435,7 +437,7 @@ impl SpritebitApp {
             .as_ref()
             .and_then(|p| p.file_name())
             .map_or_else(|| tr("Unbenannt").to_string(), |n| n.to_string_lossy().into_owned());
-        let title = format!("{}{} — spritebit", file, if self.dirty { " *" } else { "" });
+        let title = format!("{}{} — spritebit {VERSION}", file, if self.dirty { " *" } else { "" });
         if title != self.title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
             self.title = title;
@@ -890,8 +892,9 @@ impl SpritebitApp {
                 .open(&mut self.about_open)
                 .show(ctx, |ui| {
                     ui.label(tr("spritebit — Pixel-Art-Editor"));
-                    ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
-                    ui.label("© 2026 Marco Jan");
+                    ui.strong(format!("Version {VERSION}"));
+                    ui.label(tr("© 2026 Marco Jan · freie Software unter der MIT-Lizenz"));
+                    ui.hyperlink_to(tr("Neue Versionen auf GitHub"), "https://github.com/spritebit/spritebit-rs/releases");
                 });
         }
         let mut dismiss = false;

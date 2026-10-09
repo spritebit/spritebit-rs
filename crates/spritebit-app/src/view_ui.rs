@@ -203,6 +203,7 @@ impl SpritebitApp {
         let (mut save_backup, mut restore_backup) = (false, false);
         egui::Window::new(tr("Hilfe")).open(&mut open).default_size([560.0, 620.0]).show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.weak(format!("spritebit {}", crate::VERSION));
                 ui.label(tr("Pixel-Editor mit Foto-Vorlage. Du malst frei — oder paust ein Foto als Schablone ab und lässt es automatisch zu einem sauberen Sprite verarbeiten."));
                 for (title, lines) in help_sections() {
                     ui.add_space(8.0);
