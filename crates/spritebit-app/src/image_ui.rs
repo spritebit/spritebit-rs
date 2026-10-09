@@ -5,11 +5,15 @@
 //! Inhalt wird dafür angehoben), sonst auf den ganzen Sprite.
 //!
 //! Aufräumen: Hintergrund entfernen, glätten, Outline — auf die aktive Zelle.
+//!
+//! Licht: Lichtquelle aus 8 Richtungen, Kantenlicht und Schlagschatten — auf
+//! die aktive Zelle, mit Auswahl nur darin.
 
 use eframe::egui;
 use spritebit_core::selection::{Clip, Selection};
 use spritebit_core::transform::{self as tf, TransformResult};
-use spritebit_core::{cleanup, Image, Rgb};
+use spritebit_core::light::{self, LightDir, LightOpts};
+use spritebit_core::{cleanup, Image, Palette, Rgb};
 
 use crate::i18n::{tr, trf};
 use crate::SpritebitApp;
@@ -33,6 +37,11 @@ pub(crate) struct ImagePanel {
     pub bg_tolerance: f64,
     pub outline_color: Rgb,
     pub outline_thickness: u32,
+    /// Woher das Licht kommt.
+    pub light_dir: LightDir,
+    pub light: LightOpts,
+    pub cast_color: Rgb,
+    pub cast_distance: u32,
 }
 
 impl Default for ImagePanel {
@@ -47,6 +56,10 @@ impl Default for ImagePanel {
             bg_tolerance: 0.25,
             outline_color: [0x1a, 0x1a, 0x1a],
             outline_thickness: 1,
+            light_dir: (-1, -1),
+            light: LightOpts::default(),
+            cast_color: [0x1a, 0x1a, 0x1a],
+            cast_distance: 1,
         }
     }
 }
@@ -209,6 +222,7 @@ impl SpritebitApp {
         egui::CollapsingHeader::new(tr("Palette")).id_salt("p-palette").default_open(true).show(ui, |ui| self.palette_library(ui));
         egui::CollapsingHeader::new(tr("Bild")).id_salt("p-image").default_open(true).show(ui, |ui| self.image_panel(ui));
         egui::CollapsingHeader::new(tr("Aufräumen")).id_salt("p-cleanup").show(ui, |ui| self.cleanup_panel(ui));
+        egui::CollapsingHeader::new(tr("Licht")).id_salt("p-light").show(ui, |ui| self.light_panel(ui));
         egui::CollapsingHeader::new(tr("Hilfslinien")).id_salt("p-guides").show(ui, |ui| self.guides_panel(ui));
         egui::CollapsingHeader::new(tr("Schablone")).id_salt("p-template").show(ui, |ui| self.template_panel(ui));
         // „Exportieren …“ im Menü klappt dieses Panel auf und scrollt hin.
@@ -356,6 +370,139 @@ impl SpritebitApp {
                 if let Some(n) = self.clean(|img, _, _| cleanup::outline(img, value, th)) {
                     self.hint = Some(if n > 0 { trf("Outline gezeichnet — {n} Pixel.", &[("n", &n)]) } else { tr("Keine Outline nötig — Sprite leer?").into() });
                 }
+            }
+        });
+    }
+
+    /// Ein Licht-Schritt auf der aktiven Zelle. Anders als [`Self::clean`]
+    /// bleibt die Auswahl — sie begrenzt, wo das Licht wirkt.
+    fn light_step(&mut self, f: impl FnOnce(&mut Image, &Palette, &mut Vec<Rgb>, &dyn Fn(i64, i64) -> bool) -> usize) -> Option<usize> {
+        self.finish_rotate();
+        self.commit_float();
+        if !self.layer_ok() {
+            return None;
+        }
+        self.step();
+        let pal = self.project.current_palette();
+        let sel = self.selection.clone();
+        let inside = move |x: i64, y: i64| sel.as_ref().is_none_or(|s| s.contains(x, y));
+        let sp = self.project.sprite_mut();
+        let mut free = std::mem::take(&mut sp.free);
+        let n = f(sp.active(), &pal, &mut free, &inside);
+        sp.free = free;
+        if n > 0 {
+            self.changed();
+        } else {
+            let cur = self.project.current;
+            self.histories[cur].drop_last();
+        }
+        Some(n)
+    }
+
+    pub(crate) fn apply_light(&mut self) {
+        let (dir, opts) = (self.image.light_dir, self.image.light);
+        let mut r = (0, 0);
+        let done = self.light_step(|img, pal, free, inside| {
+            r = light::light(img, pal, free, dir, opts, inside);
+            r.0 + r.1
+        });
+        if let Some(n) = done {
+            self.hint = Some(if n > 0 {
+                trf("Licht gesetzt — {lit} Pixel heller, {shaded} dunkler.", &[("lit", &r.0), ("shaded", &r.1)])
+            } else {
+                tr("Nichts beleuchtet — keine Kanten oder keine passenden Palettenfarben.").into()
+            });
+        }
+    }
+
+    pub(crate) fn apply_drop_shadow(&mut self) {
+        let (dir, dist) = (self.image.light_dir, self.image.cast_distance);
+        // Farbe wie beim Farbwähler: Palettennummer, sonst freie Farbe.
+        let keep = self.color;
+        self.set_rgb(self.image.cast_color);
+        let value = std::mem::replace(&mut self.color, keep);
+        if let Some(n) = self.light_step(|img, _, _, inside| light::drop_shadow(img, dir, value, dist, inside)) {
+            self.hint = Some(if n > 0 {
+                trf("Schlagschatten gemalt — {n} Pixel.", &[("n", &n)])
+            } else {
+                tr("Kein Platz für einen Schatten — Sprite leer oder Rand erreicht?").into()
+            });
+        }
+    }
+
+    pub(crate) fn light_panel(&mut self, ui: &mut egui::Ui) {
+        ui.label(tr("Lichtquelle"));
+        const DIRS: [[(i32, i32, &str, &str); 3]; 3] = [
+            [(-1, -1, "↖", "Licht von oben links"), (0, -1, "↑", "Licht von oben"), (1, -1, "↗", "Licht von oben rechts")],
+            [(-1, 0, "←", "Licht von links"), (0, 0, "☀", ""), (1, 0, "→", "Licht von rechts")],
+            [(-1, 1, "↙", "Licht von unten links"), (0, 1, "↓", "Licht von unten"), (1, 1, "↘", "Licht von unten rechts")],
+        ];
+        egui::Grid::new("light-dirs").spacing([2.0, 2.0]).show(ui, |ui| {
+            for row in DIRS {
+                for (dx, dy, arrow, tip) in row {
+                    if dx == 0 && dy == 0 {
+                        let sun = egui::RichText::new(arrow).color(ui.visuals().selection.bg_fill);
+                        ui.add_sized([28.0, 24.0], egui::Label::new(sun));
+                        continue;
+                    }
+                    let on = self.image.light_dir == (dx, dy);
+                    if ui.add_sized([28.0, 24.0], egui::Button::selectable(on, arrow)).on_hover_text(tr(tip)).clicked() {
+                        self.image.light_dir = (dx, dy);
+                    }
+                }
+                ui.end_row();
+            }
+        });
+        let o = &mut self.image.light;
+        ui.horizontal(|ui| {
+            ui.label(tr("Stärke"));
+            ui.add(egui::Slider::new(&mut o.amount, 0.05..=0.4).custom_formatter(|v, _| format!("{:.0} %", v * 100.0)));
+        });
+        ui.horizontal(|ui| {
+            ui.label(tr("Breite"));
+            egui::ComboBox::from_id_salt("light-width")
+                .width(50.0)
+                .selected_text(format!("{} px", o.width))
+                .show_ui(ui, |ui| {
+                    for w in 1..=3 {
+                        ui.selectable_value(&mut o.width, w, format!("{w} px"));
+                    }
+                })
+                .response
+                .on_hover_text(tr("Wie viele Pixel vom Rand her beleuchtet bzw. schattiert werden"));
+        });
+        ui.checkbox(&mut o.highlight, tr("Lichtkante (heller)"));
+        ui.checkbox(&mut o.shadow, tr("Schattenkante (dunkler)"));
+        ui.checkbox(&mut o.allow_free, tr("Auch Farben außerhalb der Palette")).on_hover_text(tr(
+            "Fehlt in der Palette eine passende hellere oder dunklere Farbe, wird eine freie Farbe berechnet — sonst bleibt der Pixel, wie er ist",
+        ));
+        if ui
+            .button(tr("Licht anwenden"))
+            .on_hover_text(tr("Kanten zur Lichtquelle hin aufhellen, abgewandte Kanten abdunkeln — auf der aktiven Zelle, mit Auswahl nur darin"))
+            .clicked()
+        {
+            self.apply_light();
+        }
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.label(tr("Schlagschatten"));
+            egui::color_picker::color_edit_button_srgb(ui, &mut self.image.cast_color).on_hover_text(tr("Schattenfarbe"));
+            egui::ComboBox::from_id_salt("cast-dist")
+                .width(50.0)
+                .selected_text(format!("{} px", self.image.cast_distance))
+                .show_ui(ui, |ui| {
+                    for d in 1..=3 {
+                        ui.selectable_value(&mut self.image.cast_distance, d, format!("{d} px"));
+                    }
+                })
+                .response
+                .on_hover_text(tr("Wie weit der Schatten fällt"));
+            if ui
+                .button(tr("Werfen"))
+                .on_hover_text(tr("Silhouette von der Lichtquelle weg versetzt als Schatten in leere Pixel malen"))
+                .clicked()
+            {
+                self.apply_drop_shadow();
             }
         });
     }

@@ -19,6 +19,7 @@
 //! * [`selection`] — Auswahl (Rechteck, Lasso, Farbe), kopieren, einfügen
 //! * [`cels`] — Zellen-Bereiche der Timeline: verschieben, kopieren, verknüpfen
 //! * [`cleanup`] — Hintergrund entfernen, glätten, Outline, Median-Cut
+//! * [`light`] — Lichtquelle: Kantenlicht und Schlagschatten
 //! * [`export`] — PNG, GIF, Spritesheet mit JSON-Atlas
 //! * [`template`] — Schablone: Lage, Pipette, aufs Raster übernehmen
 //! * [`transform`] — spiegeln, drehen, zuschneiden, Leinwand, skalieren
@@ -34,6 +35,7 @@ pub mod export;
 pub mod history;
 pub mod image;
 pub mod io;
+pub mod light;
 pub mod onion;
 pub mod palette;
 pub mod palops;

@@ -1273,6 +1273,38 @@ mod tests {
     }
 
     #[test]
+    fn licht_und_schlagschatten() {
+        let mut h = app();
+        // 4×4-Block aus Farbe 3 (#999999) bei (10,10)
+        for y in 10..14 {
+            for x in 10..14 {
+                h.state_mut().project.sprite_mut().active().set(x, y, 3);
+            }
+        }
+        h.run();
+        h.get_by_label("Licht").click();
+        h.run();
+        h.get_by_label("Licht anwenden").click();
+        h.run();
+        assert_eq!(px(&h, 10, 10), 2, "oben links heller (#CCCCCC)");
+        assert_ne!(px(&h, 13, 13), 3, "unten rechts dunkler");
+        assert_eq!(px(&h, 11, 11), 3, "Mitte bleibt");
+        h.state_mut().undo();
+        assert_eq!(px(&h, 10, 10), 3);
+
+        // Mit Auswahl nur darin.
+        h.state_mut().selection = Some(Selection::rect(10, 10, 11, 13));
+        h.state_mut().apply_light();
+        assert_eq!(px(&h, 10, 10), 2);
+        assert_eq!(px(&h, 13, 13), 3, "außerhalb der Auswahl unberührt");
+        h.state_mut().deselect();
+
+        h.state_mut().apply_drop_shadow();
+        assert_ne!(px(&h, 14, 14), 0, "Schatten fällt nach unten rechts");
+        assert_eq!(px(&h, 9, 9), 0);
+    }
+
+    #[test]
     fn sprite_anlegen_duplizieren_loeschen() {
         let mut h = app();
         h.state_mut().open_new_sprite();
