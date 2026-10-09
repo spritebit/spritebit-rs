@@ -651,6 +651,9 @@ impl SpritebitApp {
                     self.about_open = true;
                 }
             });
+            // Immer sichtbar, rechts in der Leiste (wie im Web): Hintergrund
+            // und Vollbild. Im Menü „Ansicht“ gibt es beides auch.
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| self.view_quick(ui));
         });
     }
 
@@ -1316,6 +1319,24 @@ mod tests {
         let list = guides_ui::parse_layouts(&guides_ui::layouts_json(&h.state().guides.layouts));
         assert_eq!(list, h.state().guides.layouts);
         assert_eq!((list[0].width, list[0].height), (w, hh));
+    }
+
+    #[test]
+    fn dunkel_hell_und_vollbild_immer_in_der_leiste() {
+        let mut h = app();
+        assert!(!h.state().view.light);
+        h.get_by_label("Hell").click();
+        h.run();
+        assert!(h.state().view.light, "Hell");
+        h.get_by_label("Dunkel").click();
+        h.run();
+        assert!(!h.state().view.light, "Dunkel");
+        h.get_by_label("Vollbild").click();
+        h.run();
+        assert!(h.state().view.fullscreen);
+        h.get_by_label("Vollbild beenden").click();
+        h.run();
+        assert!(!h.state().view.fullscreen);
     }
 
     #[test]

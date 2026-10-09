@@ -99,6 +99,28 @@ impl SpritebitApp {
         }
     }
 
+    /// Rechts in der Menüleiste: Vollbild und Dunkel/Hell, immer zu sehen.
+    /// (Rechts nach links gelegt — der erste Knopf steht ganz rechts.)
+    pub(crate) fn view_quick(&mut self, ui: &mut egui::Ui) {
+        let c = ui.visuals().text_color();
+        let (icon, label, tip) = if self.view.fullscreen {
+            (crate::icons::SHRINK, tr("Vollbild beenden"), tr("Vollbild beenden (F11 oder Esc)"))
+        } else {
+            (crate::icons::EXPAND, tr("Vollbild"), tr("Vollbild — nur noch spritebit auf dem Bildschirm (F11)"))
+        };
+        if ui.add(egui::Button::image_and_text(crate::icons::image(icon, c), label)).on_hover_text(tip).clicked() {
+            self.toggle_fullscreen(ui.ctx());
+        }
+        ui.add_space(6.0);
+        // Rechts nach links: erst „Hell“, dann „Dunkel“ — auf dem Bildschirm also Dunkel | Hell.
+        if ui.add(egui::Button::selectable(self.view.light, tr("Hell"))).on_hover_text(tr("Heller Hintergrund")).clicked() {
+            self.set_light(true);
+        }
+        if ui.add(egui::Button::selectable(!self.view.light, tr("Dunkel"))).on_hover_text(tr("Dunkler Hintergrund")).clicked() {
+            self.set_light(false);
+        }
+    }
+
     /// Einträge im Menü „Ansicht“.
     pub(crate) fn view_menu(&mut self, ui: &mut egui::Ui) {
         ui.menu_button(tr("Hintergrund"), |ui| {

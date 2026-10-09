@@ -367,6 +367,12 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("„Für Godot exportieren“ schreibt einen Ordner mit Kachelbild (PNG), Szene (.tscn mit TileMapLayer) und JSON — in den Godot-Projektordner legen (Godot 4.3 oder neuer).", "“Export for Godot” writes a folder with tile image (PNG), scene (.tscn with TileMapLayer) and JSON — put it into your Godot project folder (Godot 4.3 or newer).", ""),
     ("Alt + Klick (Kacheln setzen)", "Alt + click (place tiles)", ""),
     ("Kachel aufnehmen", "Pick a tile", ""),
+    // ── Schnellknöpfe in der Menüleiste (view_ui.rs) ──
+    ("Vollbild beenden", "Exit full screen", ""),
+    ("Vollbild beenden (F11 oder Esc)", "Exit full screen (F11 or Esc)", ""),
+    ("Vollbild — nur noch spritebit auf dem Bildschirm (F11)", "Full screen — nothing but spritebit on the screen (F11)", ""),
+    ("Heller Hintergrund", "Light background", ""),
+    ("Dunkler Hintergrund", "Dark background", ""),
     // ── Selbst aktualisieren (selfupdate.rs, update.rs) ──
     ("Der Ordner der App ist schreibgeschützt — bitte die neue Version von Hand laden.", "The app's folder is read-only — please download the new version by hand.", ""),
     ("Download fehlgeschlagen: {e}", "Download failed: {e}", ""),
