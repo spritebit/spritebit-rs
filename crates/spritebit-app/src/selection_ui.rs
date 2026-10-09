@@ -11,7 +11,15 @@ use spritebit_core::selection::{self, Clip, Handle, Selection};
 
 use crate::tools_ui::{Pointer, Tool};
 use crate::SpritebitApp;
-use crate::i18n::{tr, keys};
+use crate::i18n::{tr, trf, keys};
+
+/// Inhalt der Zwischenablage samt Herkunft der Farben.
+#[derive(Clone)]
+pub(crate) struct ClipSrc {
+    pub clip: Clip,
+    pub pal: spritebit_core::Palette,
+    pub free: Vec<spritebit_core::Rgb>,
+}
 
 /// Schwebender Inhalt: Pixel und wo ihre linke obere Ecke gerade liegt.
 pub(crate) struct Float {
@@ -244,13 +252,15 @@ impl SpritebitApp {
 
     pub(crate) fn copy_selection(&mut self) {
         let Some(sel) = &self.selection else { return };
-        self.clipboard = Some(match &self.float {
+        let clip = match &self.float {
             Some(f) => f.clip.clone(),
             None => {
                 let sp = self.project.sprite();
                 selection::copy(sp.target(), sel)
             }
-        });
+        };
+        let pal = self.project.current_palette();
+        self.clipboard = Some(ClipSrc { clip, pal, free: self.sprite().free.clone() });
     }
 
     pub(crate) fn cut_selection(&mut self) {
@@ -293,9 +303,33 @@ impl SpritebitApp {
     /// Zwischenablage einfügen — schwebend, an der Stelle der Auswahl oder
     /// links oben; danach mit der Maus an den Platz ziehen.
     pub(crate) fn paste_clipboard(&mut self) {
-        let Some(clip) = self.clipboard.clone() else { return };
+        self.paste_clipboard_as(false);
+    }
+
+    /// `keep_numbers` (Strg+Umschalt+V): Palettennummern unverändert übernehmen.
+    /// Sonst wird nach der Farbe übertragen, damit es aussieht wie im Original
+    /// (wie im Web, js/remap.js). Freie Farben gehören zu ihrem Sprite und
+    /// werden immer umgerechnet.
+    pub(crate) fn paste_clipboard_as(&mut self, keep_numbers: bool) {
+        let Some(src) = self.clipboard.clone() else { return };
         if !self.layer_ok() {
             return;
+        }
+        let to_pal = self.project.current_palette();
+        let same = src.pal.colors == to_pal.colors && src.free == self.sprite().free;
+        let into_mask = self.sprite().editing_mask();
+        let (clip, free, mapped) = if same || into_mask {
+            (src.clip.clone(), 0, 0)
+        } else {
+            let mut r = selection::Remap::new(&src.pal, &src.free, &to_pal, keep_numbers);
+            let sp = self.project.sprite_mut();
+            let clip = r.clip(&src.clip, &mut |c| sp.free_color(c));
+            (clip, r.free, r.mapped)
+        };
+        if free > 0 {
+            self.hint = Some(trf("Eingefügt mit den Farben des Originals — {n} davon gibt es in dieser Palette nicht, sie sind als freie Farben drin. Strg+Umschalt+V übernimmt stattdessen die Nummern.", &[("n", &free)]));
+        } else if mapped > 0 {
+            self.hint = Some(trf("Eingefügt mit den Farben des Originals — {n} Farben haben in dieser Palette eine andere Nummer und wurden umgerechnet. Strg+Umschalt+V übernimmt stattdessen die Nummern.", &[("n", &mapped)]));
         }
         let (x, y) = self.selection.as_ref().map_or((0, 0), |s| (s.x, s.y));
         self.deselect();
@@ -328,14 +362,19 @@ impl SpritebitApp {
             return;
         }
         let cmd = Modifiers::COMMAND;
-        let (all, copy, cut, paste) = ctx.input_mut(|i| {
+        let (all, copy, cut, paste_raw, paste) = ctx.input_mut(|i| {
             (
                 i.consume_key(cmd, Key::A),
                 i.consume_key(cmd, Key::C),
                 i.consume_key(cmd, Key::X),
+                // Strg+Umschalt+V zuerst: Nummern übernehmen statt Farben.
+                i.consume_key(cmd | Modifiers::SHIFT, Key::V),
                 i.consume_key(cmd, Key::V),
             )
         });
+        if paste_raw {
+            self.paste_clipboard_as(true);
+        }
         if all {
             self.select_all();
         }

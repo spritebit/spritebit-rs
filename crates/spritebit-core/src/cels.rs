@@ -125,6 +125,28 @@ pub fn copy(sp: &Sprite, r: CelRange) -> CelClip {
     CelClip { w: r.f1 - r.f0 + 1, h: r.l1 - r.l0 + 1, images, ids }
 }
 
+impl CelClip {
+    /// Alle Bilder der Kopie Pixel für Pixel umrechnen (Einfügen in einen
+    /// Sprite mit anderer Palette, siehe [`crate::selection::Remap`]).
+    pub fn map_pixels(&self, mut f: impl FnMut(crate::image::Px) -> crate::image::Px) -> CelClip {
+        let images = self
+            .images
+            .iter()
+            .map(|img| {
+                let mut out = Image::new(img.width(), img.height());
+                for (x, y, v) in img.pixels() {
+                    let m = f(v);
+                    if m != 0 {
+                        out.set(x, y, m);
+                    }
+                }
+                out
+            })
+            .collect();
+        CelClip { w: self.w, h: self.h, images, ids: self.ids.clone() }
+    }
+}
+
 /// Einfügen: erster Frame und OBERSTE Ebene der Kopie landen auf Frame `f`,
 /// Ebene `l_top`. Was über den Rand ginge, fällt weg; Bilder anderer Größe
 /// passen nicht (`None`). Gibt den belegten Bereich zurück.

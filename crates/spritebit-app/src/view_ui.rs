@@ -432,6 +432,7 @@ fn help_sections() -> Vec<(&'static str, Vec<&'static str>)> {
             tr("Auswahl (A) zieht ein Rechteck auf, Lasso (L) umfährt eine freie Form, Farbwahl (K) nimmt die zusammenhängende ähnliche Fläche."),
             tr("In die Auswahl fassen und ziehen hebt den Inhalt an — er schwebt, bis du ihn absetzt. Alt+Ziehen verschiebt eine Kopie."),
             tr("Pfeiltasten verschieben pixelweise. Esc oder ein Klick daneben hebt die Auswahl auf."),
+            tr("Einfügen in einen Sprite mit anderer Palette überträgt nach der Farbe — es sieht aus wie im Original. Strg+Umschalt+V übernimmt stattdessen die Nummern."),
             tr("Skalieren: an den acht Anfassern ziehen — Ecken ändern Breite und Höhe, Kanten nur eine; Umschalt hält das Seitenverhältnis. Pixel bleiben scharf, gerechnet wird immer vom Original."),
         ]),
         (tr("Bild"), vec![
@@ -494,6 +495,7 @@ fn help_keys() -> Vec<(&'static str, &'static str)> {
         (tr("Pfeiltasten"), tr("Auswahl pixelweise verschieben")),
         (tr("Anfasser ziehen"), tr("Auswahl skalieren (Umschalt: Seitenverhältnis halten)")),
         (tr("Strg + A / C / X / V"), tr("Alles · Kopieren · Ausschneiden · Einfügen")),
+        (tr("Strg + Umschalt + V"), tr("Einfügen mit den Nummern statt den Farben (andere Palette)")),
         (tr("Entf"), tr("Auswahl leeren")),
         ("Enter", tr("Drehung übernehmen · sonst Animation abspielen / anhalten")),
         (tr("Pos1 / Ende"), tr("Zum ersten / letzten Frame")),

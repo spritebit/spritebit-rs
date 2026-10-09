@@ -243,10 +243,22 @@ impl SpritebitApp {
             let linked = (r.l0..=r.l1).any(|l| (r.f0..=r.f1).any(|f| sp.is_linked(f, l)));
             let can_link = r.f1 > r.f0 || sp.frame > 0;
             if icons::button(ui, icons::COPY, tr("Zellen kopieren (Bereich per Shift-Klick)"), true).clicked() {
-                self.cel_clip = Some(cels::copy(self.project.sprite(), r));
+                let pal = self.project.current_palette();
+                self.cel_clip = Some((cels::copy(self.project.sprite(), r), pal, self.sprite().free.clone()));
             }
             if icons::button(ui, icons::PASTE, tr("Zellen an der aktiven Zelle einfügen"), self.cel_clip.is_some()).clicked() {
-                if let Some(clip) = self.cel_clip.clone() {
+                if let Some((clip, from_pal, from_free)) = self.cel_clip.clone() {
+                    // Andere Palette (oder andere freie Farben): nach der Farbe übertragen.
+                    let to_pal = self.project.current_palette();
+                    let clip = if from_pal.colors == to_pal.colors && from_free == self.sprite().free {
+                        clip
+                    } else {
+                        let mut r = spritebit_core::selection::Remap::new(&from_pal, &from_free, &to_pal, false);
+                        let sp = self.project.sprite_mut();
+                        let mapped = clip.map_pixels(|v| r.px(v, &mut |c| sp.free_color(c)));
+                        self.hint = Some(tr("Zellen eingefügt mit den Farben des Originals — die Nummern wurden an diese Palette angepasst.").into());
+                        mapped
+                    };
                     let mut used = None;
                     self.edit_sprite(|s| {
                         let (f, l) = (s.frame, s.layer);

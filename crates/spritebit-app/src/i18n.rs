@@ -413,6 +413,13 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Umschalt beim Malen: nur waagerecht, senkrecht oder 45°. Bei den Formen rastet die Linie ein, Rechteck und Ellipse werden Quadrat und Kreis.", "Shift while painting: only horizontal, vertical or 45°. For shapes the line snaps, rectangle and ellipse become square and circle.", ""),
     ("Umschalt + Malen", "Shift + paint", ""),
     ("Nur waagerecht, senkrecht oder 45° · Formen: einrasten, Quadrat, Kreis", "Only horizontal, vertical or 45° · shapes: snap, square, circle", ""),
+    // ── Einfügen über Paletten hinweg (selection_ui.rs, timeline.rs) ──
+    ("Eingefügt mit den Farben des Originals — {n} davon gibt es in dieser Palette nicht, sie sind als freie Farben drin. Strg+Umschalt+V übernimmt stattdessen die Nummern.", "Pasted with the original colours — {n} of them are not in this palette and came in as free colours. Ctrl+Shift+V keeps the numbers instead.", ""),
+    ("Eingefügt mit den Farben des Originals — {n} Farben haben in dieser Palette eine andere Nummer und wurden umgerechnet. Strg+Umschalt+V übernimmt stattdessen die Nummern.", "Pasted with the original colours — {n} colours have a different number in this palette and were converted. Ctrl+Shift+V keeps the numbers instead.", ""),
+    ("Zellen eingefügt mit den Farben des Originals — die Nummern wurden an diese Palette angepasst.", "Cels pasted with the original colours — the numbers were adjusted to this palette.", ""),
+    ("Einfügen in einen Sprite mit anderer Palette überträgt nach der Farbe — es sieht aus wie im Original. Strg+Umschalt+V übernimmt stattdessen die Nummern.", "Pasting into a sprite with a different palette carries the colours over — it looks like the original. Ctrl+Shift+V keeps the numbers instead.", ""),
+    ("Strg + Umschalt + V", "Ctrl + Shift + V", ""),
+    ("Einfügen mit den Nummern statt den Farben (andere Palette)", "Paste with the numbers instead of the colours (other palette)", ""),
     // ── Kacheln (tiles_ui.rs) ──
     ("Kacheln", "Tiles", "Kachln"),
     ("Kachelgröße", "Tile size", ""),

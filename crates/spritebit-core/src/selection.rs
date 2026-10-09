@@ -223,6 +223,65 @@ pub fn scale_clip(clip: &Clip, w: u32, h: u32) -> Clip {
     Clip { w, h, data: scale_nearest(&clip.data, clip.w, clip.h, w, h) }
 }
 
+/// Pixel von einer Palette in eine andere übertragen (wie js/remap.js).
+/// Nach der FARBE: gibt es sie in der Ziel-Palette, bekommt der Pixel deren
+/// Nummer, sonst wird sie eine freie Farbe des Ziel-Sprites. Mit
+/// `keep_numbers` (Strg+Umschalt+V) bleiben Palettennummern, nur freie Farben
+/// werden umgerechnet — die gehören ja zu ihrem Sprite.
+pub struct Remap<'a> {
+    from_pal: &'a Palette,
+    from_free: &'a [Rgb],
+    index: std::collections::HashMap<Rgb, Px>,
+    keep_numbers: bool,
+    memo: std::collections::HashMap<Px, Px>,
+    /// Wie viele verschiedene Farben im Ziel neu als freie Farbe angelegt wurden.
+    pub free: usize,
+    /// Wie viele verschiedene Farben eine andere Nummer bekamen.
+    pub mapped: usize,
+}
+
+impl<'a> Remap<'a> {
+    pub fn new(from_pal: &'a Palette, from_free: &'a [Rgb], to_pal: &Palette, keep_numbers: bool) -> Self {
+        let mut index = std::collections::HashMap::new();
+        for (i, &c) in to_pal.colors.iter().enumerate() {
+            index.entry(c).or_insert(i as Px + 1);
+        }
+        Remap { from_pal, from_free, index, keep_numbers, memo: std::collections::HashMap::new(), free: 0, mapped: 0 }
+    }
+
+    /// Ein Pixel; `free_color` legt im Ziel eine freie Farbe an.
+    pub fn px(&mut self, v: Px, free_color: &mut impl FnMut(Rgb) -> Px) -> Px {
+        if v == 0 || (self.keep_numbers && v < FREE_BASE) {
+            return v;
+        }
+        if let Some(&m) = self.memo.get(&v) {
+            return m;
+        }
+        let out = match rgb_of(v, self.from_pal, self.from_free) {
+            None => v,
+            Some(c) => match self.index.get(&c) {
+                Some(&n) if !self.keep_numbers => {
+                    if n != v {
+                        self.mapped += 1;
+                    }
+                    n
+                }
+                _ => {
+                    self.free += 1;
+                    free_color(c)
+                }
+            },
+        };
+        self.memo.insert(v, out);
+        out
+    }
+
+    /// Ein ausgeschnittenes Stück übertragen.
+    pub fn clip(&mut self, clip: &Clip, free_color: &mut impl FnMut(Rgb) -> Px) -> Clip {
+        Clip { w: clip.w, h: clip.h, data: clip.data.iter().map(|&v| self.px(v, free_color)).collect() }
+    }
+}
+
 /// RGB eines Pixels; `None` für transparent.
 pub fn rgb_of(px: Px, pal: &Palette, free: &[Rgb]) -> Option<Rgb> {
     if px >= FREE_BASE {
@@ -338,6 +397,32 @@ pub fn paste(img: &mut Image, clip: &Clip, x: i64, y: i64) {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn nach_der_farbe_uebertragen_wie_im_web() {
+        let grau = Palette::new("grau", vec![[255, 255, 255], [170, 170, 170], [85, 85, 85], [0, 0, 0]]);
+        let bunt = Palette::new("bunt", vec![[0, 0, 0], [255, 0, 0], [0, 255, 0], [170, 170, 170]]);
+        let mut free: Vec<Rgb> = Vec::new();
+        let mut new_free = |c: Rgb| {
+            free.push(c);
+            FREE_BASE + free.len() as Px - 1
+        };
+        let mut r = Remap::new(&grau, &[], &bunt, false);
+        let c = r.clip(&Clip { w: 5, h: 1, data: vec![0, 2, 4, 1, 3] }, &mut new_free);
+        assert_eq!(c.data, vec![0, 4, 1, FREE_BASE, FREE_BASE + 1]);
+        assert_eq!((r.mapped, r.free), (2, 2));
+        assert_eq!(free, vec![[255, 255, 255], [85, 85, 85]]);
+        // Nummern behalten: Palette bleibt, freie Farben werden trotzdem umgerechnet.
+        let src_free = vec![[1, 2, 3]];
+        let mut free2: Vec<Rgb> = vec![[9, 9, 9]];
+        let mut r = Remap::new(&grau, &src_free, &bunt, true);
+        let c = r.clip(&Clip { w: 2, h: 1, data: vec![3, FREE_BASE] }, &mut |c| {
+            free2.push(c);
+            FREE_BASE + free2.len() as Px - 1
+        });
+        assert_eq!(c.data, vec![3, FREE_BASE + 1]);
+    }
+
 
     #[test]
     fn anfasser_wie_im_web() {

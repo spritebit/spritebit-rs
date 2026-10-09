@@ -32,7 +32,7 @@ use std::path::{Path, PathBuf};
 
 use eframe::egui::{self, Color32, Key, Modifiers, Pos2, Sense, Stroke, Vec2};
 use spritebit_core::{
-    export_web, import_web, load_native, render_rgba_step, save_native, selection, Clip, History, Project, Px, Rect,
+    export_web, import_web, load_native, render_rgba_step, save_native, selection, History, Project, Px, Rect,
     Selection, Sprite,
 };
 use tools_ui::{Pointer, Tool};
@@ -164,7 +164,9 @@ struct SpritebitApp {
     /// Angehobener Inhalt der Auswahl, der gerade verschoben wird.
     float: Option<selection_ui::Float>,
     sel_drag: Option<selection_ui::SelDrag>,
-    clipboard: Option<Clip>,
+    /// Zwischenablage: das Stück und woher seine Farben stammen (Palette und
+    /// freie Farben des Quell-Sprites) — siehe selection_ui.rs `paste_clipboard`.
+    clipboard: Option<selection_ui::ClipSrc>,
     /// Toleranz von Farbwahl und Zauberstab, 0.0–1.0.
     tolerance: f64,
     /// Symmetrie: an der senkrechten (x) bzw. waagerechten (y) Mitte spiegeln.
@@ -196,7 +198,7 @@ struct SpritebitApp {
     /// Bereich in der Timeline (Shift-Klick) und sein Ausgangspunkt.
     cel_range: Option<spritebit_core::cels::CelRange>,
     cel_anchor: Option<(usize, usize)>,
-    cel_clip: Option<spritebit_core::cels::CelClip>,
+    cel_clip: Option<(spritebit_core::cels::CelClip, spritebit_core::Palette, Vec<spritebit_core::Rgb>)>,
     /// Welcher Tag gerade bearbeitet wird.
     tag_edit: Option<usize>,
     /// Ebene, die gerade umbenannt wird, und der Name im Feld.
@@ -1377,6 +1379,33 @@ mod tests {
         h.get_by_label("Vollbild beenden").click();
         h.run();
         assert!(!h.state().view.fullscreen);
+    }
+
+    #[test]
+    fn einfuegen_in_andere_palette_behaelt_die_farben() {
+        use spritebit_core::selection::rgb_of;
+        let mut h = app();
+        h.state_mut().project.sprite_mut().palette = "graustufen".into();
+        for x in 0..4u32 {
+            h.state_mut().project.sprite_mut().active().set(x, 0, x as u16 + 1);
+        }
+        let before: Vec<_> = {
+            let s = h.state();
+            let pal = s.project.current_palette();
+            (0..4).map(|x| rgb_of(s.sprite().cel(0, 0).get(x, 0), &pal, &s.sprite().free)).collect()
+        };
+        h.state_mut().selection = Some(spritebit_core::selection::Selection::rect(0, 0, 3, 0));
+        h.state_mut().copy_selection();
+        h.state_mut().create_sprite("Bunt".into(), "golden".into(), 16, 16);
+        h.run();
+        assert_eq!(h.state().sprite().palette, "golden");
+        h.state_mut().paste_clipboard();
+        h.state_mut().deselect();
+        let s = h.state();
+        let pal = s.project.current_palette();
+        let after: Vec<_> = (0..4).map(|x| rgb_of(s.sprite().cel(0, 0).get(x, 0), &pal, &s.sprite().free)).collect();
+        assert_eq!(after, before, "sieht aus wie im Original");
+        assert!(s.hint.as_deref().is_some_and(|t| t.contains("Farben des Originals")));
     }
 
     #[test]

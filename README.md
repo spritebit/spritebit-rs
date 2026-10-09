@@ -87,6 +87,7 @@ cargo build --release           # schnelle Fassung (target/release)
 | A L K W | Auswahl, Lasso, Farbwahl, Zauberstab |
 | Strg+A / C / X / V, Entf, Esc, Pfeile | Alles, Kopieren, Ausschneiden, Einfügen, Leeren, Aufheben, Verschieben |
 | Umschalt + Malen | nur waagerecht, senkrecht oder 45°; Linie rastet ein, Rechteck/Ellipse werden Quadrat/Kreis |
+| Einfügen in einen Sprite mit anderer Palette | überträgt nach der Farbe (sieht aus wie im Original); Strg+Umschalt+V übernimmt die Nummern |
 | Anfasser an der Auswahl | skalieren (Ecken/Kanten, Umschalt hält das Seitenverhältnis, Pixel bleiben scharf) |
 | Füllen → Grenzen: alle Ebenen | Vorlage auf eigener Ebene ausmalen — die sichtbaren Ebenen geben die Grenzen vor |
 | Mittlere Taste oder Leertaste + Ziehen | Fläche verschieben |
