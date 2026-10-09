@@ -253,7 +253,7 @@ pub fn spray(x: i64, y: i64, r: f64, count: usize, rng: &mut Rng) -> Vec<(i64, i
         .collect()
 }
 
-/// Pixel-perfect wie in Aseprite: beim freihändigen Zeichnen mit 1 Pixel
+/// Pixel-perfect: beim freihändigen Zeichnen mit 1 Pixel
 /// entstehen an Treppenstufen L-Ecken — zwei Pixel, wo die Linie nur eins
 /// braucht. Bilden die letzten drei Punkte so eine Ecke (erster und letzter
 /// diagonal benachbart, der mittlere waagerecht/senkrecht neben beiden),

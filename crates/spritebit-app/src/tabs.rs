@@ -1,5 +1,5 @@
 //! Reiter der geöffneten Sprites über der Zeichenfläche — wie in der
-//! Web-Version (`tabs.js`), Aseprite und Photoshop.
+//! Web-Version (`tabs.js`) und in Grafikprogrammen üblich.
 //!
 //! Ein Reiter ist ein geöffneter Sprite. Klick wechselt, × oder Mittelklick
 //! schließt den Reiter (der Sprite bleibt im Projekt, ein Klick in der
@@ -111,7 +111,7 @@ impl SpritebitApp {
         let cur = self.project.current;
         let closable = self.tabs.len() > 1;
         let (mut pick, mut shut, mut rename, mut moved) = (None, None, None, None);
-        // Karteireiter wie in Aseprite: oben rund, unten gerade. Unter allen
+        // Karteireiter: oben rund, unten gerade. Unter allen
         // läuft eine Linie; der aktive hat die Farbe der Fläche und
         // unterbricht sie — so geht er in die Zeichenfläche über.
         let below = crate::STAGE_BG;

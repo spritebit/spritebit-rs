@@ -3,7 +3,7 @@
 //! Die Bilder liegen in einer Liste ([`Sprite::images`]); jede Zelle
 //! (Frame `f`, Ebene `l`) zeigt mit einer Nummer darauf. Zeigen zwei Zellen
 //! auf dieselbe Nummer, sind sie **verknüpft**: malt man in einer, ändert es
-//! sich in beiden — wie in Aseprite und in der Web-Version.
+//! sich in beiden — wie in der Web-Version.
 
 use crate::image::{Image, Px, FREE_BASE};
 use crate::palette::Rgb;

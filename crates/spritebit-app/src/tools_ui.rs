@@ -158,7 +158,7 @@ impl SpritebitApp {
             if matches!(self.tool, Tool::Pencil | Tool::Eraser) {
                 let r = ui
                     .checkbox(&mut self.pixel_perfect, tr("Pixel-perfekt"))
-                    .on_hover_text(tr("Wie in Aseprite: entfernt beim Zeichnen die doppelten Eckpixel an Treppenstufen — saubere 1-Pixel-Linien (Stift, Radierer mit Größe 1)"));
+                    .on_hover_text(tr("Wie in bekannten Pixel-Art-Programmen: entfernt beim Zeichnen die doppelten Eckpixel an Treppenstufen — saubere 1-Pixel-Linien (Stift, Radierer mit Größe 1)"));
                 if r.changed() {
                     self.save_view();
                 }
@@ -341,7 +341,7 @@ impl SpritebitApp {
     }
 
     /// Strich von a nach b: Stift 1 px, Pinsel und Radierer in ihrer Größe.
-    /// Gilt Pixel-perfekt gerade? Wie in Aseprite: beim Stift und beim
+    /// Gilt Pixel-perfekt gerade? Wie in gängigen Pixel-Art-Programmen: beim Stift und beim
     /// Radierer mit Größe 1.
     pub(crate) fn pixel_perfect_now(&self) -> bool {
         self.pixel_perfect && (self.tool == Tool::Pencil || (self.tool == Tool::Eraser && self.size == 1))
