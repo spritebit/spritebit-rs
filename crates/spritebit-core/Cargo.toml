@@ -8,6 +8,8 @@ authors.workspace = true
 publish.workspace = true
 
 [dependencies]
+ab_glyph = "0.2.32"
+epaint_default_fonts = "0.36.2"
 flate2 = "1.1.10"
 gif = "0.14.2"
 png = "0.18.1"

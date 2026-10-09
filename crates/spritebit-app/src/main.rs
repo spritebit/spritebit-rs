@@ -139,7 +139,8 @@ struct SpritebitApp {
     modifiers: Modifiers,
     /// Schachbrett unter den Pixeln (2 × 2, wiederholt).
     checker: Option<egui::TextureHandle>,
-    export_dialog: Option<export_ui::ExportDialog>,
+    /// Panel „Code & Export“ und der Import-Dialog.
+    out: export_ui::OutState,
     /// Bereich in der Timeline (Shift-Klick) und sein Ausgangspunkt.
     cel_range: Option<spritebit_core::cels::CelRange>,
     cel_anchor: Option<(usize, usize)>,
@@ -212,7 +213,7 @@ impl SpritebitApp {
             template: template_ui::TemplateState::default(),
             modifiers: Modifiers::NONE,
             checker: None,
-            export_dialog: None,
+            out: export_ui::OutState::default(),
             cel_range: None,
             cel_anchor: None,
             cel_clip: None,
@@ -924,7 +925,7 @@ impl eframe::App for SpritebitApp {
         });
         egui::CentralPanel::default().show(ui, |ui| self.canvas(ui));
         self.dialogs(&ctx);
-        self.export_window(&ctx);
+        self.import_window(&ctx);
         self.sync_title(&ctx);
     }
 }
@@ -1359,6 +1360,38 @@ mod tests {
         h.run();
         let after = h.state().template.offset;
         assert!((after.0 - before.0 - 10.0).abs() < 0.5, "{after:?}");
+    }
+
+    #[test]
+    fn code_importieren_als_neuer_sprite() {
+        let mut h = app();
+        h.state_mut().out.import = Some(export_ui::ImportModal {
+            text: "export const HELD_PALETTE = { 1: '#ff0000', 2: '#00ff00' };
+export const HELD = [[0,1],[2,1]];".into(),
+            use_palette: true,
+        });
+        h.run();
+        h.get_by_label("Als neuen Sprite").click();
+        h.run();
+        let a = h.state();
+        assert_eq!(a.project.sprites.len(), 2);
+        assert_eq!((a.sprite().name.as_str(), a.sprite().width, a.sprite().height), ("HELD", 2, 2));
+        assert_eq!(a.sprite().palette, "held2", "„held“ ist eine eingebaute Palette");
+        assert_eq!(a.project.current_palette().colors, vec![[255, 0, 0], [0, 255, 0]]);
+        assert_eq!(px(&h, 1, 0), 1);
+        assert_eq!(px(&h, 0, 1), 2);
+    }
+
+    #[test]
+    fn code_panel_zeigt_den_code_und_menue_klappt_es_auf() {
+        let mut h = app();
+        h.state_mut().project.sprite_mut().active().set(0, 0, 3);
+        h.state_mut().open_export();
+        h.run();
+        h.run();
+        // Das Panel ist offen: seine Knöpfe sind da.
+        h.get_by_label("Palette in den Code schreiben");
+        h.get_by_label("PDF");
     }
 
     #[test]

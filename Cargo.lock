@@ -3240,6 +3240,8 @@ dependencies = [
 name = "spritebit-core"
 version = "0.1.0"
 dependencies = [
+ "ab_glyph",
+ "epaint_default_fonts",
  "flate2",
  "gif",
  "png 0.18.1",

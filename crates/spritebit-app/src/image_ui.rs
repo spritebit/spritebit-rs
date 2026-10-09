@@ -211,6 +211,15 @@ impl SpritebitApp {
         egui::CollapsingHeader::new(tr("Aufräumen")).id_salt("p-cleanup").show(ui, |ui| self.cleanup_panel(ui));
         egui::CollapsingHeader::new(tr("Hilfslinien")).id_salt("p-guides").show(ui, |ui| self.guides_panel(ui));
         egui::CollapsingHeader::new(tr("Schablone")).id_salt("p-template").show(ui, |ui| self.template_panel(ui));
+        // „Exportieren …“ im Menü klappt dieses Panel auf und scrollt hin.
+        let focus = std::mem::take(&mut self.out.focus);
+        let r = egui::CollapsingHeader::new(tr("Code & Export"))
+            .id_salt("p-output")
+            .open(focus.then_some(true))
+            .show(ui, |ui| self.output_panel(ui));
+        if focus {
+            r.header_response.scroll_to_me(Some(egui::Align::TOP));
+        }
     }
 
     pub(crate) fn image_panel(&mut self, ui: &mut egui::Ui) {
