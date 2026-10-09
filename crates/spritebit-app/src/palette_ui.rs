@@ -275,10 +275,19 @@ impl SpritebitApp {
                     (c, None) => trf("Nr. {c}", &[("c", &c)]),
                 };
                 ui.label(label);
-                let mut rgb = cur.unwrap_or([0, 0, 0]);
-                if egui::color_picker::color_edit_button_srgb(ui, &mut rgb).on_hover_text(tr("Freie Farbe wählen")).changed() {
-                    self.set_rgb(rgb);
-                }
+                ui.horizontal(|ui| {
+                    let mut rgb = cur.unwrap_or([0, 0, 0]);
+                    if egui::color_picker::color_edit_button_srgb(ui, &mut rgb).on_hover_text(tr("Freie Farbe wählen")).changed() {
+                        self.set_rgb(rgb);
+                    }
+                    if ui
+                        .selectable_label(self.view.spotlight, tr("Zeigen"))
+                        .on_hover_text(tr("Zeigt, wo die aktuelle Farbe im Bild vorkommt — alles andere wird abgedunkelt"))
+                        .clicked()
+                    {
+                        self.view.spotlight = !self.view.spotlight;
+                    }
+                });
             });
         });
         ui.add_space(6.0);

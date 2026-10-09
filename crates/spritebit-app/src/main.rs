@@ -22,6 +22,7 @@ mod template_ui;
 mod timeline;
 mod tlmenu_ui;
 mod tools_ui;
+mod view_ui;
 
 use std::path::{Path, PathBuf};
 
@@ -52,21 +53,21 @@ fn main() -> eframe::Result {
             // Wie im Browser: die zuletzt geladene Schablone ist wieder da.
             app.restore_template(&cc.egui_ctx);
             app.load_tl_opts();
+            app.load_view();
+            // Nach einem Absturz: die Sitzung zurückholen.
+            app.start_session();
             Ok(Box::new(app))
         }),
     )
 }
 
 /// Grenzen der Zoomstufe (Bildschirm-Pixel je Sprite-Pixel).
-const ZOOM_MIN: f32 = 0.05;
-const ZOOM_MAX: f32 = 64.0;
+pub(crate) const ZOOM_MIN: f32 = 0.05;
+pub(crate) const ZOOM_MAX: f32 = 64.0;
 /// Ab dieser Zoomstufe werden Gitterlinien gezeichnet.
 const GRID_FROM: f32 = 8.0;
 /// Dateiendung des eigenen Formats.
 const EXT: &str = "spritebit";
-
-/// Schachbrett für transparente Stellen (dunkel, wie in der Web-Version).
-const CHECKER: [[u8; 3]; 2] = [[0x20, 0x20, 0x2c], [0x2a, 0x2a, 0x38]];
 
 /// Die Textur der Zeichenfläche und wofür sie gerechnet wurde. Ändert sich
 /// nichts davon, wird sie nicht neu gerechnet.
@@ -111,6 +112,8 @@ struct SpritebitApp {
     tool: Tool,
     /// Größe von Pinsel, Radierer und Spray (1–9).
     size: u32,
+    /// Stärke 1–100: Dichte bei Pinsel/Radierer, Menge beim Spray.
+    strength: u32,
     /// Rechteck und Ellipse gefüllt.
     filled: bool,
     /// Form, die gerade aufgezogen wird: Anfang, Ende, Farbe.
@@ -148,6 +151,13 @@ struct SpritebitApp {
     tl_persist: bool,
     tl_menu_open: bool,
     tl_cache: tlmenu_ui::TlCache,
+    /// Hintergrund, Vollbild, „Farbe zeigen“, Hilfe, Sitzungssicherung.
+    view: view_ui::ViewState,
+    /// In der Kopfzeile markierte Frames und der Ausgangspunkt für Umschalt+Klick.
+    frame_sel: Vec<usize>,
+    frame_anchor: Option<usize>,
+    /// Frame oder Ebene, die gerade in der Timeline gezogen wird.
+    tl_drag: Option<timeline::TlDrag>,
     /// Bereich in der Timeline (Shift-Klick) und sein Ausgangspunkt.
     cel_range: Option<spritebit_core::cels::CelRange>,
     cel_anchor: Option<(usize, usize)>,
@@ -201,6 +211,7 @@ impl SpritebitApp {
             onion: false,
             tool: Tool::Pencil,
             size: 1,
+            strength: 80,
             filled: false,
             shape_start: None,
             shape_end: None,
@@ -225,6 +236,10 @@ impl SpritebitApp {
             tl_persist: false,
             tl_menu_open: false,
             tl_cache: tlmenu_ui::TlCache::default(),
+            view: view_ui::ViewState::default(),
+            frame_sel: Vec::new(),
+            frame_anchor: None,
+            tl_drag: None,
             cel_range: None,
             cel_anchor: None,
             cel_clip: None,
@@ -284,6 +299,7 @@ impl SpritebitApp {
         if i < self.project.sprites.len() && i != self.project.current {
             self.finish_rotate();
             self.deselect();
+            self.frame_sel.clear();
             self.project.current = i;
             self.clamp_color();
             self.stroke_last = None;
@@ -464,7 +480,19 @@ impl SpritebitApp {
             let n = self.sprite().frames.len();
             let f = self.sprite().frame;
             if play {
-                self.toggle_play(ctx);
+                // Enter übernimmt eine laufende freie Drehung, sonst Abspielen.
+                if self.image.live.is_some() {
+                    self.finish_rotate();
+                } else {
+                    self.toggle_play(ctx);
+                }
+            }
+            // Esc bei laufender Drehung: zurück auf 0°.
+            if self.image.live.is_some() && ctx.input_mut(|i| i.consume_key(none, Key::Escape)) {
+                self.cancel_rotate();
+            }
+            if ctx.input_mut(|i| i.consume_key(none, Key::F1)) {
+                self.view.help_open = true;
             }
             if prev {
                 self.project.sprite_mut().frame = (f + n - 1) % n;
@@ -568,6 +596,8 @@ impl SpritebitApp {
                 }
                 ui.checkbox(&mut self.show_grid, tr("Gitter"));
                 ui.separator();
+                self.view_menu(ui);
+                ui.separator();
                 ui.menu_button(tr("Sprache"), |ui| {
                     for l in i18n::Lang::ALL {
                         if ui.radio(i18n::lang() == l, l.name()).clicked() {
@@ -578,6 +608,7 @@ impl SpritebitApp {
                 });
             });
             ui.menu_button(tr("Hilfe"), |ui| {
+                self.help_menu(ui);
                 if ui.button(tr("Über spritebit")).clicked() {
                     self.about_open = true;
                 }
@@ -607,16 +638,22 @@ impl SpritebitApp {
     // ── Statusleiste ────────────────────────────────────────────────
     fn status_bar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            let sp = self.sprite();
-            ui.label(format!("{} × {} px", sp.width, sp.height));
+            let (w, h) = (self.sprite().width, self.sprite().height);
+            ui.label(format!("{w} × {h} px"));
             ui.separator();
-            ui.label(format!("Zoom {:.0} %", self.zoom * 100.0));
+            ui.label(tr("Zoom"));
+            self.zoom_slider(ui);
+            if self.view.spotlight {
+                ui.separator();
+                let n = self.count_current_color();
+                ui.label(trf("{n} Pixel in dieser Farbe", &[("n", &n)]));
+            }
             if let Some((x, y)) = self.hover {
                 ui.separator();
                 ui.label(format!("({x}, {y})"));
             }
             ui.separator();
-            let tiles: usize = sp.images.iter().map(|i| i.allocated_tiles()).sum();
+            let tiles: usize = self.sprite().images.iter().map(|i| i.allocated_tiles()).sum();
             let kib = tiles * (spritebit_core::TILE * spritebit_core::TILE) as usize * 2 / 1024;
             ui.label(trf("{tiles} Kacheln · {kib} KiB", &[("tiles", &tiles), ("kib", &kib)]));
             if let Some(h) = &self.hint {
@@ -640,7 +677,7 @@ impl SpritebitApp {
         // Leertaste + Ziehen verschiebt, links malt, rechts radiert.
         let (scroll, zoom_delta, pointer, primary, secondary, middle, space, delta) = ui.input(|i| {
             (
-                i.smooth_scroll_delta.y,
+                i.smooth_scroll_delta,
                 i.zoom_delta(),
                 i.pointer.hover_pos(),
                 i.pointer.primary_down(),
@@ -657,11 +694,13 @@ impl SpritebitApp {
                 i.modifiers.alt,
             )
         });
+        // Wie im Web: Mausrad scrollt (Umschalt: waagerecht), Strg+Mausrad
+        // zoomt um den Zeiger.
         if let Some(at) = pointer.filter(|p| area.contains(*p)) {
             if zoom_delta != 1.0 {
                 self.zoom_at(zoom_delta, at, area);
-            } else if scroll != 0.0 {
-                self.zoom_at((scroll * 0.0025).exp(), at, area);
+            } else if scroll != Vec2::ZERO {
+                self.pan += scroll;
             }
         }
         let panning = middle || (space && primary) || (self.tool == Tool::Pan && primary);
@@ -743,6 +782,9 @@ impl SpritebitApp {
         }
         // Onion Skin: eigene Textur, hinter oder vor den Pixeln.
         let onion_id = self.onion_texture(ui.ctx(), rect, step);
+        // „Farbe zeigen“: Maske über allem, was nicht die aktuelle Farbe ist.
+        let spot_id = self.spotlight_texture(ui.ctx(), rect, step);
+        let checker_colors = self.checker_colors();
         if let Some(t) = &self.texture {
             let [tw, th] = t.handle.size();
             // Die Textur deckt ganze Blöcke ab — am Rand höchstens bis zur Sprite-Kante.
@@ -761,7 +803,7 @@ impl SpritebitApp {
             );
             // Schachbrett (ein Feld je Textur-Pixel), dann die Schablone, dann die Pixel.
             let checker = self.checker.get_or_insert_with(|| {
-                let [a, b] = CHECKER.map(|[r, g, b]| Color32::from_rgb(r, g, b));
+                let [a, b] = checker_colors.map(|[r, g, b]| Color32::from_rgb(r, g, b));
                 let img = egui::ColorImage::new([2, 2], vec![a, b, b, a]);
                 let opts = egui::TextureOptions { wrap_mode: egui::TextureWrapMode::Repeat, ..egui::TextureOptions::NEAREST };
                 ui.ctx().load_texture("checker", img, opts)
@@ -778,12 +820,15 @@ impl SpritebitApp {
             if let (Some(id), true) = (onion_id, onion_front) {
                 painter.image(id, screen, uv, Color32::WHITE);
             }
+            if let Some(id) = spot_id {
+                painter.image(id, screen, uv, Color32::WHITE);
+            }
             self.draw_template(&painter, origin, zoom, true);
         }
 
         // Gitterlinien, nur stark hineingezoomt und nur im Ausschnitt.
         if self.show_grid && zoom >= GRID_FROM {
-            let line = Stroke::new(1.0, Color32::from_white_alpha(18));
+            let line = Stroke::new(1.0, self.grid_color());
             for x in x0..=x1 {
                 let sx = origin.x + x as f32 * zoom;
                 painter.line_segment(
@@ -903,6 +948,7 @@ impl eframe::App for SpritebitApp {
         self.guard_close(&ctx);
         self.shortcuts(&ctx);
         self.modifiers = ctx.input(|i| i.modifiers);
+        self.view_keys(&ctx);
         self.guide_keys(&ctx);
         self.selection_keys(&ctx);
         self.tool_keys(&ctx);
@@ -927,6 +973,12 @@ impl eframe::App for SpritebitApp {
         self.dialogs(&ctx);
         self.import_window(&ctx);
         self.tl_menu(&ctx);
+        self.help_window(&ctx);
+        self.autosave(&ctx);
+        // Sauber beendet (ohne oder nach der Rückfrage): die Sitzung ist erledigt.
+        if ctx.input(|i| i.viewport().close_requested()) && (!self.dirty || self.allow_close) {
+            self.end_session();
+        }
         self.sync_title(&ctx);
     }
 }
@@ -1417,6 +1469,87 @@ export const HELD = [[0,1],[2,1]];".into(),
         assert!(h.state_mut().onion_texture(&ctx, r, 1).is_some());
         h.state_mut().onion = false;
         assert!(h.state_mut().onion_texture(&ctx, r, 1).is_none());
+    }
+
+    #[test]
+    fn ziffern_waehlen_die_farbe_und_strg_rad_zoomt() {
+        let mut h = app();
+        h.key_press(Key::Num3);
+        h.run();
+        assert_eq!(h.state().color, 3);
+        h.key_press(Key::Num0);
+        h.run();
+        assert_eq!(h.state().color, 0);
+        // Mausrad ohne Strg scrollt nur.
+        let z = h.state().zoom;
+        let p = at(&h, 10.0, 10.0);
+        h.hover_at(p);
+        h.run();
+        h.event(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: Vec2::new(0.0, -40.0), phase: egui::TouchPhase::Move, modifiers: Modifiers::NONE });
+        h.run();
+        assert_eq!(h.state().zoom, z, "kein Zoom ohne Strg");
+    }
+
+    #[test]
+    fn alt_ziehen_verschiebt_eine_kopie() {
+        let mut h = app();
+        h.state_mut().tool = tools_ui::Tool::Select;
+        h.state_mut().project.sprite_mut().active().set(5, 5, 4);
+        h.state_mut().selection = Some(Selection::rect(5, 5, 5, 5));
+        let (a, b) = (at(&h, 5.0, 5.0), at(&h, 9.0, 5.0));
+        h.hover_at(a);
+        h.run();
+        h.event_modifiers(egui::Event::PointerButton { pos: a, button: egui::PointerButton::Primary, pressed: true, modifiers: Modifiers::ALT }, Modifiers::ALT);
+        h.run();
+        for k in 1..=4 {
+            h.event_modifiers(egui::Event::PointerMoved(a + (b - a) * (k as f32 / 4.0)), Modifiers::ALT);
+            h.run();
+        }
+        h.event_modifiers(egui::Event::PointerButton { pos: b, button: egui::PointerButton::Primary, pressed: false, modifiers: Modifiers::ALT }, Modifiers::ALT);
+        h.run();
+        h.state_mut().deselect();
+        assert_eq!(px(&h, 5, 5), 4, "Original bleibt");
+        assert_eq!(px(&h, 9, 5), 4, "Kopie verschoben");
+    }
+
+    #[test]
+    fn markierte_frames_loeschen_und_farbe_zeigen() {
+        let mut h = app();
+        for _ in 0..3 {
+            h.get_by_label("Leerer Frame dahinter").click();
+            h.run();
+        }
+        assert_eq!(h.state().sprite().frames.len(), 4);
+        h.state_mut().frame_sel = vec![1, 2];
+        h.get_by_label("Frame löschen (markierte alle)").click();
+        h.run();
+        assert_eq!(h.state().sprite().frames.len(), 2);
+        // Farbe zeigen: zählt die Pixel der aktuellen Farbe.
+        h.state_mut().project.sprite_mut().active().set(0, 0, 5);
+        h.state_mut().project.sprite_mut().active().set(1, 0, 5);
+        h.state_mut().color = 5;
+        assert_eq!(h.state().count_current_color(), 2);
+        h.state_mut().color = 0;
+        assert_eq!(h.state().count_current_color(), 64 * 64 - 2);
+    }
+
+    #[test]
+    fn enter_uebernimmt_die_freie_drehung() {
+        let mut h = app();
+        h.state_mut().project.sprite_mut().active().set(32, 10, 5);
+        h.state_mut().image.angle = 90.0;
+        h.get_by_label("Bild").click(); // zu- und wieder aufklappen ist egal
+        h.run();
+        h.state_mut().flip(true); // ein beliebiger Schritt davor
+        h.state_mut().image.live = None;
+        let before = h.state().sprite().cel(0, 0).get(31, 10);
+        assert_eq!(before, 5);
+        h.state_mut().test_rotate(90.0);
+        assert!(h.state().image.live.is_some());
+        h.key_press(Key::Enter);
+        h.run();
+        assert!(h.state().image.live.is_none(), "übernommen");
+        assert!(!h.state().playing, "nicht abgespielt");
     }
 
     #[test]

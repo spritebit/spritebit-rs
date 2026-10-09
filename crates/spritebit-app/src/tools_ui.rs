@@ -148,6 +148,10 @@ impl SpritebitApp {
                     }
                 }
             }
+            if matches!(self.tool, Tool::Brush | Tool::Spray | Tool::Eraser) {
+                ui.label(tr("Stärke")).on_hover_text(tr("Pinsel und Radierer: Dichte — Spray: Menge je Schritt"));
+                ui.add(egui::Slider::new(&mut self.strength, 1..=100).suffix(" %"));
+            }
             if matches!(self.tool, Tool::Rect | Tool::Ellipse) {
                 ui.checkbox(&mut self.filled, tr("Gefüllt"));
             }
@@ -173,6 +177,13 @@ impl SpritebitApp {
         for t in Tool::ALL {
             if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, t.key())) {
                 self.tool = t;
+            }
+        }
+        // 0–9: Farbe mit dieser Nummer (0 = Transparent).
+        let digits = [Key::Num0, Key::Num1, Key::Num2, Key::Num3, Key::Num4, Key::Num5, Key::Num6, Key::Num7, Key::Num8, Key::Num9];
+        for (n, k) in digits.into_iter().enumerate() {
+            if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, k)) && n <= self.project.current_palette().len() {
+                self.color = n as Px;
             }
         }
     }
@@ -203,8 +214,10 @@ impl SpritebitApp {
             self.shape_start = None;
             return;
         }
-        // Alt+Klick: Pipette — mit jedem Malwerkzeug.
-        if p.alt && p.pressed && p.over {
+        // Alt+Klick: Pipette — mit jedem Malwerkzeug. In einer Auswahl
+        // heißt Alt+Ziehen dagegen: eine Kopie verschieben.
+        let in_selection = p.cell.is_some_and(|c| self.selection.as_ref().is_some_and(|s| s.contains(c.0, c.1)));
+        if p.alt && p.pressed && p.over && !(self.is_select_tool() && in_selection) {
             if let Some(c) = p.cell {
                 self.pick_color(c.0, c.1);
             }
@@ -314,6 +327,22 @@ impl SpritebitApp {
             .into_iter()
             .flat_map(|(x, y)| tools::stamp(x, y, size).spans())
             .collect();
+        // Stärke = Dichte bei Pinsel und Radierer: jedes Pixel nur mit dieser
+        // Wahrscheinlichkeit (wie im Web). Der Stift malt immer voll.
+        let density = self.strength as f64 / 100.0;
+        let spans = if self.tool != Tool::Pencil && density < 1.0 {
+            let mut out = Vec::new();
+            for (y, x0, x1) in spans {
+                for x in x0..=x1 {
+                    if self.rng.next_f64() <= density {
+                        out.push((y, x, x));
+                    }
+                }
+            }
+            out
+        } else {
+            spans
+        };
         self.paint(spans, value);
     }
 
@@ -327,8 +356,9 @@ impl SpritebitApp {
 
     fn spray_at(&mut self, cell: (i64, i64), erase: bool) {
         let value = self.value(erase);
-        let r = self.size as f64 * 1.5 + 1.0;
-        let count = (self.size as usize).max(1) * 2;
+        // Wie im Web: Radius = Größe, Menge je Schritt = Stärke / 10.
+        let r = self.size as f64;
+        let count = ((self.strength as f64 / 10.0).round() as usize).max(1);
         let pts = tools::spray(cell.0, cell.1, r, count, &mut self.rng);
         self.paint(pts.into_iter().map(|(x, y)| (y, x, x)).collect(), value);
     }

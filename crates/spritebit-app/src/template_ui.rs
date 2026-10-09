@@ -5,7 +5,7 @@
 //!   10–200 %, Zentrieren, Entfernen
 //! * Umschalt+Alt+Ziehen verschiebt die Schablone; Umschalt+Alt+Klick nimmt
 //!   ihre Farbe (Pipette, genauer Farbwert als freie Farbe)
-//! * Umschalt halten: Schablone deckend VOR den Pixeln — zum Vergleichen
+//! * Umschalt+Alt halten: Schablone deckend VOR den Pixeln — zum Vergleichen
 //! * „Aufs Raster übernehmen“: Palettenfarben, Originalfarben oder auf N
 //!   Farben reduziert — in die aktive Zelle, ein Undo-Schritt
 //! * Die Schablone bleibt gemerkt (im Einstellungsordner), bis man sie
@@ -192,7 +192,7 @@ impl SpritebitApp {
         if self.template.loaded.is_none() {
             return;
         }
-        ui.weak(tr("Umschalt+Alt ziehen: verschieben · Umschalt+Alt Klick: Farbe nehmen · Umschalt halten: vorne zeigen"));
+        ui.weak(tr("Umschalt+Alt halten: vorne zeigen · ziehen: verschieben · Klick: Farbe nehmen"));
         ui.separator();
         ui.label(tr("Aufs Raster übernehmen"));
         ui.horizontal_wrapped(|ui| {
@@ -256,8 +256,8 @@ impl SpritebitApp {
     /// Schablone zeichnen. `front`: der Durchgang über den Pixeln.
     pub(crate) fn draw_template(&self, painter: &egui::Painter, origin: Pos2, zoom: f32, front: bool) {
         let Some(l) = &self.template.loaded else { return };
-        // Umschalt (ohne Alt) holt sie nach vorn; Umschalt+Alt ist Verschieben.
-        let in_front = self.modifiers.shift && !self.modifiers.alt;
+        // Umschalt+Alt halten holt sie deckend nach vorn (wie im Web).
+        let in_front = self.modifiers.shift && self.modifiers.alt;
         if front != in_front {
             return;
         }

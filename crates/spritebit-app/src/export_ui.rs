@@ -85,6 +85,10 @@ impl SpritebitApp {
 
     /// Frames für PNG/PDF/GIF: die in der Timeline markierten, sonst der aktive.
     fn frames_to_export(&self) -> Vec<usize> {
+        let marked = self.marked_frames();
+        if marked.len() > 1 {
+            return marked;
+        }
         let sp = self.sprite();
         match self.cel_range.and_then(|r| r.clamp(sp)) {
             Some(r) if r.f1 > r.f0 => (r.f0..=r.f1).collect(),

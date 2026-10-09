@@ -157,7 +157,7 @@ impl SpritebitApp {
     }
 
     /// Zurück aufs Original.
-    fn cancel_rotate(&mut self) {
+    pub(crate) fn cancel_rotate(&mut self) {
         match self.image.live.take() {
             Some(RotLive::Selection { clip, mask, x, y }) => {
                 if let Some(f) = &mut self.float {
@@ -363,5 +363,11 @@ impl SpritebitApp {
     #[cfg(test)]
     pub(crate) fn clean_for_test_outline(&mut self) -> usize {
         self.clean(|img, _, _| cleanup::outline(img, 1, 1)).unwrap_or(0)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_rotate(&mut self, angle: f64) {
+        self.image.angle = angle;
+        self.preview_rotate(angle);
     }
 }

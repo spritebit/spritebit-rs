@@ -48,6 +48,16 @@ impl SpritebitApp {
     }
 
     /// Inhalt der Auswahl anheben: aus dem Bild nehmen, schwebend halten.
+    /// Wie [`Self::lift`], aber das Bild darunter bleibt (Alt+Ziehen).
+    fn lift_copy(&mut self) {
+        let Some(sel) = self.selection.clone() else { return };
+        self.record_step();
+        let img = self.project.sprite_mut().active();
+        let clip = selection::copy(img, &sel);
+        self.float = Some(Float { clip, x: sel.x, y: sel.y });
+        self.changed();
+    }
+
     pub(crate) fn lift(&mut self) {
         if self.float.is_some() {
             return;
@@ -76,7 +86,12 @@ impl SpritebitApp {
         if p.pressed && p.over && !p.secondary {
             let inside = self.selection.as_ref().is_some_and(|s| s.contains(cell.0, cell.1));
             if inside && self.tool != Tool::Wand {
-                self.lift();
+                // Alt: das Original bleibt stehen, verschoben wird eine Kopie.
+                if p.alt && self.float.is_none() {
+                    self.lift_copy();
+                } else {
+                    self.lift();
+                }
                 let from = self.float.as_ref().map_or((0, 0), |f| (f.x, f.y));
                 self.sel_drag = Some(SelDrag::Move { start: cell, from });
                 return;

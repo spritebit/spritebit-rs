@@ -19,6 +19,13 @@ use spritebit_core::cels::{self, CelRange};
 use spritebit_core::sprite::{Direction, Tag};
 
 use crate::{icons, tlmenu_ui, SpritebitApp};
+
+/// Was in der Timeline gerade gezogen wird.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum TlDrag {
+    Frame(usize),
+    Layer(usize),
+}
 use crate::i18n::{tr, trf};
 
 const LAYER_W: f32 = 170.0;
@@ -40,6 +47,13 @@ impl SpritebitApp {
         self.histories[cur].record(&self.project.sprites[cur]);
         f(&mut self.project.sprites[cur]);
         self.changed();
+    }
+
+    /// Markierte Frames (Strg/Umschalt+Klick in der Kopfzeile), gültig für
+    /// den Sprite; leer, wenn nichts markiert ist.
+    pub(crate) fn marked_frames(&self) -> Vec<usize> {
+        let n = self.sprite().frames.len();
+        self.frame_sel.iter().copied().filter(|&f| f < n).collect()
     }
 
     pub(crate) fn go_frame(&mut self, f: usize) {
@@ -97,10 +111,16 @@ impl SpritebitApp {
                     s.add_frame(f, true);
                 });
             }
-            if icons::button(ui, icons::TRASH, tr("Frame löschen"), n > 1).clicked() {
+            // Löschen nimmt alle markierten Frames mit (ein Undo-Schritt);
+            // einer bleibt immer.
+            let marked = self.marked_frames();
+            if icons::button(ui, icons::TRASH, tr("Frame löschen (markierte alle)"), n > 1).clicked() {
+                self.frame_sel.clear();
                 self.edit_sprite(|s| {
-                    let f = s.frame;
-                    s.delete_frame(f);
+                    let list = if marked.len() > 1 { marked } else { vec![s.frame] };
+                    for f in list.into_iter().rev() {
+                        s.delete_frame(f);
+                    }
                 });
             }
             if icons::button(ui, icons::LEFT, tr("Frame nach links"), cur > 0).clicked() {
@@ -243,7 +263,7 @@ impl SpritebitApp {
         let (n, nl) = (sp.frames.len(), sp.layers.len());
         let tag_h = if sp.tags.is_empty() { 0.0 } else { TAG_H + 2.0 };
         let size = Vec2::new(LAYER_W + n as f32 * CELL_W + 8.0, tag_h + head_h + nl as f32 * ROW_H + 4.0);
-        let (resp, painter) = ui.allocate_painter(size, Sense::click());
+        let (resp, painter) = ui.allocate_painter(size, Sense::click_and_drag());
         let o = resp.rect.min;
         let font = FontId::proportional(12.0);
         let head_y = o.y + tag_h;
@@ -271,6 +291,8 @@ impl SpritebitApp {
             let c = egui::Rect::from_min_size(Pos2::new(col_x(f), head_y), Vec2::new(CELL_W, head_h));
             if f == sp.frame {
                 painter.rect_filled(c.shrink(1.0), 3.0, ACCENT.gamma_multiply(0.35));
+            } else if self.frame_sel.contains(&f) {
+                painter.rect_filled(c.shrink(1.0), 3.0, ACCENT.gamma_multiply(0.2));
             }
             let num = egui::Rect::from_min_size(c.min, Vec2::new(CELL_W, HEAD_H));
             painter.text(num.center(), Align2::CENTER_CENTER, format!("{}", tl.label(f)), font.clone(), if f == sp.frame { Color32::WHITE } else { DIM });
@@ -336,8 +358,51 @@ impl SpritebitApp {
             }
         }
 
+        // Ziehen: Frame-Nummer → Frame verschieben, Ebenen-Name → Ebene verschieben.
+        let at_pos = |p: Pos2| {
+            let fx = ((p.x - o.x - LAYER_W) / CELL_W).floor();
+            let ry = ((p.y - head_y - head_h) / ROW_H).floor();
+            ((fx >= 0.0 && (fx as usize) < n).then_some(fx as usize), (ry >= 0.0 && (ry as usize) < nl).then(|| nl - 1 - ry as usize))
+        };
+        if resp.drag_started() {
+            if let Some(p) = resp.interact_pointer_pos() {
+                let (f, l) = at_pos(p);
+                if p.y >= head_y && p.y < head_y + head_h && p.x >= o.x + LAYER_W {
+                    self.tl_drag = f.map(TlDrag::Frame);
+                } else if p.x < o.x + LAYER_W && p.x >= o.x + 3.0 * ICON_W {
+                    self.tl_drag = l.map(TlDrag::Layer);
+                }
+            }
+        }
+        if let (Some(d), Some(p)) = (self.tl_drag, ui.input(|i| i.pointer.hover_pos())) {
+            let (f, l) = at_pos(p);
+            let mark = Stroke::new(2.0, Color32::WHITE);
+            match (d, f, l) {
+                (TlDrag::Frame(_), Some(f), _) => {
+                    painter.line_segment([Pos2::new(col_x(f), head_y), Pos2::new(col_x(f), head_y + head_h)], mark);
+                }
+                (TlDrag::Layer(_), _, Some(l)) => {
+                    let y = row_y(nl - 1 - l);
+                    painter.line_segment([Pos2::new(o.x, y), Pos2::new(o.x + LAYER_W - 4.0, y)], mark);
+                }
+                _ => {}
+            }
+            if resp.drag_stopped() {
+                self.tl_drag = None;
+                match (d, f, l) {
+                    (TlDrag::Frame(from), Some(to), _) if from != to => {
+                        self.frame_sel.clear();
+                        self.edit_sprite(|s| s.move_frame(from, to));
+                    }
+                    (TlDrag::Layer(from), _, Some(to)) if from != to => self.edit_sprite(|s| s.move_layer(from, to)),
+                    _ => {}
+                }
+                return;
+            }
+        }
+
         // Klicks auswerten
-        let shift = ui.input(|i| i.modifiers.shift);
+        let (shift, ctrl) = ui.input(|i| (i.modifiers.shift, i.modifiers.command));
         let double = resp.double_clicked();
         if let Some(p) = resp.interact_pointer_pos().filter(|_| resp.clicked() || double) {
             let fx = ((p.x - o.x - LAYER_W) / CELL_W).floor();
@@ -350,6 +415,27 @@ impl SpritebitApp {
                 }
             } else if p.y < head_y + head_h {
                 if let Some(f) = frame_at {
+                    // Wie im Dateimanager: Strg+Klick nimmt einzelne Frames
+                    // dazu, Umschalt+Klick eine Spanne, ein Klick allein hebt auf.
+                    let cur = self.project.sprite().frame;
+                    if ctrl {
+                        if self.frame_sel.is_empty() {
+                            self.frame_sel.push(cur);
+                        }
+                        match self.frame_sel.iter().position(|&x| x == f) {
+                            Some(i) => {
+                                self.frame_sel.remove(i);
+                            }
+                            None => self.frame_sel.push(f),
+                        }
+                        self.frame_sel.sort_unstable();
+                    } else if shift {
+                        let a = self.frame_anchor.unwrap_or(cur);
+                        self.frame_sel = (a.min(f)..=a.max(f)).collect();
+                    } else {
+                        self.frame_sel.clear();
+                        self.frame_anchor = Some(f);
+                    }
                     self.cel_range = None;
                     self.go_frame(f);
                 }
