@@ -114,6 +114,9 @@ struct SpritebitApp {
     size: u32,
     /// Stärke 1–100: Dichte bei Pinsel/Radierer, Menge beim Spray.
     strength: u32,
+    /// Pixel-perfekt (Stift, Radierer 1 px) und der Pfad des laufenden Strichs.
+    pixel_perfect: bool,
+    pp: Option<spritebit_core::tools::PixelPerfect>,
     /// Rechteck und Ellipse gefüllt.
     filled: bool,
     /// Form, die gerade aufgezogen wird: Anfang, Ende, Farbe.
@@ -212,6 +215,8 @@ impl SpritebitApp {
             tool: Tool::Pencil,
             size: 1,
             strength: 80,
+            pixel_perfect: false,
+            pp: None,
             filled: false,
             shape_start: None,
             shape_end: None,
@@ -1550,6 +1555,31 @@ export const HELD = [[0,1],[2,1]];".into(),
         h.run();
         assert!(h.state().image.live.is_none(), "übernommen");
         assert!(!h.state().playing, "nicht abgespielt");
+    }
+
+    #[test]
+    fn pixel_perfekt_zieht_saubere_diagonalen() {
+        let mut h = app();
+        h.get_by_label("Pixel-perfekt").click();
+        h.run();
+        assert!(h.state().pixel_perfect);
+        // Treppe von Hand: (2,2) → (3,2) → (3,3) → (4,3) → (4,4)
+        let pts = [(2.0, 2.0), (3.0, 2.0), (3.0, 3.0), (4.0, 3.0), (4.0, 4.0)];
+        let a = at(&h, pts[0].0, pts[0].1);
+        h.hover_at(a);
+        h.run();
+        h.drag_at(a);
+        h.run();
+        for p in &pts[1..] {
+            h.hover_at(at(&h, p.0, p.1));
+            h.run();
+        }
+        h.drop_at(at(&h, 4.0, 4.0));
+        h.run();
+        assert_eq!([px(&h, 2, 2), px(&h, 3, 3), px(&h, 4, 4)], [5, 5, 5]);
+        assert_eq!([px(&h, 3, 2), px(&h, 4, 3)], [0, 0], "Eckpixel entfernt");
+        h.state_mut().undo();
+        assert_eq!(px(&h, 2, 2), 0, "ein Undo-Schritt");
     }
 
     #[test]

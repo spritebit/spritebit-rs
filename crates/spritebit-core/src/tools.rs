@@ -253,6 +253,69 @@ pub fn spray(x: i64, y: i64, r: f64, count: usize, rng: &mut Rng) -> Vec<(i64, i
         .collect()
 }
 
+/// Pixel-perfect wie in Aseprite: beim freihändigen Zeichnen mit 1 Pixel
+/// entstehen an Treppenstufen L-Ecken — zwei Pixel, wo die Linie nur eins
+/// braucht. Bilden die letzten drei Punkte so eine Ecke (erster und letzter
+/// diagonal benachbart, der mittlere waagerecht/senkrecht neben beiden),
+/// bekommt der mittlere seinen alten Wert zurück und fällt aus dem Pfad.
+///
+/// Ein Strich = ein `PixelPerfect`. Symmetrie wird mitgespiegelt.
+#[derive(Debug, Default)]
+pub struct PixelPerfect {
+    path: Vec<(i64, i64)>,
+    /// Wert jedes im Strich berührten Pixels vor dem Strich.
+    before: std::collections::HashMap<(i64, i64), Px>,
+}
+
+impl PixelPerfect {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Punkt (x, y) mit `value` malen; gibt `true` zurück, wenn sich etwas
+    /// geändert hat. `mx`/`my`: Symmetrie an der senkrechten/waagerechten Mitte.
+    pub fn add(&mut self, img: &mut Image, x: i64, y: i64, value: Px, mx: bool, my: bool) -> bool {
+        if self.path.last() == Some(&(x, y)) {
+            return false;
+        }
+        let (w, h) = (img.width(), img.height());
+        let mut changed = false;
+        for (py, px, _) in mirror_spans(vec![(y, x, x)], w, h, mx, my) {
+            if px < 0 || py < 0 || px >= w as i64 || py >= h as i64 {
+                continue;
+            }
+            let old = img.get(px as u32, py as u32);
+            self.before.entry((px, py)).or_insert(old);
+            if old != value {
+                img.set(px as u32, py as u32, value);
+                changed = true;
+            }
+        }
+        self.path.push((x, y));
+        let n = self.path.len();
+        if n >= 3 {
+            let (a, b, c) = (self.path[n - 3], self.path[n - 2], self.path[n - 1]);
+            let diagonal = (a.0 - c.0).abs() == 1 && (a.1 - c.1).abs() == 1;
+            let corner = (b.0 == a.0 || b.1 == a.1) && (b.0 == c.0 || b.1 == c.1);
+            if diagonal && corner {
+                self.path.remove(n - 2);
+                // Liegt der Punkt noch woanders im Pfad, bleibt er gemalt.
+                if !self.path.contains(&b) {
+                    for (py, px, _) in mirror_spans(vec![(b.1, b.0, b.0)], w, h, mx, my) {
+                        if let Some(&old) = self.before.get(&(px, py)) {
+                            if img.get(px as u32, py as u32) != old {
+                                img.set(px as u32, py as u32, old);
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        changed
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -353,6 +416,40 @@ mod tests {
         let pts = spray(50, 50, 5.0, 200, &mut rng);
         assert_eq!(pts.len(), 200);
         assert!(pts.iter().all(|&(x, y)| ((x - 50).pow(2) + (y - 50).pow(2)) as f64 <= 6.0 * 6.0));
+    }
+
+    /// Pixel-perfect: eine Treppe ohne Doppel.
+    #[test]
+    fn pixel_perfect_entfernt_l_ecken() {
+        let mut img = Image::new(6, 6);
+        img.set(1, 0, 7); // war schon da — muss zurückkommen
+        let mut pp = PixelPerfect::new();
+        // Freihand-Treppe: rechts, runter, rechts, runter …
+        for (x, y) in [(0, 0), (1, 0), (1, 1), (2, 1), (2, 2), (3, 2)] {
+            pp.add(&mut img, x, y, 3, false, false);
+        }
+        let painted: Vec<(u32, u32)> = (0..6).flat_map(|y| (0..6).map(move |x| (x, y))).filter(|&(x, y)| img.get(x, y) == 3).collect();
+        assert_eq!(painted, vec![(0, 0), (1, 1), (2, 2), (3, 2)], "eine saubere Diagonale");
+        assert_eq!(img.get(1, 0), 7, "Eckpixel bekommt seinen alten Wert");
+        // Gerade Linien bleiben unberührt.
+        let mut img = Image::new(6, 2);
+        let mut pp = PixelPerfect::new();
+        for x in 0..6 {
+            pp.add(&mut img, x, 0, 1, false, false);
+        }
+        assert!((0..6).all(|x| img.get(x, 0) == 1));
+    }
+
+    #[test]
+    fn pixel_perfect_mit_symmetrie() {
+        let mut img = Image::new(8, 4);
+        let mut pp = PixelPerfect::new();
+        for (x, y) in [(0, 0), (1, 0), (1, 1)] {
+            pp.add(&mut img, x, y, 2, true, false);
+        }
+        assert_eq!(img.get(1, 0), 0);
+        assert_eq!(img.get(6, 0), 0, "Spiegelbild der Ecke auch weg");
+        assert_eq!(img.get(6, 1), 2);
     }
 
     #[test]

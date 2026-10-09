@@ -155,6 +155,14 @@ impl SpritebitApp {
             if matches!(self.tool, Tool::Rect | Tool::Ellipse) {
                 ui.checkbox(&mut self.filled, tr("Gefüllt"));
             }
+            if matches!(self.tool, Tool::Pencil | Tool::Eraser) {
+                let r = ui
+                    .checkbox(&mut self.pixel_perfect, tr("Pixel-perfekt"))
+                    .on_hover_text(tr("Wie in Aseprite: entfernt beim Zeichnen die doppelten Eckpixel an Treppenstufen — saubere 1-Pixel-Linien (Stift, Radierer mit Größe 1)"));
+                if r.changed() {
+                    self.save_view();
+                }
+            }
             ui.separator();
             let c = ui.visuals().text_color();
             let mx = egui::Button::selectable(self.mirror_x, icons::image(icons::MIRROR_X, c));
@@ -263,6 +271,7 @@ impl SpritebitApp {
                 self.paint(spans, value);
             }
             self.stroke_last = None;
+            self.pp = None;
             self.blocked = false;
             return;
         }
@@ -324,14 +333,35 @@ impl SpritebitApp {
             _ => {
                 self.record();
                 self.stroke_last = Some(cell);
+                // Pixel-perfekt: ein Strich, ein Pfad.
+                self.pp = self.pixel_perfect_now().then(tools::PixelPerfect::new);
                 self.stroke(cell, cell, erase);
             }
         }
     }
 
     /// Strich von a nach b: Stift 1 px, Pinsel und Radierer in ihrer Größe.
+    /// Gilt Pixel-perfekt gerade? Wie in Aseprite: beim Stift und beim
+    /// Radierer mit Größe 1.
+    pub(crate) fn pixel_perfect_now(&self) -> bool {
+        self.pixel_perfect && (self.tool == Tool::Pencil || (self.tool == Tool::Eraser && self.size == 1))
+    }
+
     fn stroke(&mut self, a: (i64, i64), b: (i64, i64), erase: bool) {
         let value = self.value(erase);
+        if let Some(mut pp) = self.pp.take() {
+            let (mx, my) = (self.mirror_x, self.mirror_y);
+            let img = self.project.sprite_mut().active();
+            let mut changed = false;
+            for (x, y) in tools::line(a.0, a.1, b.0, b.1) {
+                changed |= pp.add(img, x, y, value, mx, my);
+            }
+            self.pp = Some(pp);
+            if changed {
+                self.changed();
+            }
+            return;
+        }
         let size = if self.tool == Tool::Pencil { 1 } else { self.size };
         let spans: Vec<Span> = tools::line(a.0, a.1, b.0, b.1)
             .into_iter()

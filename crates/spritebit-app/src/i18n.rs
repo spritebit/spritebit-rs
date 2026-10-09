@@ -641,6 +641,9 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("{n} Pixel in dieser Farbe", "{n} pixels in this color", "{n} Pixel in dera Farb"),
     // ── Auswahl-Leiste ──
     ("Alles", "All", "Ois"),
+    // ── Pixel-perfekt ──
+    ("Pixel-perfekt", "Pixel-perfect", "Pixel-perfekt"),
+    ("Wie in Aseprite: entfernt beim Zeichnen die doppelten Eckpixel an Treppenstufen — saubere 1-Pixel-Linien (Stift, Radierer mit Größe 1)", "Like in Aseprite: removes the doubled corner pixels at stair steps while drawing — clean 1-pixel lines (pencil, eraser at size 1)", "Wia in Aseprite: haut beim Zeichnen de doppltn Eckpixel an de Stiagnstufn weg — saubere 1-Pixel-Linien (Stift, Radiergummi mit Greß 1)"),
 ];
 
 /// Fehler beim Laden in der gewählten Sprache.

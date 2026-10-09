@@ -63,12 +63,14 @@ impl SpritebitApp {
         self.view.persist = true;
         let Some(v) = dir().and_then(|d| std::fs::read_to_string(d.join("view.json")).ok()).and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok()) else { return };
         self.view.light = v["bg"].as_str() == Some("light");
+        self.pixel_perfect = v["pixelPerfect"].as_bool().unwrap_or(false);
     }
 
-    fn save_view(&self) {
+    pub(crate) fn save_view(&self) {
         if let (true, Some(d)) = (self.view.persist, dir()) {
             let _ = std::fs::create_dir_all(&d);
-            let _ = std::fs::write(d.join("view.json"), serde_json::json!({ "bg": if self.view.light { "light" } else { "dark" } }).to_string());
+            let v = serde_json::json!({ "bg": if self.view.light { "light" } else { "dark" }, "pixelPerfect": self.pixel_perfect });
+            let _ = std::fs::write(d.join("view.json"), v.to_string());
         }
     }
 
