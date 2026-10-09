@@ -6,6 +6,7 @@
 //! * [`image`] — ein Bild in Kacheln: leere Flächen kosten nichts, Kopien
 //!   teilen sich die Kacheln (Undo, verknüpfte Zellen)
 //! * [`sprite`] — Ebenen × Frames, verknüpfte Zellen, durchgehende Ebenen, Tags
+//! * [`onion`] — welche Frames durchscheinen (Onion Skin)
 //! * [`palette`] — bis zu 255 Farben, 0 ist transparent
 //! * [`codegen`] — Code-Formate (TS, JS, JSON, Spiel-JSON, SVG, CSS, C, Python, Text)
 //! * [`codeimport`] — Sprite aus Code einlesen (Format am Inhalt erkannt)
@@ -33,6 +34,7 @@ pub mod export;
 pub mod history;
 pub mod image;
 pub mod io;
+pub mod onion;
 pub mod palette;
 pub mod palops;
 pub mod project;

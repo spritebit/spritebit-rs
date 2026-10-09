@@ -528,6 +528,32 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Pixel ({x}, {y}) hat Index {value}, gültig ist 0 bis {max}.", "pixel ({x}, {y}) has index {value}, valid is 0 to {max}.", ""),
     ("Ausschnitt „{name}“ liegt nicht vollständig im Bild.", "region “{name}” does not lie fully inside the image.", ""),
     ("durations braucht {need} ganze Zahlen (ms), eine je Frame.", "durations needs {need} whole numbers (ms), one per frame.", ""),
+    // ── Timeline-Einstellungen ──
+    ("Position", "Position", "Wo"),
+    ("0 = Dauer nach FPS.", "0 = duration from FPS.", "0 = Dauer noch FPS."),
+    ("Abstufung", "Fade", "Obstufung"),
+    ("Aktueller Frame", "Current frame", ""),
+    ("Am Ende des Tags scheint sein Anfang durch — für Animationen, die im Kreis laufen", "At the end of a tag its start shows through — for animations that loop", "Am End vom Tag scheint sei Ofang durch — für Animationen, de im Kreis rennan"),
+    ("Darstellung", "Display", "Ausschaun"),
+    ("Davor", "In front", ""),
+    ("Erster Frame", "First frame", ""),
+    ("Frames davor", "Frames before", ""),
+    ("Hinter dem Bild", "Behind the image", "Hintam Büd"),
+    ("Im Tag im Kreis", "Loop within the tag", "Im Tag rundumadum"),
+    ("Kopfzeile", "Header", "Kopfzeiln"),
+    ("Lage", "Position", ""),
+    ("Links", "Left", ""),
+    ("Nur die aktive Ebene", "Active layer only", "Nur de aktive Ebene"),
+    ("Oben", "Top", "Obn"),
+    ("Onion Skin", "Onion skin", ""),
+    ("Rechts", "Right", ""),
+    ("Rot/Blau", "Red/blue", ""),
+    ("Timeline", "Timeline", ""),
+    ("Timeline-Einstellungen — Lage, Kopfzeile, Dauer, Onion Skin", "Timeline settings — position, header, duration, onion skin", "Timeline-Einstellungen — wo, Kopfzeiln, Dauer, Onion Skin"),
+    ("Um wie viel jeder weitere Frame blasser wird", "How much fainter each farther frame gets", "Um wia vü jeder weitere Frame blasser wird"),
+    ("Unten", "Bottom", "Untn"),
+    ("Vorschaubilder", "Thumbnails", "Vorschaubüdln"),
+    ("danach", "after", "danoch"),
 ];
 
 /// Fehler beim Laden in der gewählten Sprache.
@@ -576,6 +602,7 @@ mod tests {
             include_str!("preview_ui.rs"),
             include_str!("guides_ui.rs"),
             include_str!("template_ui.rs"),
+            include_str!("tlmenu_ui.rs"),
         ];
         let mut missing = Vec::new();
         for src in sources {

@@ -20,6 +20,7 @@ mod selection_ui;
 mod sprites_ui;
 mod template_ui;
 mod timeline;
+mod tlmenu_ui;
 mod tools_ui;
 
 use std::path::{Path, PathBuf};
@@ -50,6 +51,7 @@ fn main() -> eframe::Result {
             let mut app = SpritebitApp::new();
             // Wie im Browser: die zuletzt geladene Schablone ist wieder da.
             app.restore_template(&cc.egui_ctx);
+            app.load_tl_opts();
             Ok(Box::new(app))
         }),
     )
@@ -70,7 +72,7 @@ const CHECKER: [[u8; 3]; 2] = [[0x20, 0x20, 0x2c], [0x2a, 0x2a, 0x38]];
 /// nichts davon, wird sie nicht neu gerechnet.
 struct CanvasTexture {
     handle: egui::TextureHandle,
-    key: (usize, Rect, u32, usize, u64, bool),
+    key: (usize, Rect, u32, usize, u64),
 }
 
 /// Dialog „Neuer Sprite".
@@ -141,6 +143,11 @@ struct SpritebitApp {
     checker: Option<egui::TextureHandle>,
     /// Panel „Code & Export“ und der Import-Dialog.
     out: export_ui::OutState,
+    /// Timeline-Einstellungen (für alle Sprites), ihr Fenster und Zwischenspeicher.
+    tl: tlmenu_ui::TlOpts,
+    tl_persist: bool,
+    tl_menu_open: bool,
+    tl_cache: tlmenu_ui::TlCache,
     /// Bereich in der Timeline (Shift-Klick) und sein Ausgangspunkt.
     cel_range: Option<spritebit_core::cels::CelRange>,
     cel_anchor: Option<(usize, usize)>,
@@ -214,6 +221,10 @@ impl SpritebitApp {
             modifiers: Modifiers::NONE,
             checker: None,
             out: export_ui::OutState::default(),
+            tl: tlmenu_ui::TlOpts::default(),
+            tl_persist: false,
+            tl_menu_open: false,
+            tl_cache: tlmenu_ui::TlCache::default(),
             cel_range: None,
             cel_anchor: None,
             cel_clip: None,
@@ -701,8 +712,7 @@ impl SpritebitApp {
         // Herausgezoomt: nur jedes n-te Pixel, sonst wäre die Textur größer
         // als der Bildschirm.
         let step = if zoom < 1.0 { (1.0 / zoom).floor() as u32 } else { 1 };
-        let onion = self.onion && !self.playing && self.sprite().frames.len() > 1;
-        let key = (self.project.current, rect, step, self.sprite().frame, self.version, onion);
+        let key = (self.project.current, rect, step, self.sprite().frame, self.version);
         if self.texture.as_ref().map(|t| t.key) != Some(key) {
             let palette = self.project.current_palette();
             let sp = self.sprite();
@@ -718,32 +728,7 @@ impl SpritebitApp {
                 }
                 None => sp,
             };
-            let (mut buf, tw, th) = render_rgba_step(shown, &palette, sp.frame, rect, step);
-            // Onion Skin: Nachbar-Frames, nur ihre Form — rot davor, blau danach.
-            let n = sp.frames.len();
-            let mut neighbours: Vec<(Vec<u8>, [u8; 3])> = Vec::new();
-            if onion {
-                if sp.frame > 0 {
-                    neighbours.push((render_rgba_step(sp, &palette, sp.frame - 1, rect, step).0, [255, 96, 96]));
-                }
-                if sp.frame + 1 < n {
-                    neighbours.push((render_rgba_step(sp, &palette, sp.frame + 1, rect, step).0, [96, 156, 255]));
-                }
-            }
-            // Transparente Stellen bleiben durchsichtig — darunter liegen
-            // Schachbrett und Schablone. Onion Skin tönt sie leicht ein.
-            if !neighbours.is_empty() {
-                for o in (0..buf.len()).step_by(4) {
-                    if buf[o + 3] == 0 {
-                        for (nb, tint) in &neighbours {
-                            if nb[o + 3] != 0 {
-                                buf[o..o + 3].copy_from_slice(tint);
-                                buf[o + 3] = 77;
-                            }
-                        }
-                    }
-                }
-            }
+            let (buf, tw, th) = render_rgba_step(shown, &palette, sp.frame, rect, step);
             let image = egui::ColorImage::from_rgba_unmultiplied([tw as usize, th as usize], &buf);
             match &mut self.texture {
                 Some(t) => {
@@ -756,6 +741,8 @@ impl SpritebitApp {
                 }
             }
         }
+        // Onion Skin: eigene Textur, hinter oder vor den Pixeln.
+        let onion_id = self.onion_texture(ui.ctx(), rect, step);
         if let Some(t) = &self.texture {
             let [tw, th] = t.handle.size();
             // Die Textur deckt ganze Blöcke ab — am Rand höchstens bis zur Sprite-Kante.
@@ -783,7 +770,14 @@ impl SpritebitApp {
             let cuv = egui::Rect::from_min_max(Pos2::new(x0 as f32 / k, y0 as f32 / k), Pos2::new(ex as f32 / k, ey as f32 / k));
             painter.image(checker.id(), screen, cuv, Color32::WHITE);
             self.draw_template(&painter.with_clip_rect(screen.intersect(area)), origin, zoom, false);
+            let onion_front = self.tl.onion.front;
+            if let (Some(id), false) = (onion_id, onion_front) {
+                painter.image(id, screen, uv, Color32::WHITE);
+            }
             painter.image(t.handle.id(), screen, uv, Color32::WHITE);
+            if let (Some(id), true) = (onion_id, onion_front) {
+                painter.image(id, screen, uv, Color32::WHITE);
+            }
             self.draw_template(&painter, origin, zoom, true);
         }
 
@@ -916,7 +910,13 @@ impl eframe::App for SpritebitApp {
         egui::Panel::top("menu").show(ui, |ui| self.menu_bar(ui));
         egui::Panel::top("tools").show(ui, |ui| self.toolbar(ui));
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
-        egui::Panel::bottom("timeline").resizable(true).default_size(150.0).show(ui, |ui| self.timeline(ui));
+        // Die Timeline dockt dort an, wo man sie im ⚙-Menü hinstellt.
+        match self.tl.zone {
+            tlmenu_ui::Zone::Bottom => egui::Panel::bottom("timeline").resizable(true).default_size(150.0).show(ui, |ui| self.timeline(ui)),
+            tlmenu_ui::Zone::Top => egui::Panel::top("timeline-top").resizable(true).default_size(150.0).show(ui, |ui| self.timeline(ui)),
+            tlmenu_ui::Zone::Left => egui::Panel::left("timeline-left").resizable(true).default_size(360.0).show(ui, |ui| self.timeline(ui)),
+            tlmenu_ui::Zone::Right => egui::Panel::right("timeline-right").resizable(true).default_size(360.0).show(ui, |ui| self.timeline(ui)),
+        };
         egui::Panel::left("side").resizable(true).default_size(180.0).show(ui, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| self.side_panel(ui));
         });
@@ -926,6 +926,7 @@ impl eframe::App for SpritebitApp {
         egui::CentralPanel::default().show(ui, |ui| self.canvas(ui));
         self.dialogs(&ctx);
         self.import_window(&ctx);
+        self.tl_menu(&ctx);
         self.sync_title(&ctx);
     }
 }
@@ -1392,6 +1393,30 @@ export const HELD = [[0,1],[2,1]];".into(),
         // Das Panel ist offen: seine Knöpfe sind da.
         h.get_by_label("Palette in den Code schreiben");
         h.get_by_label("PDF");
+    }
+
+    #[test]
+    fn timeline_einstellungen_links_und_onion() {
+        let mut h = app();
+        h.get_by_label("Timeline-Einstellungen — Lage, Kopfzeile, Dauer, Onion Skin").click();
+        h.run();
+        h.get_by_label("Links").click();
+        h.run();
+        assert_eq!(h.state().tl.zone, tlmenu_ui::Zone::Left);
+        h.state_mut().tl_menu_open = false;
+        h.run();
+        h.get_by_label("Leerer Frame dahinter").click();
+        h.run();
+        assert_eq!(h.state().sprite().frames.len(), 2, "Timeline arbeitet auch links");
+        // Onion Skin an: der Nachbar-Frame wird eine eigene Textur.
+        h.state_mut().project.sprite_mut().cel_mut(0, 0).set(1, 1, 5);
+        h.state_mut().onion = true;
+        h.state_mut().changed();
+        let ctx = h.ctx.clone();
+        let r = spritebit_core::Rect { x: 0, y: 0, w: 64, h: 64 };
+        assert!(h.state_mut().onion_texture(&ctx, r, 1).is_some());
+        h.state_mut().onion = false;
+        assert!(h.state_mut().onion_texture(&ctx, r, 1).is_none());
     }
 
     #[test]

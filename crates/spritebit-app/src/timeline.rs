@@ -18,7 +18,7 @@ use eframe::egui::{self, Align2, Color32, FontId, Pos2, Sense, Stroke, Vec2};
 use spritebit_core::cels::{self, CelRange};
 use spritebit_core::sprite::{Direction, Tag};
 
-use crate::{icons, SpritebitApp};
+use crate::{icons, tlmenu_ui, SpritebitApp};
 use crate::i18n::{tr, trf};
 
 const LAYER_W: f32 = 170.0;
@@ -109,10 +109,11 @@ impl SpritebitApp {
             if icons::button(ui, icons::RIGHT, tr("Frame nach rechts"), cur + 1 < n).clicked() {
                 self.edit_sprite(|s| s.move_frame(cur, cur + 1));
             }
-            // Sprungfeld: Nummer eintippen (1-basiert wie die Kopfzeile).
-            let mut go = cur + 1;
-            if ui.add(egui::DragValue::new(&mut go).range(1..=n)).on_hover_text(tr("Zu Frame springen")).changed() {
-                self.go_frame(go - 1);
+            // Sprungfeld: Nummer eintippen, gezählt wie in der Kopfzeile.
+            let first = self.tl.first_frame;
+            let mut go = cur + first;
+            if ui.add(egui::DragValue::new(&mut go).range(first..=n - 1 + first)).on_hover_text(tr("Zu Frame springen")).changed() {
+                self.go_frame(go - first);
             }
             ui.separator();
             ui.weak(tr("Ebene"));
@@ -210,8 +211,9 @@ impl SpritebitApp {
                 });
                 self.tag_edit = Some(k);
             }
-            let onion_btn = egui::Button::selectable(self.onion, icons::image(icons::ONION, ui.visuals().text_color()));
-            if ui.add(onion_btn).on_hover_text(tr("Onion Skin — voriger (rot) und nächster Frame (blau) scheinen durch")).clicked() {
+            let tip = tr("Onion Skin — voriger (rot) und nächster Frame (blau) scheinen durch");
+            let onion_btn = egui::Button::selectable(self.onion, icons::image(icons::ONION, ui.visuals().text_color()).alt_text(tip));
+            if ui.add(onion_btn).on_hover_text(tip).clicked() {
                 self.onion = !self.onion;
                 self.version = self.version.wrapping_add(1);
             }
@@ -222,30 +224,31 @@ impl SpritebitApp {
                 self.project.sprite_mut().fps = fps;
                 self.dirty = true;
             }
-            let mut dur = self.project.sprite().frames[cur].duration_ms;
-            ui.label(tr("Dauer"));
-            if ui
-                .add(egui::DragValue::new(&mut dur).range(0..=10_000).suffix(" ms"))
-                .on_hover_text(tr("0 = nach FPS"))
-                .changed()
-            {
-                self.project.sprite_mut().frames[cur].duration_ms = dur;
-                self.dirty = true;
+            ui.separator();
+            let tip = tr("Timeline-Einstellungen — Lage, Kopfzeile, Dauer, Onion Skin");
+            let gear = egui::Button::selectable(self.tl_menu_open, icons::image(icons::SLIDERS, ui.visuals().text_color()).alt_text(tip));
+            if ui.add(gear).on_hover_text(tip).clicked() {
+                self.tl_menu_open = !self.tl_menu_open;
             }
         });
     }
 
     fn timeline_grid(&mut self, ui: &mut egui::Ui) {
+        let tl = self.tl;
+        // Vorschaubilder vorher holen — sie brauchen `&mut self`.
+        let thumbs: Vec<Option<egui::TextureId>> =
+            if tl.thumbs { (0..self.project.sprite().frames.len()).map(|f| self.thumb(ui.ctx(), f)).collect() } else { Vec::new() };
+        let head_h = HEAD_H + if tl.thumbs { tlmenu_ui::THUMB + 4.0 } else { 0.0 };
         let sp = self.project.sprite();
         let (n, nl) = (sp.frames.len(), sp.layers.len());
         let tag_h = if sp.tags.is_empty() { 0.0 } else { TAG_H + 2.0 };
-        let size = Vec2::new(LAYER_W + n as f32 * CELL_W + 8.0, tag_h + HEAD_H + nl as f32 * ROW_H + 4.0);
+        let size = Vec2::new(LAYER_W + n as f32 * CELL_W + 8.0, tag_h + head_h + nl as f32 * ROW_H + 4.0);
         let (resp, painter) = ui.allocate_painter(size, Sense::click());
         let o = resp.rect.min;
         let font = FontId::proportional(12.0);
         let head_y = o.y + tag_h;
         // Zeile `r` von oben zeigt Ebene nl-1-r — oberste Ebene oben.
-        let row_y = |r: usize| head_y + HEAD_H + r as f32 * ROW_H;
+        let row_y = |r: usize| head_y + head_h + r as f32 * ROW_H;
         let col_x = |f: usize| o.x + LAYER_W + f as f32 * CELL_W;
         let range = self.cel_range.and_then(|r| r.clamp(sp)).filter(|r| r.size() > 1);
 
@@ -265,11 +268,20 @@ impl SpritebitApp {
 
         // Kopfzeile: Frame-Nummern (1-basiert, wie in der Web-Version).
         for f in 0..n {
-            let c = egui::Rect::from_min_size(Pos2::new(col_x(f), head_y), Vec2::new(CELL_W, HEAD_H));
+            let c = egui::Rect::from_min_size(Pos2::new(col_x(f), head_y), Vec2::new(CELL_W, head_h));
             if f == sp.frame {
                 painter.rect_filled(c.shrink(1.0), 3.0, ACCENT.gamma_multiply(0.35));
             }
-            painter.text(c.center(), Align2::CENTER_CENTER, format!("{}", f + 1), font.clone(), if f == sp.frame { Color32::WHITE } else { DIM });
+            let num = egui::Rect::from_min_size(c.min, Vec2::new(CELL_W, HEAD_H));
+            painter.text(num.center(), Align2::CENTER_CENTER, format!("{}", tl.label(f)), font.clone(), if f == sp.frame { Color32::WHITE } else { DIM });
+            if let Some(Some(id)) = thumbs.get(f) {
+                // Vorschaubild im Seitenverhältnis des Sprites, mittig.
+                let k = tlmenu_ui::THUMB / sp.width.max(sp.height) as f32;
+                let size = Vec2::new(sp.width as f32 * k, sp.height as f32 * k);
+                let r = egui::Rect::from_center_size(Pos2::new(c.center().x, c.min.y + HEAD_H + 2.0 + tlmenu_ui::THUMB / 2.0), size);
+                painter.rect_filled(r.expand(1.0), 1.0, tlmenu_ui::THUMB_FRAME);
+                painter.image(*id, r, egui::Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
+            }
         }
 
         for r in 0..nl {
@@ -329,14 +341,14 @@ impl SpritebitApp {
         let double = resp.double_clicked();
         if let Some(p) = resp.interact_pointer_pos().filter(|_| resp.clicked() || double) {
             let fx = ((p.x - o.x - LAYER_W) / CELL_W).floor();
-            let ry = ((p.y - head_y - HEAD_H) / ROW_H).floor();
+            let ry = ((p.y - head_y - head_h) / ROW_H).floor();
             let frame_at = (fx >= 0.0 && (fx as usize) < n).then_some(fx as usize);
             if p.y < head_y {
                 // Tag-Spur
                 if let Some(f) = frame_at {
                     self.tag_edit = self.project.sprite().tags.iter().position(|t| f >= t.from && f <= t.to);
                 }
-            } else if p.y < head_y + HEAD_H {
+            } else if p.y < head_y + head_h {
                 if let Some(f) = frame_at {
                     self.cel_range = None;
                     self.go_frame(f);
@@ -416,12 +428,13 @@ impl SpritebitApp {
             ui.text_edit_singleline(&mut t.name);
             ui.horizontal(|ui| {
                 ui.label(tr("Frames"));
-                let (mut a, mut b) = (t.from + 1, t.to + 1);
-                ui.add(egui::DragValue::new(&mut a).range(1..=n));
+                let first = self.tl.first_frame;
+                let (mut a, mut b) = (t.from + first, t.to + first);
+                ui.add(egui::DragValue::new(&mut a).range(first..=n - 1 + first));
                 ui.label("–");
-                ui.add(egui::DragValue::new(&mut b).range(1..=n));
-                t.from = a.min(b) - 1;
-                t.to = a.max(b) - 1;
+                ui.add(egui::DragValue::new(&mut b).range(first..=n - 1 + first));
+                t.from = a.min(b) - first;
+                t.to = a.max(b) - first;
             });
             ui.horizontal(|ui| {
                 ui.label(tr("Richtung"));
