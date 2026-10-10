@@ -69,6 +69,12 @@ pub(crate) fn move_tab(tabs: &mut Vec<usize>, from: usize, to: usize) {
     tabs.insert(to.min(tabs.len()), t);
 }
 
+/// Stelle, vor die ein Reiter beim Loslassen an `x` kommt: hinter alle,
+/// deren Mitte links davon liegt (`rects.len()` = ans Ende).
+pub(crate) fn insert_at(rects: &[egui::Rect], x: f32) -> usize {
+    rects.iter().filter(|r| r.center().x < x).count()
+}
+
 /// Nachbar zum Weiterschalten: +1 rechts, -1 links, rundum.
 pub(crate) fn step(tabs: &[usize], cur: usize, dir: i32) -> Option<usize> {
     if tabs.is_empty() {
@@ -121,6 +127,9 @@ impl SpritebitApp {
         let full = ui.max_rect().x_range();
         let mut active_rect = None;
         let mut tabs_bottom = f32::NEG_INFINITY;
+        // Ziehen: welcher Reiter gezogen wird, wo alle liegen.
+        let (mut dragging, mut dropped) = (None, None);
+        let mut rects = Vec::with_capacity(self.tabs.len());
         let row = egui::ScrollArea::horizontal().id_salt("sprite-tabs").show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 2.0;
@@ -159,17 +168,24 @@ impl SpritebitApp {
                     if label.double_clicked() {
                         rename = Some(i);
                     }
-                    // Ziehen ordnet: der gezogene Reiter landet vor dem, über dem man loslässt.
-                    label.dnd_set_drag_payload(pos);
-                    let whole = inner.response;
-                    if let Some(from) = whole.dnd_hover_payload::<usize>().or_else(|| label.dnd_hover_payload::<usize>()) {
-                        if *from != pos {
-                            let x = whole.rect.left();
-                            ui.painter().vline(x - 1.0, whole.rect.y_range(), ui.visuals().selection.stroke);
-                        }
+                    rects.push(inner.response.rect);
+                    if label.dragged() {
+                        dragging = Some(pos);
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
                     }
-                    if let Some(from) = whole.dnd_release_payload::<usize>().or_else(|| label.dnd_release_payload::<usize>()) {
-                        moved = Some((*from, pos));
+                    if label.drag_stopped() {
+                        dropped = Some(pos);
+                    }
+                }
+                // Ziehen ordnet: die Maus entscheidet, zwischen welchen Reitern
+                // er landet — auch ganz vorne oder hinten.
+                if let (Some(from), Some(x)) = (dragging.or(dropped), ui.ctx().pointer_interact_pos().map(|p| p.x)) {
+                    let to = insert_at(&rects, x);
+                    if dropped.is_some() {
+                        moved = Some((from, to));
+                    } else if to != from && to != from + 1 {
+                        let x = if to < rects.len() { rects[to].left() - 1.0 } else { rects[rects.len() - 1].right() + 1.0 };
+                        ui.painter().vline(x, rects[from].y_range(), egui::Stroke::new(2.0, accent));
                     }
                 }
                 if ui.button("+").on_hover_text(tr("Neuer Sprite")).clicked() {
@@ -245,6 +261,19 @@ mod tests {
         assert_eq!(t, vec![10, 11, 12]);
         move_tab(&mut t, 1, 2);
         assert_eq!(t, vec![10, 11, 12], "vor den eigenen Nachbarn = bleibt");
+    }
+
+    #[test]
+    fn ablegen_nach_mausposition() {
+        let r = |x: f32| egui::Rect::from_min_size(egui::pos2(x, 0.0), egui::vec2(50.0, 20.0));
+        let rects = [r(0.0), r(52.0), r(104.0)];
+        assert_eq!(insert_at(&rects, -5.0), 0);
+        assert_eq!(insert_at(&rects, 30.0), 1, "rechte Hälfte des ersten = dahinter");
+        assert_eq!(insert_at(&rects, 90.0), 2);
+        assert_eq!(insert_at(&rects, 500.0), 3, "ganz hinten");
+        let mut t = vec![10, 11, 12];
+        move_tab(&mut t, 0, insert_at(&rects, 90.0));
+        assert_eq!(t, vec![11, 10, 12], "auf den rechten Nachbarn ziehen tauscht");
     }
 
     #[test]
