@@ -155,21 +155,33 @@ impl SpritebitApp {
     /// Beide brechen um, wenn das Fenster schmal ist — sonst liefe die Leiste
     /// rechts hinaus und ihre Knöpfe wären nicht mehr zu erreichen.
     pub(crate) fn toolbar(&mut self, ui: &mut egui::Ui) {
+        // Ein Fluss für Werkzeuge und Einstellungen: Passen die Werkzeuge in
+        // eine Zeile, beginnen die Einstellungen in der zweiten. Brechen sie
+        // um, laufen die Einstellungen in derselben Zeile weiter — eine dritte
+        // Zeile erst, wenn auch die voll ist.
         ui.horizontal_wrapped(|ui| {
+            let mut first_top = None;
+            let mut last_top = 0.0;
             for t in Tool::ALL {
                 let key = format!("{:?}", t.key());
                 let on = self.tool == t;
                 let color = if on { ui.visuals().strong_text_color() } else { ui.visuals().text_color() };
                 let btn = egui::Button::selectable(on, (icons::image(t.icon(), color), t.label()));
-                if ui.add(btn).on_hover_text(format!("{} ({key})", t.label())).clicked() {
+                let r = ui.add(btn).on_hover_text(format!("{} ({key})", t.label()));
+                if r.clicked() {
                     self.tool = t;
                 }
+                first_top.get_or_insert(r.rect.top());
+                last_top = r.rect.top();
                 if matches!(t, Tool::Pan | Tool::Eraser | Tool::Ellipse) {
                     ui.separator();
                 }
             }
-        });
-        ui.horizontal_wrapped(|ui| {
+            if first_top.is_some_and(|y| last_top <= y + 1.0) {
+                ui.end_row();
+            } else {
+                ui.separator();
+            }
             let c = ui.visuals().text_color();
             let mx = egui::Button::selectable(self.mirror_x, icons::image(icons::MIRROR_X, c));
             if ui.add(mx).on_hover_text(tr("Symmetrie: links ↔ rechts")).clicked() {
