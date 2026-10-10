@@ -139,8 +139,12 @@ pub(crate) struct DockLayout {
     pub(crate) right: Vec<PanelId>,
     /// Gelöst: nur als Icon in der Leiste.
     pub(crate) loose: Vec<PanelId>,
-    /// Das gerade aufgeklappte gelöste Panel und wo sein Icon sitzt.
+    /// Das gerade aufgeklappte gelöste Panel und wo es steht (anfangs am
+    /// Icon, nach dem Verschieben dort, wo man es losgelassen hat).
     pub(crate) flyout: Option<(PanelId, Pos2)>,
+    /// Beim Ziehen des Fensters an seiner Kopfzeile: Abstand vom Zeiger zur
+    /// Ecke, an der es hängt.
+    pub(crate) flyout_grab: Option<egui::Vec2>,
     /// Klick aufs Icon eines angepinnten Panels: hinscrollen und aufklappen.
     pub(crate) focus: Option<PanelId>,
 }
@@ -153,6 +157,7 @@ impl Default for DockLayout {
             right: vec![Layers, Preview, Palette, Image, Cleanup, Light, Tiles, Guides, Template, Output],
             loose: Vec::new(),
             flyout: None,
+            flyout_grab: None,
             focus: None,
         }
     }
@@ -275,7 +280,7 @@ impl DockLayout {
     /// Aus der Einstellungsdatei. Unbekanntes fällt weg; Panels, die es noch
     /// nicht gab, kommen an ihren gewohnten Platz.
     pub(crate) fn from_text(text: &str) -> DockLayout {
-        let mut d = DockLayout { left: Vec::new(), right: Vec::new(), loose: Vec::new(), flyout: None, focus: None };
+        let mut d = DockLayout { left: Vec::new(), right: Vec::new(), loose: Vec::new(), flyout: None, flyout_grab: None, focus: None };
         for line in text.lines() {
             let Some((k, v)) = line.split_once('=') else { continue };
             let ids: Vec<PanelId> = v.split(',').filter_map(|s| PanelId::from_key(s.trim())).collect();
@@ -507,10 +512,27 @@ impl SpritebitApp {
             Side::Left => Align2::LEFT_TOP,
             Side::Right => Align2::RIGHT_TOP,
         };
+        // Wird das Panel an der Kopfzeile gezogen, wandert das Fenster mit.
+        // Klicks gehen dabei durch — darunter liegen die Leisten und Spalten,
+        // in die man es andocken kann. Lässt man es woanders los, bleibt es
+        // dort stehen.
+        let dragging = egui::DragAndDrop::payload::<PanelId>(ctx).is_some_and(|p| *p == id);
+        let mut at = at;
+        if dragging {
+            if let Some(p) = ctx.pointer_interact_pos() {
+                let grab = *self.dock.flyout_grab.get_or_insert_with(|| at - ctx.input(|i| i.pointer.press_origin()).unwrap_or(p));
+                let screen = ctx.content_rect();
+                at = (p + grab).clamp(screen.min, screen.max - egui::vec2(40.0, 40.0));
+                self.dock.flyout = Some((id, at));
+            }
+        } else {
+            self.dock.flyout_grab = None;
+        }
         let (mut close, mut pin) = (false, false);
         egui::Window::new(id.title())
             .id(egui::Id::new(("flyout", id.key())))
             .title_bar(false)
+            .interactable(!dragging)
             .pivot(pivot)
             .fixed_pos(at)
             .resizable(false)
@@ -550,10 +572,6 @@ impl SpritebitApp {
             self.dock.toggle_pin(id);
             self.dock.save();
         }
-        // Wer ein Panel zieht, braucht das Fenster nicht mehr.
-        if egui::DragAndDrop::payload::<PanelId>(ctx).is_some_and(|p| *p == id) {
-            self.dock.flyout = None;
-        }
     }
 
     /// Während des Ziehens: der Name des Panels am Zeiger.
@@ -561,6 +579,10 @@ impl SpritebitApp {
         let Some(id) = egui::DragAndDrop::payload::<PanelId>(ctx) else { return };
         let Some(p) = ctx.pointer_interact_pos() else { return };
         ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
+        // Das aufgeklappte Fenster wandert selbst mit — kein Schild nötig.
+        if self.dock.flyout.is_some_and(|(f, _)| f == *id) {
+            return;
+        }
         let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("dock-drag")));
         let font = egui::FontId::proportional(13.0);
         let text = painter.layout_no_wrap(id.title().to_string(), font, Color32::WHITE);

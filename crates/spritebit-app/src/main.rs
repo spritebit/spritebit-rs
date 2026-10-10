@@ -1658,6 +1658,67 @@ mod tests {
     }
 
     #[test]
+    fn aufgeklapptes_panel_an_der_kopfzeile_verschieben() {
+        use dock_ui::{PanelId, Side};
+        let mut h = app();
+        {
+            let d = &mut h.state_mut().dock;
+            d.move_to_other_side(PanelId::Colors);
+            d.toggle_pin(PanelId::Colors);
+        }
+        h.run();
+        h.get_by_label("Farben — Klick klappt auf").click();
+        h.run();
+        assert!(h.state().dock.flyout.is_some_and(|(id, _)| id == PanelId::Colors));
+        // Der Name in der Kopfzeile des Fensters — gleich rechts vom Icon.
+        let from = h.get_all_by_label("Farben").map(|n| n.rect()).find(|r| r.width() < 120.0).expect("Name im Fenster").center();
+        let to = h.get_by_label("Sprites").rect().center() - Vec2::new(0.0, 6.0);
+        let btn = egui::PointerButton::Primary;
+        h.hover_at(from);
+        h.step();
+        h.event(egui::Event::PointerButton { pos: from, button: btn, pressed: true, modifiers: Modifiers::NONE });
+        h.step();
+        for k in 1..=10 {
+            let p = from + (to - from) * (k as f32 / 10.0);
+            h.event(egui::Event::PointerMoved(p));
+            h.step();
+        }
+        h.event(egui::Event::PointerButton { pos: to, button: btn, pressed: false, modifiers: Modifiers::NONE });
+        h.run();
+        let d = &h.state().dock;
+        assert!(d.all_on(Side::Left).contains(&PanelId::Colors), "links eingereiht: {:?}", d.all_on(Side::Left));
+        assert!(d.is_pinned(PanelId::Colors));
+    }
+
+    #[test]
+    fn aufgeklapptes_panel_frei_verschieben() {
+        use dock_ui::PanelId;
+        let mut h = app();
+        h.state_mut().dock.toggle_pin(PanelId::Light);
+        h.run();
+        h.get_by_label("Licht — Klick klappt auf").click();
+        h.run();
+        let before = h.state().dock.flyout.expect("offen").1;
+        let from = h.get_all_by_label("Licht").map(|n| n.rect()).find(|r| r.width() < 120.0).expect("Name im Fenster").center();
+        let to = from - Vec2::new(300.0, 0.0);
+        let btn = egui::PointerButton::Primary;
+        h.hover_at(from);
+        h.step();
+        h.event(egui::Event::PointerButton { pos: from, button: btn, pressed: true, modifiers: Modifiers::NONE });
+        h.step();
+        for k in 1..=10 {
+            h.event(egui::Event::PointerMoved(from + (to - from) * (k as f32 / 10.0)));
+            h.step();
+        }
+        h.event(egui::Event::PointerButton { pos: to, button: btn, pressed: false, modifiers: Modifiers::NONE });
+        h.run();
+        let (id, at) = h.state().dock.flyout.expect("bleibt offen, wo man es loslässt");
+        assert_eq!(id, PanelId::Light);
+        assert!((at.x - (before.x - 300.0)).abs() < 2.0, "um 300 px nach links: {before:?} → {at:?}");
+        assert!(!h.state().dock.is_pinned(PanelId::Light));
+    }
+
+    #[test]
     fn neues_projekt_mit_namen_und_speicherort() {
         let mut h = app();
         h.state_mut().project.palettes.push(spritebit_core::Palette::new("meine", vec![[1, 2, 3]]));
