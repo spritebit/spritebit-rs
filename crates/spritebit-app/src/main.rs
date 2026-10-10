@@ -1219,6 +1219,7 @@ impl eframe::App for SpritebitApp {
         self.tile_sync(down);
         self.dialogs(&ctx);
         self.dock_flyout(&ctx);
+        self.dock_drag_preview(&ctx);
         self.notes_window(&ctx);
         self.import_window(&ctx);
         self.tl_menu(&ctx);
@@ -1398,21 +1399,47 @@ mod tests {
         // Pin-Knopf in der Kopfzeile von „Licht“: das wievielte Panel rechts?
         let i = h.state().dock.pinned(Side::Right).iter().position(|p| *p == PanelId::Light).unwrap();
         let left = h.state().dock.pinned(Side::Left).len();
-        let tip = "Lösen — das Panel steht dann nur noch als Icon in der Leiste am Rand";
+        let tip = "Angepinnt — klicken, um das Panel zu lösen (dann nur noch als Icon in der Leiste)";
         h.get_all_by_label(tip).nth(left + i).unwrap().click();
         h.run();
         assert!(!h.state().dock.is_pinned(PanelId::Light), "gelöst");
         assert_eq!(h.state().dock.loose_on(Side::Right), [PanelId::Light]);
         // Icon in der Leiste klappt es auf …
-        h.get_by_label("Licht").click();
+        h.get_by_label("Licht — Klick klappt auf").click();
         h.run();
         assert_eq!(h.state().dock.flyout.map(|f| f.0), Some(PanelId::Light));
         assert!(h.query_by_label("Lichtquelle").is_some(), "der Inhalt steht im Fenster");
-        // … „Anpinnen“ holt es zurück in die Spalte.
-        h.get_by_label("Anpinnen").click();
+        // … die Pinnadel im Fenster holt es zurück in die Spalte.
+        h.get_by_label("Anpinnen — das Panel steht dann offen in der Spalte").click();
         h.run();
         assert!(h.state().dock.is_pinned(PanelId::Light));
         assert!(h.state().dock.flyout.is_none());
+    }
+
+    /// Ein Icon aus der rechten Leiste auf ein Icon der linken ziehen.
+    #[test]
+    fn panel_icon_in_die_andere_leiste_ziehen() {
+        use dock_ui::{PanelId, Side};
+        let mut h = app();
+        let from = h.get_by_label("Licht — angepinnt, Klick springt hin").rect().center();
+        let to = h.get_by_label("Farben — angepinnt, Klick springt hin").rect().center() - Vec2::new(0.0, 6.0);
+        let btn = egui::PointerButton::Primary;
+        h.hover_at(from);
+        h.step();
+        h.event(egui::Event::PointerButton { pos: from, button: btn, pressed: true, modifiers: Modifiers::NONE });
+        h.step();
+        // In kleinen Schritten — erst ab ein paar Pixeln wird gezogen.
+        for k in 1..=10 {
+            let p = from + (to - from) * (k as f32 / 10.0);
+            h.event(egui::Event::PointerMoved(p));
+            h.step();
+        }
+        h.event(egui::Event::PointerButton { pos: to, button: btn, pressed: false, modifiers: Modifiers::NONE });
+        h.run();
+        let d = &h.state().dock;
+        assert_eq!(d.all_on(Side::Left), [PanelId::Sprites, PanelId::Light, PanelId::Colors], "vor „Farben“ eingereiht");
+        assert!(!d.all_on(Side::Right).contains(&PanelId::Light));
+        assert!(d.is_pinned(PanelId::Light), "bleibt angepinnt");
     }
 
     #[test]
@@ -2453,7 +2480,7 @@ mod shot {
             d.toggle_pin(PanelId::Tiles);
             d.move_to_other_side(PanelId::Layers);
             h.run();
-            h.get_by_label("Licht").click();
+            h.get_by_label("Licht — Klick klappt auf").click();
             h.run();
         }
         let img = h.render().expect("Bild");

@@ -289,6 +289,7 @@ impl SpritebitApp {
     /// Ein aufklappbares Panel mit Icon, das sich merkt, ob es offen ist —
     /// beim nächsten Start der App steht es wieder so da (PanelMemory).
     /// `extra`: Knöpfe rechts in der Kopfzeile (dock_ui.rs panel_header).
+    /// Gibt die Kopfzeile und den Griff zum Ziehen zurück.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn panel_with(
         &mut self,
@@ -300,7 +301,7 @@ impl SpritebitApp {
         force: Option<bool>,
         extra: impl FnOnce(&mut Self, &mut egui::Ui),
         body: impl FnOnce(&mut Self, &mut egui::Ui),
-    ) -> egui::Response {
+    ) -> (egui::Response, egui::Response) {
         use egui::collapsing_header::CollapsingState;
         // An den Schlüssel gebunden, nicht an die Spalte — so bleibt der
         // Zustand, wenn das Panel die Seite wechselt.
@@ -316,11 +317,13 @@ impl SpritebitApp {
             state.set_open(open);
         }
         let color = ui.visuals().text_color();
+        // Icon und Name: Klick klappt auf und zu, Ziehen verschiebt das
+        // Panel (dock_ui.rs).
         let header = state.show_header(ui, |ui| {
-            ui.add(icons::image(icon, color));
-            let name = ui.add(egui::Label::new(egui::RichText::new(title).strong()).selectable(false).sense(egui::Sense::click()));
+            let grip = ui.add(icons::image(icon, color).sense(egui::Sense::click_and_drag()));
+            let name = ui.add(egui::Label::new(egui::RichText::new(title).strong()).selectable(false).sense(egui::Sense::click_and_drag()));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| extra(self, ui));
-            name
+            grip | name
         });
         let (_, head, _) = header.body(|ui| body(self, ui));
         // Auch ein Klick auf den Namen klappt auf und zu, nicht nur der Pfeil.
@@ -334,7 +337,8 @@ impl SpritebitApp {
             self.panels.open.insert(id.to_string(), open);
             self.panels.save();
         }
-        head.response
+        // Kopfzeile (Ablageziel) und der Griff (Icon + Name, zum Ziehen).
+        (head.response, head.inner)
     }
 
     pub(crate) fn image_panel(&mut self, ui: &mut egui::Ui) {
