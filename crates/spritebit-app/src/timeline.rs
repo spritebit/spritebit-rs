@@ -26,7 +26,7 @@ pub(crate) enum TlDrag {
     Frame(usize),
     Layer(usize),
 }
-use crate::i18n::{tr, trf};
+use crate::i18n::tr;
 
 const LAYER_W: f32 = 170.0;
 const TAG_H: f32 = 16.0;
@@ -137,105 +137,11 @@ impl SpritebitApp {
             }
             ui.separator();
             ui.weak(tr("Ebene"));
-            let (nl, l) = (self.project.sprite().layers.len(), self.project.sprite().layer);
-            if icons::button(ui, icons::PLUS, tr("Neue Ebene über der aktiven"), true).clicked() {
-                self.edit_sprite(|s| {
-                    let name = trf("Ebene {n}", &[("n", &(s.layers.len() + 1))]);
-                    let at = s.layer + 1;
-                    s.add_layer(at, name);
-                });
-            }
-            if icons::button(ui, icons::UP, tr("Ebene nach oben"), l + 1 < nl).clicked() {
-                self.edit_sprite(|s| s.move_layer(l, l + 1));
-            }
-            if icons::button(ui, icons::DOWN, tr("Ebene nach unten"), l > 0).clicked() {
-                self.edit_sprite(|s| s.move_layer(l, l - 1));
-            }
-            if icons::button(ui, icons::COPY, tr("Ebene verdoppeln"), true).clicked() {
-                let name = trf("{name} Kopie", &[("name", &self.project.sprite().layers[l].name)]);
-                self.edit_sprite(|s| s.duplicate_layer(name));
-            }
-            if icons::button(ui, icons::MERGE_DOWN, tr("Nach unten zusammenlegen — in jedem Frame"), l > 0).clicked() {
-                let pal = self.project.current_palette();
-                self.edit_sprite(|s| {
-                    s.merge_down(&pal);
-                });
-            }
-            let visible = self.project.sprite().layers.iter().filter(|l| l.visible && l.opacity > 0.0).count();
-            if icons::button(ui, icons::MERGE_ALL, tr("Alle sichtbaren Ebenen zusammenführen — in jedem Frame, auch Licht und Schatten; ausgeblendete bleiben"), visible >= 2).clicked() {
-                let pal = self.project.current_palette();
-                let name = tr("Zusammengeführt");
-                self.edit_sprite(|s| {
-                    s.merge_visible(&pal, name);
-                });
-            }
-            // Ebenenmaske der aktiven Ebene (spritebit_core::mask).
+            self.layer_buttons(ui);
+            // Ebenenmaske der aktiven Ebene (layers_ui.rs).
             ui.separator();
-            let (has_mask, mask_on, editing) = {
-                let sp = self.project.sprite();
-                let m = sp.layers[sp.layer].mask.as_ref();
-                (m.is_some(), m.is_some_and(|m| m.on), sp.editing_mask())
-            };
-            if !has_mask {
-                if icons::button(ui, icons::MASK, tr("Maske hinzufügen — damit blendest du Teile der Ebene aus, ohne sie zu löschen"), true).clicked() {
-                    self.edit_sprite(|s| {
-                        let l = s.layer;
-                        s.layers[l].mask = Some(spritebit_core::mask::Mask::new(s.width, s.height));
-                        s.editing_mask = true;
-                    });
-                    self.hint = Some(tr("Maske bearbeiten: Malen blendet aus, Radieren blendet wieder ein.").into());
-                }
-            } else {
-                let c = ui.visuals().text_color();
-                let b = egui::Button::selectable(editing, icons::image(icons::MASK, c)).wrap_mode(egui::TextWrapMode::Extend);
-                if ui.add(b).on_hover_text(tr("Maske bearbeiten: Malen blendet aus, Radieren blendet wieder ein")).clicked() {
-                    self.commit_float();
-                    let sp = self.project.sprite_mut();
-                    sp.editing_mask = !editing;
-                    self.hint = (!editing).then(|| tr("Maske bearbeiten: Malen blendet aus, Radieren blendet wieder ein.").into());
-                    self.changed();
-                }
-                let (eye, tip) = if mask_on { (icons::EYE, tr("Maske ausschalten (alles sichtbar)")) } else { (icons::EYE_OFF, tr("Maske einschalten")) };
-                if icons::button(ui, eye, tip, true).clicked() {
-                    self.edit_sprite(|s| {
-                        let l = s.layer;
-                        if let Some(m) = s.layers[l].mask.as_mut() {
-                            m.on = !m.on;
-                        }
-                    });
-                }
-                if icons::button(ui, icons::CHECK, tr("Maske anwenden: ausgeblendete Pixel werden gelöscht, die Maske verschwindet"), true).clicked() {
-                    self.edit_sprite(|s| {
-                        s.apply_mask();
-                    });
-                }
-                if icons::button(ui, icons::TRASH, tr("Maske löschen — alles wieder sichtbar"), true).clicked() {
-                    self.edit_sprite(|s| {
-                        let l = s.layer;
-                        s.layers[l].mask = None;
-                        s.editing_mask = false;
-                    });
-                }
-            }
-            // Aktive Ebene frisch lesen — Verdoppeln/Zusammenlegen eben hat sie verschoben.
-            let la = self.project.sprite().layer;
-            let mut op = self.project.sprite().layers[la].opacity * 100.0;
-            let r = ui
-                .add(egui::DragValue::new(&mut op).range(0.0..=100.0).speed(1.0).suffix(" %").max_decimals(0))
-                .on_hover_text(tr("Deckkraft der aktiven Ebene"));
-            if r.drag_started() || (r.changed() && !r.dragged()) {
-                self.edit_sprite(|_| {});
-            }
-            if r.changed() {
-                self.project.sprite_mut().layers[la].opacity = (op / 100.0).clamp(0.0, 1.0);
-                self.changed();
-            }
-            if icons::button(ui, icons::TRASH, tr("Ebene löschen"), nl > 1).clicked() {
-                self.edit_sprite(|s| {
-                    let l = s.layer;
-                    s.delete_layer(l);
-                });
-            }
+            self.mask_buttons(ui);
+            self.opacity_field(ui);
             ui.separator();
             ui.weak(tr("Zellen"));
             let r = self.cur_range();
@@ -380,7 +286,12 @@ impl SpritebitApp {
             let y = row_y(r);
             // Ebenen-Spalte
             let row = egui::Rect::from_min_size(Pos2::new(o.x, y), Vec2::new(LAYER_W - 4.0, ROW_H - 2.0));
-            painter.rect_filled(row, 3.0, if l == sp.layer { ACCENT.gamma_multiply(0.25) } else { Color32::from_gray(38) });
+            // Aktive Ebene deutlich: blauer Grund, Balken links, Name fett —
+            // sonst sah man kaum, in welcher Zeile man gerade malt.
+            painter.rect_filled(row, 3.0, if l == sp.layer { ACCENT.gamma_multiply(0.38) } else { Color32::from_gray(38) });
+            if l == sp.layer {
+                painter.rect_filled(egui::Rect::from_min_size(row.min, Vec2::new(3.0, row.height())), 1.0, ACCENT);
+            }
             let icon_rect = |k: usize| {
                 egui::Rect::from_center_size(Pos2::new(o.x + 10.0 + k as f32 * ICON_W, y + ROW_H / 2.0 - 1.0), Vec2::splat(14.0))
             };
@@ -391,7 +302,13 @@ impl SpritebitApp {
             let (cont, cont_c) = if layer.continuous { (icons::CONT_ON, ACCENT) } else { (icons::CONT_OFF, Color32::from_gray(90)) };
             egui::Image::new(cont).tint(cont_c).paint_at(ui, icon_rect(2));
             let name_col = if l == sp.layer { Color32::WHITE } else if layer.visible { Color32::from_gray(200) } else { Color32::from_gray(110) };
-            painter.text(Pos2::new(o.x + 3.0 * ICON_W + 6.0, y + ROW_H / 2.0 - 1.0), Align2::LEFT_CENTER, &layer.name, font.clone(), name_col);
+            let name_font = if l == sp.layer { FontId::proportional(12.5) } else { font.clone() };
+            let name_pos = Pos2::new(o.x + 3.0 * ICON_W + 6.0, y + ROW_H / 2.0 - 1.0);
+            painter.text(name_pos, Align2::LEFT_CENTER, &layer.name, name_font.clone(), name_col);
+            if l == sp.layer {
+                // „fett“: einmal leicht versetzt nachgezeichnet
+                painter.text(name_pos + Vec2::new(0.6, 0.0), Align2::LEFT_CENTER, &layer.name, name_font, name_col);
+            }
 
             // Zellen
             for f in 0..n {
@@ -402,7 +319,9 @@ impl SpritebitApp {
                     ACCENT.gamma_multiply(0.45)
                 } else if in_range {
                     ACCENT.gamma_multiply(0.25)
-                } else if f == sp.frame || l == sp.layer {
+                } else if l == sp.layer {
+                    ACCENT.gamma_multiply(0.16)
+                } else if f == sp.frame {
                     Color32::from_gray(44)
                 } else {
                     Color32::from_gray(34)

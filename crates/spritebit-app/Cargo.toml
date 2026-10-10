@@ -20,4 +20,4 @@ ureq = "3.4.2"
 winresource = "0.1"
 
 [dev-dependencies]
-egui_kittest = { version = "0.36.2", features = ["eframe"] }
+egui_kittest = { version = "0.36.2", features = ["eframe", "wgpu"] }

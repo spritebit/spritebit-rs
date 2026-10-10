@@ -90,6 +90,35 @@ pub fn render_rgba_step(sp: &Sprite, pal: &Palette, frame: usize, rect: Rect, st
     (out, ow, oh)
 }
 
+/// Nur die Ebene `layer` im Frame `frame`, ganzes Bild, jedes `step`-te
+/// Pixel — für das Vorschaubild im Ebenen-Panel. Sichtbarkeit und
+/// Deckkraft zählen hier nicht (man soll sehen, was drauf ist, auch wenn
+/// sie gerade aus ist); eine eingeschaltete Maske schon.
+pub fn render_layer_rgba_step(sp: &Sprite, pal: &Palette, frame: usize, layer: usize, step: u32) -> (Vec<u8>, u32, u32) {
+    let step = step.max(1);
+    let (ow, oh) = (sp.width.div_ceil(step), sp.height.div_ceil(step));
+    let mut out = vec![0u8; (ow * oh * 4) as usize];
+    let img = sp.cel(frame, layer);
+    if img.allocated_tiles() == 0 {
+        return (out, ow, oh);
+    }
+    let mask = sp.layers[layer].mask.as_ref().filter(|m| m.on);
+    for y in 0..oh {
+        for x in 0..ow {
+            let (sx, sy) = (x * step, y * step);
+            let px = img.get(sx, sy);
+            if px == 0 || mask.is_some_and(|m| m.hide.get(sx, sy) != 0) {
+                continue;
+            }
+            let Some(rgb) = color_of(px, pal, &sp.free) else { continue };
+            let o = ((y * ow + x) * 4) as usize;
+            out[o..o + 3].copy_from_slice(&rgb);
+            out[o + 3] = 255;
+        }
+    }
+    (out, ow, oh)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -109,6 +138,23 @@ mod tests {
         let buf = render_rgba(&sp, &pal, 0, Rect { x: 0, y: 0, w: 4, h: 4 });
         assert_eq!(px(&buf, 4, 1, 1), [255, 255, 255, 255]);
         assert_eq!(px(&buf, 4, 0, 0)[3], 0, "leer bleibt durchsichtig");
+    }
+
+    #[test]
+    fn eine_ebene_allein_auch_wenn_sie_aus_ist() {
+        let pal = Palette::grayscale();
+        let mut sp = Sprite::new("a", 4, 4).unwrap();
+        sp.cel_mut(0, 0).set(1, 1, 5); // schwarz
+        sp.add_layer(1, "oben");
+        sp.cel_mut(0, 1).set(2, 2, 1); // weiß
+        sp.layers[1].visible = false;
+        let (buf, w, h) = render_layer_rgba_step(&sp, &pal, 0, 1, 1);
+        assert_eq!((w, h), (4, 4));
+        assert_eq!(px(&buf, 4, 2, 2), [255, 255, 255, 255], "ausgeblendet trotzdem zu sehen");
+        assert_eq!(px(&buf, 4, 1, 1)[3], 0, "die Ebene darunter gehört nicht dazu");
+        let (buf, w, _) = render_layer_rgba_step(&sp, &pal, 0, 0, 2);
+        assert_eq!(w, 2);
+        assert_eq!(px(&buf, 2, 0, 0)[3], 0);
     }
 
     #[test]

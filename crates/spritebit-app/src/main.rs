@@ -15,6 +15,7 @@ mod guides_ui;
 mod i18n;
 mod icons;
 mod image_ui;
+mod layers_ui;
 mod palette_ui;
 mod preview_ui;
 mod selection_ui;
@@ -196,6 +197,8 @@ struct SpritebitApp {
     tl_persist: bool,
     tl_menu_open: bool,
     tl_cache: tlmenu_ui::TlCache,
+    /// Vorschaubilder im Ebenen-Panel (layers_ui.rs).
+    layer_thumbs: layers_ui::LayerThumbs,
     /// Hintergrund, Vollbild, „Farbe zeigen“, Hilfe, Sitzungssicherung.
     view: view_ui::ViewState,
     /// Bitty, der Helfer: Blase, Suche, Hinweise (bitty_ui.rs).
@@ -296,6 +299,7 @@ impl SpritebitApp {
             tl_persist: false,
             tl_menu_open: false,
             tl_cache: tlmenu_ui::TlCache::default(),
+            layer_thumbs: layers_ui::LayerThumbs::default(),
             view: view_ui::ViewState::default(),
             bitty: bitty_ui::BittyState::default(),
             panels: image_ui::PanelMemory::load(),
@@ -1386,6 +1390,23 @@ mod tests {
     }
 
     #[test]
+    fn ebenen_panel_waehlt_und_blendet_aus() {
+        let mut h = app();
+        h.get_all_by_label("Neue Ebene über der aktiven").next().unwrap().click();
+        h.run();
+        assert_eq!(h.state().project.sprite().layer, 1, "die neue Ebene ist aktiv");
+        let first = h.state().project.sprite().layers[0].name.clone();
+        h.get_by_label(&first).click();
+        h.run();
+        assert_eq!(h.state().project.sprite().layer, 0, "Klick auf die Zeile wählt die Ebene");
+        // Oberste Zeile = oberste Ebene.
+        h.get_all_by_label("Ebene ausblenden").next().unwrap().click();
+        h.run();
+        assert!(!h.state().project.sprite().layers[1].visible, "das Auge blendet aus");
+        assert!(h.state().project.sprite().layers[0].visible);
+    }
+
+    #[test]
     fn sprites_und_farben_lassen_sich_einklappen() {
         let mut h = app();
         for (name, id) in [("Sprites", "p-sprites"), ("Farben", "p-colors")] {
@@ -1931,7 +1952,7 @@ mod tests {
         h.state_mut().project.sprite_mut().layer = li;
         h.run();
         assert!(h.state().project.sprite().layers[li].locked);
-        h.get_by_label("Maske hinzufügen — damit blendest du Teile der Ebene aus, ohne sie zu löschen").click();
+        h.get_all_by_label("Maske hinzufügen — damit blendest du Teile der Ebene aus, ohne sie zu löschen").next().unwrap().click();
         h.run();
         assert!(h.state().project.sprite().editing_mask());
         // Mit dem Stift über die Lichtkante oben: die Maske blendet sie aus.
@@ -2029,10 +2050,10 @@ mod tests {
     fn ebene_zusammenlegen_ueber_knopf() {
         let mut h = app();
         h.state_mut().project.sprite_mut().active().set(1, 1, 5);
-        h.get_by_label("Neue Ebene über der aktiven").click();
+        h.get_all_by_label("Neue Ebene über der aktiven").next().unwrap().click();
         h.run();
         h.state_mut().project.sprite_mut().active().set(2, 2, 3);
-        h.get_by_label("Nach unten zusammenlegen — in jedem Frame").click();
+        h.get_all_by_label("Nach unten zusammenlegen — in jedem Frame").next().unwrap().click();
         h.run();
         let sp = h.state().sprite();
         assert_eq!(sp.layers.len(), 1);
@@ -2333,5 +2354,32 @@ export const HELD = [[0,1],[2,1]];".into(),
         h.run();
         assert_eq!(h.state().project.sprite().frames.len(), 2);
         assert_eq!(h.state().project.sprite().frame, 1);
+    }
+}
+
+/// Nur zum Ansehen: `cargo test -p spritebit-app bild_der_oberflaeche -- --ignored`
+/// schreibt ein Bild der App nach SPRITEBIT_SHOT (Pfad einer PNG-Datei).
+#[cfg(test)]
+mod shot {
+    use super::*;
+    use egui_kittest::Harness;
+
+    #[test]
+    #[ignore = "nur zum Ansehen, braucht eine Grafikkarte"]
+    fn bild_der_oberflaeche() {
+        let Some(path) = std::env::var_os("SPRITEBIT_SHOT") else { return };
+        let mut h = Harness::builder().with_size(Vec2::new(1400.0, 860.0)).wgpu().build_eframe(|cc| {
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+            let mut app = SpritebitApp::new();
+            let s = app.project.sprite_mut();
+            s.add_layer(1, "Figur");
+            for x in 4..12 {
+                s.cel_mut(0, 1).set(x, 6, 5);
+            }
+            app
+        });
+        h.run();
+        let img = h.render().expect("Bild");
+        img.save(path).expect("speichern");
     }
 }
