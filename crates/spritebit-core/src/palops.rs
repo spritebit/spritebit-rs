@@ -96,6 +96,21 @@ pub fn add_free_colors(sp: &mut Sprite, colors: &[Rgb]) -> Result<(Vec<Rgb>, usi
     Ok((out, fresh.len()))
 }
 
+/// Eine Farbe hinten an `colors` hängen; Pixel, die sie als freie Farbe
+/// haben, bekommen die neue Nummer. `None`, wenn sie schon drin ist oder die
+/// Palette voll ist.
+pub fn add_color(sp: &mut Sprite, colors: &[Rgb], rgb: Rgb) -> Option<Vec<Rgb>> {
+    if colors.contains(&rgb) || colors.len() >= MAX_COLORS {
+        return None;
+    }
+    let mut out = colors.to_vec();
+    out.push(rgb);
+    let n = out.len() as Px;
+    let free = sp.free.clone();
+    remap_pixels(sp, |_, v| if v >= FREE_BASE && free.get((v - FREE_BASE) as usize) == Some(&rgb) { n } else { v });
+    Some(out)
+}
+
 /// HSL eines Farbwerts: Farbton 0–360, Sättigung und Helligkeit 0–1.
 fn hsl(c: Rgb) -> (f64, f64, f64) {
     let [r, g, b] = c.map(|v| v as f64 / 255.0);
@@ -245,6 +260,20 @@ mod tests {
         let c = sp.free_color([1, 1, 1]);
         sp.active().set(2, 0, c);
         assert_eq!(add_free_colors(&mut sp, &full), Err(1));
+    }
+
+    #[test]
+    fn eine_farbe_in_die_palette() {
+        let mut sp = Sprite::new("t", 2, 1).unwrap();
+        let a = sp.free_color([9, 9, 9]);
+        let b = sp.free_color([7, 7, 7]);
+        sp.active().set(0, 0, a);
+        sp.active().set(1, 0, b);
+        let colors = add_color(&mut sp, &[[255, 0, 0]], [9, 9, 9]).unwrap();
+        assert_eq!(colors, vec![[255, 0, 0], [9, 9, 9]]);
+        assert_eq!([sp.cel(0, 0).get(0, 0), sp.cel(0, 0).get(1, 0)], [2, b], "nur diese Farbe wird zur Nummer");
+        assert_eq!(add_color(&mut sp, &colors, [9, 9, 9]), None, "schon drin");
+        assert_eq!(add_color(&mut sp, &vec![[0, 0, 0]; MAX_COLORS], [1, 1, 1]), None, "voll");
     }
 
     #[test]

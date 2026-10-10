@@ -1376,6 +1376,27 @@ mod tests {
     }
 
     #[test]
+    fn hex_eingeben_und_in_die_palette() {
+        let mut h = app();
+        let n = h.state().project.current_palette().len();
+        let tool = h.state().tool;
+        let is_field = |n: &egui_kittest::kittest::AccessKitNode<'_>| n.role() == egui::accesskit::Role::TextInput && n.value().as_deref() == Some("#000000");
+        h.get_by(is_field).click();
+        h.run();
+        h.get_by(is_field).type_text("c0ffee");
+        h.run();
+        h.run();
+        assert!(h.state().color >= spritebit_core::FREE_BASE, "neue Farbe ist frei");
+        h.get_by_label("+ In Palette").click();
+        h.run();
+        let a = h.state();
+        assert_eq!(a.project.current_palette().len(), n + 1);
+        assert_eq!(a.color as usize, n + 1);
+        assert_eq!(a.current_rgb(), Some([0xc0, 0xff, 0xee]));
+        assert!(a.tool == tool, "Buchstaben im Feld sind keine Kürzel");
+    }
+
+    #[test]
     fn reiter_lassen_sich_ziehen() {
         let mut h = app();
         {

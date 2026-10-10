@@ -22,7 +22,7 @@
 use std::collections::HashMap;
 
 use eframe::egui::{self, Color32, Sense, Stroke, Vec2};
-use spritebit_core::palette::MAX_COLORS;
+use spritebit_core::palette::{parse_hex, MAX_COLORS};
 use spritebit_core::{builtin, palops, selection::rgb_of, Palette, Px, Rgb, FREE_BASE};
 
 use crate::i18n::{tr, trf};
@@ -109,6 +109,32 @@ fn strip(ui: &mut egui::Ui, colors: &[Rgb], width: f32) {
 
 pub(crate) fn hex(c: Rgb) -> String {
     format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])
+}
+
+/// Hex-Eingabe für `rgb` (`None` = transparent, Feld leer). Gibt die
+/// eingegebene Farbe: sofort bei sechs Stellen, sonst beim Verlassen
+/// (`#rgb` geht auch, das `#` darf fehlen).
+fn hex_field(ui: &mut egui::Ui, id: &str, rgb: Option<Rgb>) -> Option<Rgb> {
+    let id = ui.id().with(id);
+    let mut text = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| rgb.map(hex).unwrap_or_default());
+    let mut edit = egui::TextEdit::singleline(&mut text).id(id).desired_width(64.0).char_limit(7).font(egui::TextStyle::Monospace).hint_text("#rrggbb").show(ui);
+    // Beim Hineinklicken alles markieren — gleich drüberschreiben
+    if edit.response.gained_focus() {
+        edit.state.cursor.set_char_range(Some(egui::text::CCursorRange::select_all(&edit.galley)));
+        edit.state.store(ui.ctx(), id);
+    }
+    let resp = edit.response.response;
+    let digits = text.trim().trim_start_matches('#').to_string();
+    let parsed = parse_hex(&format!("#{digits}")).filter(|c| Some(*c) != rgb);
+    let out = if resp.has_focus() {
+        ui.data_mut(|d| d.insert_temp(id, text));
+        parsed.filter(|_| resp.changed() && digits.len() == 6)
+    } else {
+        ui.data_mut(|d| d.remove::<String>(id));
+        parsed.filter(|_| resp.lost_focus())
+    };
+    resp.on_hover_text(tr("Hex-Wert eingeben, z. B. #6fa211 — liegt die Farbe schon in der Palette, wird sie gewählt"));
+    out
 }
 
 /// Name für eine eigene Palette: klein, nur a–z, 0–9, _ und -.
@@ -233,6 +259,28 @@ impl SpritebitApp {
         self.changed();
     }
 
+    /// Die aktuelle (freie) Farbe als neue Nummer in die Palette.
+    fn add_current_to_palette(&mut self) {
+        let Some(rgb) = self.current_rgb() else { return };
+        if self.project.current_palette().len() >= MAX_COLORS {
+            self.hint = Some(trf("Die Palette ist voll ({n} Farben).", &[("n", &MAX_COLORS)]));
+            return;
+        }
+        self.pal_step();
+        let i = self.own_palette();
+        let cur = self.project.current;
+        let colors = self.project.palettes[i].colors.clone();
+        match palops::add_color(&mut self.project.sprites[cur], &colors, rgb) {
+            Some(colors) => {
+                self.color = colors.len() as Px;
+                self.project.palettes[i].colors = colors;
+                self.hint = Some(trf("{hex} ist jetzt Nr. {n} der Palette.", &[("hex", &hex(rgb)), ("n", &self.color)]));
+                self.changed();
+            }
+            None => self.histories[cur].drop_last(),
+        }
+    }
+
     fn add_free_to_palette(&mut self) {
         let pal = self.project.current_palette();
         self.pal_step();
@@ -289,6 +337,20 @@ impl SpritebitApp {
                     }
                 });
             });
+        });
+        // Hex eingeben — findet die Farbe in der Palette oder wird eine freie
+        ui.horizontal(|ui| {
+            if let Some(rgb) = hex_field(ui, "cur-hex", self.current_rgb()) {
+                self.set_rgb(rgb);
+            }
+            if self.color >= FREE_BASE
+                && ui
+                    .add_enabled(palette.len() < MAX_COLORS, egui::Button::new(tr("+ In Palette")).small())
+                    .on_hover_text(tr("Diese Farbe als neue Nummer in die Palette aufnehmen"))
+                    .clicked()
+            {
+                self.add_current_to_palette();
+            }
         });
         ui.add_space(6.0);
 
@@ -373,6 +435,12 @@ impl SpritebitApp {
                 ui.horizontal(|ui| {
                     ui.label(trf("Farbe {n}", &[("n", &self.color)]));
                     let r = egui::color_picker::color_edit_button_srgb(ui, &mut rgb);
+                    if let Some(typed) = hex_field(ui, "edit-hex", Some(rgb)) {
+                        self.pal_step();
+                        let i = self.own_palette();
+                        self.project.palettes[i].colors[self.color as usize - 1] = typed;
+                        self.changed();
+                    }
                     if r.changed() {
                         // Ein Undo-Schritt je Öffnen des Farbwählers, nicht je Zug.
                         if !self.pal.picking {
