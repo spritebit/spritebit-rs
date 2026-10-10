@@ -914,6 +914,16 @@ const TEXTS: &[(&str, &str, &str)] = &[
     // ── Clean Stroke (saubere 1-Pixel-Striche) ──
     ("Clean Stroke", "Clean Stroke", ""),
     ("Wie in bekannten Pixel-Art-Programmen: entfernt beim Zeichnen die doppelten Eckpixel an Treppenstufen — saubere 1-Pixel-Linien (Stift, Radierer mit Größe 1)", "As in well-known pixel art tools: removes the doubled corner pixels at stair steps while drawing — clean 1-pixel lines (pencil, eraser at size 1)", "Wia in bekanntn Pixel-Art-Programmen: haut beim Zeichnen de doppltn Eckpixel an de Stiagnstufn weg — saubere 1-Pixel-Linien (Stift, Radiergummi mit Greß 1)"),
+    // ── Einzelne Sprites (.bitty) ──
+    ("Sprite speichern unter …", "Save sprite as …", "Sprite speichern unta …"),
+    ("Sprite hinzufügen …", "Add sprite …", "Sprite dazuagebn …"),
+    ("Sprite speichern", "Save sprite", ""),
+    ("Sprite hinzufügen", "Add sprite", "Sprite dazuagebn"),
+    ("spritebit-Sprite", "spritebit sprite", ""),
+    ("spritebit-Sprite oder -Projekt", "spritebit sprite or project", ""),
+    ("Sprite gespeichert: {name}", "Sprite saved: {name}", "Sprite gspeichat: {name}"),
+    ("Sprite „{name}“ zum Projekt hinzugefügt.", "Sprite “{name}” added to the project.", "Sprite „{name}“ zum Projekt dazuagebn."),
+    ("{n} Sprites zum Projekt hinzugefügt.", "{n} sprites added to the project.", "{n} Sprites zum Projekt dazuagebn."),
     // ── Bitty, der Helfer (bitty_ui.rs) ──
     ("Bitty — Suche und Tipps (Strg+K)", "Bitty — search and tips (Ctrl+K)", "Bitty — Suach und Tipps (Strg+K)"),
     ("Hinweise von Bitty", "Hints from Bitty", ""),

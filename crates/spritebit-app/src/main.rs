@@ -78,8 +78,12 @@ pub(crate) const ZOOM_MIN: f32 = 0.05;
 pub(crate) const ZOOM_MAX: f32 = 64.0;
 /// Ab dieser Zoomstufe werden Gitterlinien gezeichnet.
 const GRID_FROM: f32 = 8.0;
-/// Dateiendung des eigenen Formats.
-const EXT: &str = "spritebit";
+/// Dateiendung des eigenen Projektformats. Früher „.spritebit“ — solche
+/// Dateien öffnen sich weiter (OLD_EXT), gespeichert wird als .sb.
+const EXT: &str = "sb";
+const OLD_EXT: &str = "spritebit";
+/// Ein einzelner Sprite: JSON wie in der Web-Version, dort genauso lesbar.
+const SPRITE_EXT: &str = "bitty";
 /// Version aus Cargo.toml — steht in Titelleiste, Hilfe und „Über“.
 pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Unterstützen (Ko-fi) — fließt in ein Code-Signatur-Zertifikat. Wie im Web (js/site-links.js).
@@ -389,12 +393,23 @@ impl SpritebitApp {
     fn open_now(&mut self) {
         let Some(path) = rfd::FileDialog::new()
             .set_title(tr("Projekt öffnen"))
-            .add_filter(tr("spritebit-Projekt"), &[EXT, "json"])
+            .add_filter(tr("spritebit-Projekt"), &[EXT, OLD_EXT, SPRITE_EXT, "json"])
             .add_filter(tr("Alle Dateien"), &["*"])
             .pick_file()
         else {
             return;
         };
+        // Ein einzelner Sprite ersetzt das Projekt nicht, er kommt dazu — wie im Web.
+        if path.extension().is_some_and(|e| e.eq_ignore_ascii_case(SPRITE_EXT)) {
+            match std::fs::read_to_string(&path).map_err(|e| e.to_string()) {
+                Ok(text) => match import_web(&text) {
+                    Ok(p) => self.merge_project(p),
+                    Err(e) => self.error = Some(i18n::io_error(&e)),
+                },
+                Err(e) => self.error = Some(trf("{path} konnte nicht gelesen werden: {e}", &[("path", &path.display()), ("e", &e)])),
+            }
+            return;
+        }
         match std::fs::read(&path) {
             Err(e) => self.error = Some(trf("{path} konnte nicht gelesen werden: {e}", &[("path", &path.display()), ("e", &e)])),
             Ok(bytes) => {
@@ -403,7 +418,7 @@ impl SpritebitApp {
                 let result = if bytes.starts_with(b"SPRITEBIT\0") {
                     load_native(&bytes).map(|p| (p, Some(path.clone())))
                 } else {
-                    // Aus einer Web-Datei wird beim Speichern eine .spritebit-Datei.
+                    // Aus einer Web-Datei wird beim Speichern eine .sb-Datei.
                     std::str::from_utf8(&bytes)
                         .map_err(|_| spritebit_core::IoError::NotAProject("kein Text".into()))
                         .and_then(import_web)
@@ -452,6 +467,75 @@ impl SpritebitApp {
             }
             Err(e) => self.error = Some(trf("{path} konnte nicht gespeichert werden: {e}", &[("path", &path.display()), ("e", &e)])),
         }
+    }
+
+    /// Nur den aktuellen Sprite als .bitty sichern (JSON der Web-Version,
+    /// dort genauso lesbar) — das Projekt bleibt, wie es ist.
+    fn save_sprite_as(&mut self) {
+        self.commit_float();
+        let name = format!("{}.{SPRITE_EXT}", self.sprite().name);
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title(tr("Sprite speichern"))
+            .add_filter(tr("spritebit-Sprite"), &[SPRITE_EXT])
+            .set_file_name(name)
+            .save_file()
+        {
+            let path = if path.extension().is_none() { path.with_extension(SPRITE_EXT) } else { path };
+            match std::fs::write(&path, spritebit_core::export_sprite(&self.project, self.project.current)) {
+                Ok(()) => self.hint = Some(trf("Sprite gespeichert: {name}", &[("name", &path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned()))])),
+                Err(e) => self.error = Some(trf("{path} konnte nicht gespeichert werden: {e}", &[("path", &path.display()), ("e", &e)])),
+            }
+        }
+    }
+
+    /// Sprites aus einer Datei zum Projekt dazunehmen: .bitty, eine
+    /// spritebit-Projektdatei oder ein Web-Projekt — ersetzt wird nichts
+    /// (Project::merge).
+    fn add_sprites(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .set_title(tr("Sprite hinzufügen"))
+            .add_filter(tr("spritebit-Sprite oder -Projekt"), &[SPRITE_EXT, EXT, OLD_EXT, "json"])
+            .add_filter(tr("Alle Dateien"), &["*"])
+            .pick_file()
+        else {
+            return;
+        };
+        let other = match std::fs::read(&path) {
+            Err(e) => {
+                self.error = Some(trf("{path} konnte nicht gelesen werden: {e}", &[("path", &path.display()), ("e", &e)]));
+                return;
+            }
+            Ok(bytes) if bytes.starts_with(b"SPRITEBIT\0") => load_native(&bytes),
+            Ok(bytes) => std::str::from_utf8(&bytes)
+                .map_err(|_| spritebit_core::IoError::NotAProject("kein Text".into()))
+                .and_then(import_web),
+        };
+        match other {
+            Ok(other) => self.merge_project(other),
+            Err(e) => self.error = Some(i18n::io_error(&e)),
+        }
+    }
+
+    /// Sprites eines anderen Projekts übernehmen: je ein frischer Verlauf,
+    /// ein offener Reiter, der erste wird gewählt.
+    fn merge_project(&mut self, other: Project) {
+        let added = self.project.merge(other);
+        let n = added.len();
+        if n == 0 {
+            return;
+        }
+        for i in added.clone() {
+            self.histories.push(History::default());
+            self.tabs.push(i);
+        }
+        self.select_sprite(added.start);
+        self.dirty = true;
+        self.version = self.version.wrapping_add(1);
+        self.hint = Some(if n == 1 {
+            trf("Sprite „{name}“ zum Projekt hinzugefügt.", &[("name", &self.sprite().name)])
+        } else {
+            trf("{n} Sprites zum Projekt hinzugefügt.", &[("n", &n)])
+        });
     }
 
     fn export_web(&mut self) {
@@ -596,6 +680,14 @@ impl SpritebitApp {
                 }
                 if ui.add(egui::Button::new(tr("Speichern unter …")).shortcut_text(keys("Strg+Umschalt+S"))).clicked() {
                     self.save_as();
+                }
+                ui.separator();
+                // Einzelne Sprites statt des ganzen Projekts (.bitty)
+                if ui.button(tr("Sprite speichern unter …")).clicked() {
+                    self.save_sprite_as();
+                }
+                if ui.button(tr("Sprite hinzufügen …")).clicked() {
+                    self.add_sprites();
                 }
                 ui.separator();
                 if ui.add(egui::Button::new(tr("Exportieren …")).shortcut_text(keys("Strg+E"))).clicked() {

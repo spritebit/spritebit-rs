@@ -545,6 +545,16 @@ pub fn export_web(p: &Project) -> String {
     serde_json::to_string(&doc).expect("JSON aus eigenen Daten")
 }
 
+/// Ein einzelner Sprite als `.bitty`-Datei: das JSON der Web-Version mit
+/// nur diesem Sprite (samt eigener Palette) und `"kind": "sprite"` — so
+/// lesen Web und Desktop dieselbe Datei, und die Web-Version fügt sie beim
+/// Öffnen hinzu, statt das Projekt zu ersetzen.
+pub fn export_sprite(p: &Project, i: usize) -> String {
+    let mut doc: Value = serde_json::from_str(&export_web(&p.single(i))).expect("eben geschrieben");
+    doc["kind"] = json!("sprite");
+    serde_json::to_string(&doc).expect("JSON aus eigenen Daten")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -688,6 +698,19 @@ mod tests {
         assert!(matches!(import_web(r#"{ "grids": {} }"#), Err(IoError::Unsupported(_))));
         assert!(matches!(import_web("kein json"), Err(IoError::NotAProject(_))));
         assert!(matches!(import_web(r#"{ "version": 2, "sprites": {} }"#), Err(IoError::NotAProject(_))));
+    }
+
+    #[test]
+    fn einzelner_sprite_als_bitty() {
+        let p = sample();
+        let text = export_sprite(&p, 0);
+        let doc: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(doc["kind"], "sprite");
+        assert_eq!(doc["sprites"].as_object().unwrap().len(), 1);
+        // und die Desktop-App liest sie wieder
+        let back = import_web(&text).unwrap();
+        assert_eq!(back.sprites.len(), 1);
+        assert_eq!(back.sprites[0].name, p.sprites[0].name);
     }
 
     #[test]

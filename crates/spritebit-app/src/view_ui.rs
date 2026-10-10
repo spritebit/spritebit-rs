@@ -270,7 +270,7 @@ impl SpritebitApp {
             self.view.help_open = false;
         }
         if save_backup {
-            if let (Some(src), Some(dst)) = (dir().map(|d| d.join("backup.spritebit")), rfd::FileDialog::new().set_file_name("sicherung.spritebit").save_file()) {
+            if let (Some(src), Some(dst)) = (dir().map(|d| d.join("backup.spritebit")), rfd::FileDialog::new().set_file_name("sicherung.sb").save_file()) {
                 if let Err(e) = std::fs::copy(&src, &dst) {
                     self.error = Some(trf("{path} konnte nicht geschrieben werden: {e}", &[("path", &dst.display()), ("e", &e)]));
                 }

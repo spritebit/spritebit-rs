@@ -53,7 +53,7 @@ pub mod tools;
 pub use composite::{render_rgba, render_rgba_step, Rect};
 pub use history::History;
 pub use image::{Image, Px, FREE_BASE, TILE};
-pub use io::{export_web, import_web, load_native, save_native, IoError};
+pub use io::{export_sprite, export_web, import_web, load_native, save_native, IoError};
 pub use palette::{Palette, Rgb};
 pub use project::Project;
 pub use selection::{Clip, Selection};
