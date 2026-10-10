@@ -20,9 +20,10 @@ warnt beim ersten Start vor einem unbekannten Herausgeber, weil die Datei nicht
 signiert ist: „Weitere Informationen“ → „Trotzdem ausführen“.
 
 **Updates:** Beim Start fragt die App einmal bei GitHub nach, ob es eine neuere
-Version gibt, und zeigt dann oben ein Band mit **„Jetzt aktualisieren“**, „Später“
-und „Diese Version überspringen“. Abgerufen wird nur die neueste Versionsnummer —
-keine Daten aus deinen Projekten. Abschalten: Hilfe → „Beim Start nach Updates suchen“.
+Version gibt, und zeigt dann oben ein Band mit **„Jetzt aktualisieren“** und „Später“.
+„Später“ merkt sich nichts — beim nächsten Start kommt das Band wieder. Abgerufen wird nur
+die neueste Versionsnummer — keine Daten aus deinen Projekten. Abschalten: Hilfe → „Beim
+Start nach Updates suchen“; Hilfe → „Jetzt nach Updates suchen“ fragt sofort nach.
 
 „Jetzt aktualisieren“ lädt die neue `spritebit.exe` direkt von der Release, prüft sie
 gegen die mitveröffentlichte SHA-256-Prüfsumme und tauscht die App an Ort und Stelle

@@ -1,12 +1,13 @@
 //! Update-Hinweis: beim Start einmal bei GitHub nach der neuesten Release
 //! fragen und, wenn es eine neuere gibt, oben ein Band zeigen —
-//! „Neue Version 1.0.3 verfügbar“ mit Herunterladen, Später und
-//! „Diese Version überspringen“.
+//! „Neue Version 1.0.3 verfügbar“ mit Aktualisieren und Später. „Später“
+//! merkt sich nichts: beim nächsten Start ist das Band wieder da, solange
+//! es eine neuere Version gibt.
 //!
 //! Die Abfrage läuft in einem eigenen Thread, die App startet also nicht
 //! langsamer; ohne Internet passiert einfach nichts. Abschaltbar unter
-//! Hilfe → „Beim Start nach Updates suchen“. Gemerkt wird das (und eine
-//! übersprungene Version) in `update.json` im Einstellungsordner.
+//! Hilfe → „Beim Start nach Updates suchen“, gemerkt in `update.json` im
+//! Einstellungsordner. Hilfe → „Jetzt nach Updates suchen“ fragt sofort nach.
 //!
 //! „Was ist neu?“: Jede Version hat Notizen in `notes/<version>.md` (im
 //! Repo, Abschnitte `## Deutsch` und `## English`). Die eigenen bettet
@@ -128,10 +129,6 @@ pub(crate) fn show_own_notes(seen: Option<&str>, current: &str, notes: &str) -> 
     seen.is_none_or(|s| is_newer(current, s)) && !note_points(notes, Lang::De).is_empty()
 }
 
-/// Ob ein Band gezeigt wird: neuer als diese Version und nicht übersprungen.
-pub(crate) fn worth_showing(latest: &str, current: &str, skipped: Option<&str>) -> bool {
-    is_newer(latest, current) && skipped != Some(latest)
-}
 
 /// Die Abfrage selbst (blockierend — läuft im eigenen Thread).
 ///
@@ -189,10 +186,11 @@ pub(crate) struct UpdateState {
     /// Beim Start nachsehen? (Hilfe-Menü)
     pub check: bool,
     /// Diese Version nicht mehr anbieten.
-    pub skipped: Option<String>,
     /// Gefundene neuere Version, solange das Band offen ist.
     pub available: Option<String>,
     rx: Option<Receiver<Option<String>>>,
+    /// Die laufende Abfrage kam aus dem Hilfe-Menü: Ergebnis immer melden.
+    manual: bool,
     /// Erst nach dem Laden speichern (Tests schreiben nichts).
     persist: bool,
     /// „Jetzt aktualisieren“ (selfupdate.rs).
@@ -211,9 +209,9 @@ impl Default for UpdateState {
     fn default() -> Self {
         UpdateState {
             check: true,
-            skipped: None,
             available: None,
             rx: None,
+            manual: false,
             persist: false,
             install: Default::default(),
             install_target: None,
@@ -237,7 +235,6 @@ impl SpritebitApp {
             if let Some(c) = v.get("check").and_then(|c| c.as_bool()) {
                 self.update.check = c;
             }
-            self.update.skipped = v.get("skip").and_then(|s| s.as_str()).map(str::to_string);
             self.update.seen = v.get("seen").and_then(|s| s.as_str()).map(str::to_string);
         }
         // Neue Version (per Update oder von Hand): einmal ihre Notizen zeigen.
@@ -280,7 +277,7 @@ impl SpritebitApp {
         }
         if let Some(p) = settings_path() {
             let _ = p.parent().map(std::fs::create_dir_all);
-            let v = serde_json::json!({ "check": self.update.check, "skip": self.update.skipped, "seen": self.update.seen });
+            let v = serde_json::json!({ "check": self.update.check, "seen": self.update.seen });
             let _ = std::fs::write(p, v.to_string());
         }
     }
@@ -295,12 +292,23 @@ impl SpritebitApp {
         let Some(rx) = &self.update.rx else { return };
         let Ok(found) = rx.try_recv() else { return };
         self.update.rx = None;
-        if let Some(v) = found {
-            if worth_showing(&v, VERSION, self.update.skipped.as_deref()) {
+        let manual = std::mem::take(&mut self.update.manual);
+        match found {
+            Some(v) if is_newer(&v, VERSION) => {
                 self.spawn_notes_fetch(&v, ctx);
                 self.update.available = Some(v);
             }
+            _ if !manual => {}
+            Some(_) => self.error = Some(trf("spritebit {v} ist die neueste Version.", &[("v", &VERSION)])),
+            None => self.error = Some(tr("GitHub ist gerade nicht erreichbar — später noch einmal versuchen.").into()),
         }
+    }
+
+    /// Hilfe → „Jetzt nach Updates suchen“: sofort fragen und das Ergebnis
+    /// auf jeden Fall melden.
+    pub(crate) fn check_updates_now(&mut self, ctx: &egui::Context) {
+        self.update.manual = true;
+        self.spawn_update_check(ctx);
     }
 
     /// Notizen der neueren Version gleich mitladen — „Was ist neu?“ soll
@@ -334,7 +342,7 @@ impl SpritebitApp {
             .clicked()
     }
 
-    /// Nebenknopf im Band (Später, Überspringen, Schließen): dezent.
+    /// Nebenknopf im Band (Später, Schließen): dezent.
     fn banner_link(ui: &mut egui::Ui, text: &str) -> bool {
         ui.add(egui::Button::new(egui::RichText::new(text).color(Color32::from_rgb(214, 226, 245))).frame(false)).clicked()
     }
@@ -394,7 +402,7 @@ impl SpritebitApp {
             Install::Idle => {}
         }
         let Some(v) = self.update.available.clone() else { return };
-        let (mut later, mut skip, mut install, mut notes) = (false, false, false, false);
+        let (mut later, mut install, mut notes) = (false, false, false);
         ui.horizontal_wrapped(|ui| {
             Self::banner_title(ui, "⬆", &trf("Neue Version {new} verfügbar", &[("new", &v)]));
             ui.label(egui::RichText::new(trf("(du hast {old})", &[("old", &VERSION)])).color(soft));
@@ -409,7 +417,6 @@ impl SpritebitApp {
                 .clicked();
             ui.add_space(8.0);
             later = Self::banner_link(ui, tr("Später"));
-            skip = Self::banner_link(ui, tr("Diese Version überspringen"));
         });
         if notes {
             self.update.notes_view = Some(NotesView::Next);
@@ -418,11 +425,8 @@ impl SpritebitApp {
             self.start_install(v.clone(), ui.ctx());
             return;
         }
-        if skip {
-            self.update.skipped = Some(v);
-            self.save_update_settings();
-        }
-        if later || skip {
+        // Nur für diese Sitzung — nach dem nächsten Start kommt das Band wieder.
+        if later {
             self.update.available = None;
         }
     }
@@ -442,7 +446,7 @@ impl SpritebitApp {
                     NextNotes::Idle | NextNotes::Failed => (title, Vec::new(), false),
                 }
             }
-            // Das Band ist weg (Später, Überspringen): das Fenster auch.
+            // Das Band ist weg (Später): das Fenster auch.
             (NotesView::Next, None) => {
                 self.update.notes_view = None;
                 return;
@@ -497,6 +501,15 @@ impl SpritebitApp {
     pub(crate) fn update_menu(&mut self, ui: &mut egui::Ui) {
         if ui.button(tr("Was ist neu?")).on_hover_text(tr("Was diese Version mitbringt")).clicked() {
             self.update.notes_view = Some(NotesView::Own);
+            ui.close();
+        }
+        let busy = self.update.rx.is_some() || self.update.available.is_some() || !matches!(self.update.install, crate::selfupdate::Install::Idle);
+        if ui
+            .add_enabled(!busy, egui::Button::new(tr("Jetzt nach Updates suchen")))
+            .on_hover_text(tr("Fragt sofort bei GitHub nach, ob es eine neuere Version gibt."))
+            .clicked()
+        {
+            self.check_updates_now(ui.ctx());
             ui.close();
         }
         let before = self.update.check;
@@ -587,10 +600,26 @@ mod tests {
     }
 
     #[test]
-    fn uebersprungene_version_kommt_nicht_wieder() {
-        assert!(worth_showing("1.0.3", "1.0.2", None));
-        assert!(!worth_showing("1.0.3", "1.0.2", Some("1.0.3")));
-        assert!(worth_showing("1.0.4", "1.0.2", Some("1.0.3")), "eine noch neuere schon");
-        assert!(!worth_showing("1.0.2", "1.0.2", None));
+    fn von_hand_suchen_meldet_immer_etwas() {
+        let ctx = egui::Context::default();
+        let mut app = crate::SpritebitApp::new();
+        // Antwort von Hand einspeisen statt ins Netz zu gehen.
+        let answer = |app: &mut crate::SpritebitApp, v: Option<&str>| {
+            let (tx, rx) = mpsc::channel();
+            tx.send(v.map(str::to_string)).unwrap();
+            app.update.rx = Some(rx);
+            app.update.manual = true;
+            app.poll_update(&ctx);
+        };
+        answer(&mut app, Some("9.9.9"));
+        assert_eq!(app.update.available.as_deref(), Some("9.9.9"));
+        app.update.available = None;
+        answer(&mut app, Some(VERSION));
+        assert!(app.error.as_deref().is_some_and(|h| h.contains(VERSION)), "neueste Version gemeldet");
+        app.error = None;
+        answer(&mut app, None);
+        assert!(app.error.is_some(), "ohne Netz eine Meldung");
+        assert!(!app.update.manual);
     }
+
 }

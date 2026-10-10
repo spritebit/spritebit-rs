@@ -419,6 +419,10 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Lädt die neue Version, prüft sie und tauscht die App aus — ohne ZIP und ohne Entpacken.", "Downloads the new version, checks it and swaps the app — no ZIP, no unpacking.", ""),
     ("Was ist neu?", "What's new?", ""),
     ("Was diese Version mitbringt", "What this version brings", ""),
+    ("Jetzt nach Updates suchen", "Check for updates now", ""),
+    ("Fragt sofort bei GitHub nach, ob es eine neuere Version gibt.", "Asks GitHub right away whether there is a newer version.", ""),
+    ("spritebit {v} ist die neueste Version.", "spritebit {v} is the latest version.", ""),
+    ("GitHub ist gerade nicht erreichbar — später noch einmal versuchen.", "GitHub cannot be reached right now — please try again later.", ""),
     ("Neu in spritebit {v}", "New in spritebit {v}", ""),
     ("Notizen werden geladen …", "Loading the notes …", ""),
     ("Zu dieser Version gibt es keine Notizen.", "There are no notes for this version.", ""),
@@ -900,7 +904,6 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Neue Version {new} verfügbar", "New version {new} available", "Neiche Version {new} do"),
     ("(du hast {old})", "(you have {old})", "(du host {old})"),
     ("Später", "Later", "Spätta"),
-    ("Diese Version überspringen", "Skip this version", "De Version auslossn"),
     ("Beim Start nach Updates suchen", "Check for updates on start", "Beim Start noch Updates schaun"),
     (
         "Fragt beim Start einmal bei GitHub nach, ob es eine neuere Version gibt. Dabei wird nur die neueste Versionsnummer abgerufen — keine Daten aus deinen Projekten.",
