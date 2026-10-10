@@ -127,7 +127,8 @@ impl SpritebitApp {
         let full = ui.max_rect().x_range();
         let mut active_rect = None;
         let mut tabs_bottom = f32::NEG_INFINITY;
-        // Ziehen: welcher Reiter gezogen wird, wo alle liegen.
+        // Ziehen: welcher Reiter gezogen wird, wo alle liegen. Die Namen sind
+        // nicht markierbar — sonst nimmt die Textauswahl das Ziehen.
         let (mut dragging, mut dropped) = (None, None);
         let mut rects = Vec::with_capacity(self.tabs.len());
         let row = egui::ScrollArea::horizontal().id_salt("sprite-tabs").show(ui, |ui| {
@@ -145,7 +146,7 @@ impl SpritebitApp {
                         ui.horizontal(|ui| {
                             let text = egui::RichText::new(sp.name.as_str());
                             let label = ui
-                                .add(egui::Label::new(if active { text.strong() } else { text }).truncate().sense(egui::Sense::click_and_drag()))
+                                .add(egui::Label::new(if active { text.strong() } else { text }).truncate().selectable(false).sense(egui::Sense::click_and_drag()))
                                 .on_hover_text(format!("{} · {}×{} · {}", sp.name, sp.width, sp.height, sp.palette));
                             if closable && ui.add(egui::Button::new("×").small().frame(false)).on_hover_text(tr("Reiter schließen (Mittelklick) — der Sprite bleibt im Projekt")).clicked() {
                                 shut = Some(i);

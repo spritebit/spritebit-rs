@@ -1400,6 +1400,37 @@ mod tests {
     }
 
     #[test]
+    fn reiter_ziehen_viele_schmales_fenster() {
+        let mut h = Harness::builder().with_size(Vec2::new(1000.0, 700.0)).build_eframe(|cc| {
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+            SpritebitApp::new()
+        });
+        h.run();
+        {
+            let a = h.state_mut();
+            a.project.sprites[0].name = "background".into();
+            for n in ["Sprite 4", "Sprite 3", "Sprite 5", "tile-layout", "bitty", "test", "Hero", "Sprite 9", "bitty2"] {
+                a.project.sprites.push(spritebit_core::Sprite::new(n, 16, 16).unwrap());
+            }
+            a.tabs = (0..10).collect();
+        }
+        h.run();
+        let r = |h: &Harness<'_, SpritebitApp>, n: &str| h.get_by_label(n).rect();
+        let (from, to) = (r(&h, "Sprite 4").center(), r(&h, "Hero").right_center() + Vec2::new(4.0, 0.0));
+        h.hover_at(from);
+        h.run();
+        h.drag_at(from);
+        h.run();
+        for k in 1..=8 {
+            h.hover_at(from + (to - from) * (k as f32 / 8.0));
+            h.run();
+        }
+        h.drop_at(to);
+        h.run();
+        assert_eq!(h.state().tabs, vec![0, 2, 3, 4, 5, 6, 7, 1, 8, 9]);
+    }
+
+    #[test]
     fn stift_malt_einen_strich_ohne_luecken() {
         let mut h = app();
         drag(&mut h, (10.0, 10.0), (20.0, 10.0));
