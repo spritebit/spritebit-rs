@@ -193,6 +193,8 @@ struct SpritebitApp {
     view: view_ui::ViewState,
     /// Bitty, der Helfer: Blase, Suche, Hinweise (bitty_ui.rs).
     bitty: bitty_ui::BittyState,
+    /// Welche Panels rechts offen sind — wird gemerkt (image_ui.rs).
+    panels: image_ui::PanelMemory,
     /// In der Kopfzeile markierte Frames und der Ausgangspunkt für Umschalt+Klick.
     frame_sel: Vec<usize>,
     frame_anchor: Option<usize>,
@@ -288,6 +290,7 @@ impl SpritebitApp {
             tl_cache: tlmenu_ui::TlCache::default(),
             view: view_ui::ViewState::default(),
             bitty: bitty_ui::BittyState::default(),
+            panels: image_ui::PanelMemory::load(),
             frame_sel: Vec::new(),
             frame_anchor: None,
             tl_drag: None,
@@ -1219,6 +1222,18 @@ mod tests {
         drag(&mut h, (10.0, 10.0), (12.0, 10.0));
         assert_eq!(px(&h, 10, 10), 0);
         assert!(h.state().hint.as_deref().is_some_and(|t| t.contains("gesperrt")));
+    }
+
+    #[test]
+    fn panel_merkt_sich_auf_und_zu() {
+        let mut h = app();
+        assert_eq!(h.state().panel_open("p-light"), None, "noch nichts geändert");
+        h.get_by_label("Licht").click();
+        h.run();
+        assert_eq!(h.state().panel_open("p-light"), Some(true));
+        h.get_by_label("Licht").click();
+        h.run();
+        assert_eq!(h.state().panel_open("p-light"), Some(false));
     }
 
     #[test]

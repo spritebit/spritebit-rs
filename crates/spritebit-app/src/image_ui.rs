@@ -19,6 +19,50 @@ use spritebit_core::{cleanup, Image, Rgb};
 use crate::i18n::{tr, trf};
 use crate::SpritebitApp;
 
+/// Welche Panels der rechten Leiste offen sind — überlebt den Neustart.
+/// Kleine Textdatei im Einstellungsordner („p-light=1“ je Zeile), wie die
+/// Sprache; in Tests nie (die liefen sonst gegen die echten Einstellungen).
+#[derive(Default)]
+pub(crate) struct PanelMemory {
+    pub(crate) open: std::collections::HashMap<String, bool>,
+    /// Der gespeicherte Stand ist gesetzt (nur im ersten Durchlauf).
+    pub(crate) applied: bool,
+}
+
+impl PanelMemory {
+    #[cfg(not(test))]
+    fn file() -> Option<std::path::PathBuf> {
+        Some(crate::i18n::settings_dir()?.join("panels"))
+    }
+
+    pub(crate) fn load() -> Self {
+        #[allow(unused_mut)]
+        let mut m = Self::default();
+        #[cfg(not(test))]
+        if let Some(text) = Self::file().and_then(|p| std::fs::read_to_string(p).ok()) {
+            for line in text.lines() {
+                if let Some((k, v)) = line.split_once('=') {
+                    m.open.insert(k.trim().to_string(), v.trim() == "1");
+                }
+            }
+        }
+        m
+    }
+
+    fn save(&self) {
+        #[cfg(not(test))]
+        if let Some(p) = Self::file() {
+            let mut keys: Vec<_> = self.open.iter().collect();
+            keys.sort();
+            let out: String = keys.into_iter().map(|(k, v)| format!("{k}={}\n", if *v { 1 } else { 0 })).collect();
+            if let Some(dir) = p.parent() {
+                let _ = std::fs::create_dir_all(dir);
+            }
+            let _ = std::fs::write(p, out);
+        }
+    }
+}
+
 /// Laufende freie Drehung: das unberührte Original, jede Vorschau rechnet
 /// von ihm aus (sonst wäre die Form nach dreimal Ziehen Matsch).
 pub(crate) enum RotLive {
@@ -235,25 +279,52 @@ impl SpritebitApp {
         self.report(r, nothing);
     }
 
+    /// Wie die Panels stehen (für Tests).
+    #[cfg(test)]
+    pub(crate) fn panel_open(&self, id: &str) -> Option<bool> {
+        self.panels.open.get(id).copied()
+    }
+
     /// Die rechte Leiste: aufklappbare Panels wie in der Web-Version.
     pub(crate) fn right_panels(&mut self, ui: &mut egui::Ui) {
-        egui::CollapsingHeader::new(tr("Vorschau")).id_salt("p-preview").default_open(true).show(ui, |ui| self.preview_panel(ui));
-        egui::CollapsingHeader::new(tr("Palette")).id_salt("p-palette").default_open(true).show(ui, |ui| self.palette_library(ui));
-        egui::CollapsingHeader::new(tr("Bild")).id_salt("p-image").default_open(true).show(ui, |ui| self.image_panel(ui));
-        egui::CollapsingHeader::new(tr("Aufräumen")).id_salt("p-cleanup").show(ui, |ui| self.cleanup_panel(ui));
-        egui::CollapsingHeader::new(tr("Licht")).id_salt("p-light").show(ui, |ui| self.light_panel(ui));
-        egui::CollapsingHeader::new(tr("Kacheln")).id_salt("p-tiles").show(ui, |ui| self.tiles_panel(ui));
-        egui::CollapsingHeader::new(tr("Hilfslinien")).id_salt("p-guides").show(ui, |ui| self.guides_panel(ui));
-        egui::CollapsingHeader::new(tr("Schablone")).id_salt("p-template").show(ui, |ui| self.template_panel(ui));
+        self.panel(ui, tr("Vorschau"), "p-preview", true, None, |s, ui| s.preview_panel(ui));
+        self.panel(ui, tr("Palette"), "p-palette", true, None, |s, ui| s.palette_library(ui));
+        self.panel(ui, tr("Bild"), "p-image", true, None, |s, ui| s.image_panel(ui));
+        self.panel(ui, tr("Aufräumen"), "p-cleanup", false, None, |s, ui| s.cleanup_panel(ui));
+        self.panel(ui, tr("Licht"), "p-light", false, None, |s, ui| s.light_panel(ui));
+        self.panel(ui, tr("Kacheln"), "p-tiles", false, None, |s, ui| s.tiles_panel(ui));
+        self.panel(ui, tr("Hilfslinien"), "p-guides", false, None, |s, ui| s.guides_panel(ui));
+        self.panel(ui, tr("Schablone"), "p-template", false, None, |s, ui| s.template_panel(ui));
         // „Exportieren …“ im Menü klappt dieses Panel auf und scrollt hin.
         let focus = std::mem::take(&mut self.out.focus);
-        let r = egui::CollapsingHeader::new(tr("Code & Export"))
-            .id_salt("p-output")
-            .open(focus.then_some(true))
-            .show(ui, |ui| self.output_panel(ui));
+        let r = self.panel(ui, tr("Code & Export"), "p-output", false, focus.then_some(true), |s, ui| s.output_panel(ui));
         if focus {
-            r.header_response.scroll_to_me(Some(egui::Align::TOP));
+            r.scroll_to_me(Some(egui::Align::TOP));
         }
+        self.panels.applied = true;
+    }
+
+    /// Ein aufklappbares Panel, das sich merkt, ob es offen ist — beim
+    /// nächsten Start der App steht es wieder so da (PanelMemory).
+    fn panel(&mut self, ui: &mut egui::Ui, title: &str, id: &'static str, default: bool, force: Option<bool>, body: impl FnOnce(&mut Self, &mut egui::Ui)) -> egui::Response {
+        // Nur im ersten Durchlauf den gespeicherten Zustand setzen — danach
+        // gehört das Auf- und Zuklappen wieder dem Nutzer.
+        let start = (!self.panels.applied).then(|| self.panels.open.get(id).copied().unwrap_or(default));
+        let r = egui::CollapsingHeader::new(title)
+            .id_salt(id)
+            .default_open(default)
+            .open(force.or(start))
+            .show(ui, |ui| body(self, ui));
+        // Der Stand folgt dem Klick auf die Kopfzeile (die Animation wandert
+        // über mehrere Bilder und taugt nicht als Zustand). Aufgezwungen
+        // (Menü „Exportieren …“) zählt als offen.
+        let prev = self.panels.open.get(id).copied().unwrap_or(default);
+        let open = force.unwrap_or(if r.header_response.clicked() { !prev } else { prev });
+        if prev != open {
+            self.panels.open.insert(id.to_string(), open);
+            self.panels.save();
+        }
+        r.header_response
     }
 
     pub(crate) fn image_panel(&mut self, ui: &mut egui::Ui) {
