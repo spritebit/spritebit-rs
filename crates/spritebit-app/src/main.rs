@@ -867,9 +867,13 @@ impl SpritebitApp {
                 i.pointer.secondary_pressed(),
             )
         });
+        // Liegt ein Fenster oder eine aufgeklappte Liste über der Fläche
+        // (Neuer Sprite → Farbpalette …), gehört das Mausrad ihr, nicht der
+        // Fläche dahinter. contains_pointer beachtet diese Ebenen.
+        let over_canvas = resp.contains_pointer();
         // Wie im Web: Mausrad scrollt (Umschalt: waagerecht), Strg+Mausrad
         // zoomt um den Zeiger.
-        if let Some(at) = pointer.filter(|p| area.contains(*p)) {
+        if let Some(at) = pointer.filter(|p| over_canvas && area.contains(*p)) {
             if zoom_delta != 1.0 {
                 self.zoom_at(zoom_delta, at, area);
             } else if scroll != Vec2::ZERO {
@@ -888,7 +892,7 @@ impl SpritebitApp {
             let v = (p - origin) / zoom;
             (v.x.floor() as i64, v.y.floor() as i64)
         };
-        self.hover = pointer.filter(|p| area.contains(*p)).map(to_cell);
+        self.hover = pointer.filter(|p| over_canvas && area.contains(*p)).map(to_cell);
 
         // Werkzeug anwenden (tools_ui.rs).
         let p = Pointer {
@@ -2169,6 +2173,21 @@ export const HELD = [[0,1],[2,1]];".into(),
         h.event(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: Vec2::new(0.0, -40.0), phase: egui::TouchPhase::Move, modifiers: Modifiers::NONE });
         h.run();
         assert_eq!(h.state().zoom, z, "kein Zoom ohne Strg");
+    }
+
+    #[test]
+    fn mausrad_ueber_einem_fenster_scrollt_nicht_die_flaeche() {
+        let mut h = app();
+        h.state_mut().open_new_sprite();
+        h.run();
+        let p = h.get_by_label("Erstellen").rect().center();
+        assert!(h.state().canvas_rect.contains(p), "das Fenster liegt über der Fläche");
+        h.hover_at(p);
+        h.run();
+        let pan = h.state().pan;
+        h.event(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: Vec2::new(0.0, -120.0), phase: egui::TouchPhase::Move, modifiers: Modifiers::NONE });
+        h.run();
+        assert_eq!(h.state().pan, pan, "die Fläche dahinter bleibt stehen");
     }
 
     #[test]
