@@ -170,9 +170,13 @@ impl SpritebitApp {
                         rename = Some(i);
                     }
                     rects.push(inner.response.rect);
+                    // Schon beim Drücken die greifende Hand — man sieht, dass man
+                    // den Reiter festhält, bevor er sich bewegt.
+                    if label.is_pointer_button_down_on() || label.dragged() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+                    }
                     if label.dragged() {
                         dragging = Some(pos);
-                        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
                     }
                     if label.drag_stopped() {
                         dropped = Some(pos);
