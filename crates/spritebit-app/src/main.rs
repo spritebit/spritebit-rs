@@ -1493,6 +1493,36 @@ mod tests {
     }
 
     #[test]
+    fn trennlinie_unter_den_vorschaubildern_zieht_die_groesse() {
+        let mut h = app();
+        for k in 2..9 {
+            h.state_mut().project.sprite_mut().add_layer(k, "x");
+        }
+        h.state_mut().tl.thumb_size = 32.0;
+        h.run();
+        let before = h.state().tl.thumb_size;
+        // Die Linie unter der Kopfzeile
+        let num = h.get_by_label("Ziehen: Vorschaubilder größer oder kleiner · Doppelklick: Standardgröße").rect().center();
+        let btn = egui::PointerButton::Primary;
+        h.hover_at(num);
+        h.step();
+        h.event(egui::Event::PointerButton { pos: num, button: btn, pressed: true, modifiers: Modifiers::NONE });
+        h.step();
+        for k in 1..=5 {
+            h.event(egui::Event::PointerMoved(num + Vec2::new(0.0, 6.0 * k as f32)));
+            h.step();
+        }
+        h.event(egui::Event::PointerButton { pos: num + Vec2::new(0.0, 30.0), button: btn, pressed: false, modifiers: Modifiers::NONE });
+        h.run();
+        let after = h.state().tl.thumb_size;
+        assert!(after > before + 15.0, "größer gezogen: {before} → {after}");
+        // Mehr Ebenen ändern die Größe nicht
+        h.state_mut().project.sprite_mut().add_layer(9, "y");
+        h.run();
+        assert_eq!(h.state().tl.thumb_size, after);
+    }
+
+    #[test]
     fn stift_malt_einen_strich_ohne_luecken() {
         let mut h = app();
         drag(&mut h, (10.0, 10.0), (20.0, 10.0));
@@ -2836,6 +2866,11 @@ mod shot {
             for x in 4..12 {
                 s.cel_mut(0, 1).set(x, 6, 5);
             }
+            // SPRITEBIT_SHOT_LAYERS=n: n Ebenen (Timeline mit Überlauf).
+            let layers: usize = std::env::var("SPRITEBIT_SHOT_LAYERS").ok().and_then(|v| v.parse().ok()).unwrap_or(2);
+            for k in 2..layers {
+                s.add_layer(k, &format!("Ebene {}", k + 1));
+            }
             // SPRITEBIT_SHOT_FRAMES=n: n Frames, jeder etwas anders (Timeline).
             let frames: usize = std::env::var("SPRITEBIT_SHOT_FRAMES").ok().and_then(|v| v.parse().ok()).unwrap_or(1);
             for f in 1..frames {
@@ -2863,6 +2898,19 @@ mod shot {
             d.move_to_other_side(PanelId::Layers);
             h.run();
             h.get_by_label("Licht — Klick klappt auf").click();
+            h.run();
+        }
+        // SPRITEBIT_SHOT_THUMB=px: Größe der Vorschaubilder in der Timeline.
+        if let Some(t) = std::env::var("SPRITEBIT_SHOT_THUMB").ok().and_then(|v| v.parse::<f32>().ok()) {
+            h.state_mut().tl.thumb_size = t;
+            h.run();
+        }
+        // SPRITEBIT_SHOT_TLSCROLL=1: Ebenen der Timeline nach unten gescrollt.
+        if std::env::var_os("SPRITEBIT_SHOT_TLSCROLL").is_some() {
+            h.hover_at(egui::pos2(400.0, 800.0));
+            h.run();
+            h.event(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: Vec2::new(0.0, -60.0), modifiers: egui::Modifiers::NONE, phase: egui::TouchPhase::Move });
+            h.run();
             h.run();
         }
         // SPRITEBIT_SHOT_PAL=1: Farbwähler am Farbfeld 3 offen.

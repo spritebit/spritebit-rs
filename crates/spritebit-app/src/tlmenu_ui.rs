@@ -29,13 +29,15 @@ pub(crate) struct TlOpts {
     pub first_frame: usize,
     /// Vorschaubilder in der Kopfzeile.
     pub thumbs: bool,
+    /// Kantenlänge der Vorschaubilder — die Trennlinie darunter ziehen.
+    pub thumb_size: f32,
     pub zone: Zone,
     pub onion: OnionOpts,
 }
 
 impl Default for TlOpts {
     fn default() -> Self {
-        TlOpts { first_frame: 1, thumbs: true, zone: Zone::Bottom, onion: OnionOpts::default() }
+        TlOpts { first_frame: 1, thumbs: true, thumb_size: THUMB_DEFAULT, zone: Zone::Bottom, onion: OnionOpts::default() }
     }
 }
 
@@ -48,7 +50,7 @@ impl TlOpts {
     fn to_json(self) -> serde_json::Value {
         let o = self.onion;
         serde_json::json!({
-            "firstFrame": self.first_frame, "thumbs": self.thumbs,
+            "firstFrame": self.first_frame, "thumbs": self.thumbs, "thumbSize": self.thumb_size,
             "zone": match self.zone { Zone::Top => "top", Zone::Bottom => "bottom", Zone::Left => "left", Zone::Right => "right" },
             "onion": {
                 "mode": if o.real_colors { "color" } else { "tint" }, "opacity": o.opacity, "step": o.step,
@@ -64,6 +66,7 @@ impl TlOpts {
         TlOpts {
             first_frame: if v["firstFrame"].as_u64() == Some(0) { 0 } else { 1 },
             thumbs: v["thumbs"].as_bool().unwrap_or(true),
+            thumb_size: f(&v["thumbSize"], THUMB_DEFAULT).clamp(THUMB_MIN, THUMB_MAX),
             zone: match v["zone"].as_str() {
                 Some("top") => Zone::Top,
                 Some("left") => Zone::Left,
@@ -94,8 +97,9 @@ pub(crate) struct TlCache {
     thumbs_sprite: usize,
 }
 
-/// Größe der Vorschaubilder in der Kopfzeile: die Höhe der Timeline
-/// bestimmt sie (timeline.rs), zwischen diesen Grenzen.
+/// Größe der Vorschaubilder in der Kopfzeile (TlOpts::thumb_size): die
+/// Trennlinie unter ihnen ziehen (timeline.rs), zwischen diesen Grenzen.
+pub(crate) const THUMB_DEFAULT: f32 = 32.0;
 pub(crate) const THUMB_MIN: f32 = 20.0;
 pub(crate) const THUMB_MAX: f32 = 128.0;
 
@@ -109,7 +113,7 @@ impl SpritebitApp {
         }
     }
 
-    fn save_tl_opts(&self) {
+    pub(crate) fn save_tl_opts(&self) {
         if !self.tl_persist {
             return;
         }

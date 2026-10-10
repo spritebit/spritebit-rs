@@ -287,6 +287,11 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("− Letzte", "− Last", "− De letzte"),
     ("Palette: {name}", "Palette: {name}", "Palettn: {name}"),
     // ── Timeline ──
+    (
+        "Ziehen: Vorschaubilder größer oder kleiner · Doppelklick: Standardgröße",
+        "Drag: thumbnails larger or smaller · Double-click: default size",
+        "Ziagn: Vorschaubuidln größa oder klana · Doppelklick: Standardgröße",
+    ),
     ("Erster Frame (Pos1)", "First frame (Home)", "Da erste Frame (Pos1)"),
     ("Voriger Frame (,)", "Previous frame (,)", "Da Frame davor (,)"),
     ("Abspielen / Anhalten (Enter)", "Play / pause (Enter)", "Obspün / Aunhoitn (Enter)"),

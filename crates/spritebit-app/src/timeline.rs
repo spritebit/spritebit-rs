@@ -73,12 +73,7 @@ impl SpritebitApp {
     pub(crate) fn timeline(&mut self, ui: &mut egui::Ui) {
         self.timeline_buttons(ui);
         ui.add_space(4.0);
-        // Die Vorschaubilder füllen die Höhe, die über den Ebenen-Zeilen
-        // frei ist — die Trennlinie der Timeline ziehen macht sie größer.
-        let sp = self.project.sprite();
-        let tag_h = if sp.tags.is_empty() { 0.0 } else { TAG_H + 2.0 };
-        let free = ui.available_height() - tag_h - HEAD_H - 4.0 - sp.layers.len() as f32 * ROW_H - 4.0 - 16.0;
-        let thumb = free.clamp(tlmenu_ui::THUMB_MIN, tlmenu_ui::THUMB_MAX).floor();
+        let thumb = self.tl.thumb_size.round();
         egui::ScrollArea::both().auto_shrink([false, false]).show(ui, |ui| self.timeline_grid(ui, thumb));
         self.timeline_windows(ui.ctx());
     }
@@ -248,45 +243,54 @@ impl SpritebitApp {
         let (resp, painter) = ui.allocate_painter(size, Sense::click_and_drag());
         let o = resp.rect.min;
         let font = FontId::proportional(12.0);
-        let head_y = o.y + tag_h;
+        // Tags und Kopfzeile kleben oben, wenn die Ebenen gescrollt werden:
+        // `stick` ist, wie weit das Raster oben aus dem Bild gerutscht ist.
+        let stick = (ui.clip_rect().top() - o.y).max(0.0);
+        let top = o.y + stick;
+        let head_y = top + tag_h;
+        let rows_y = o.y + tag_h + head_h;
         // Zeile `r` von oben zeigt Ebene nl-1-r — oberste Ebene oben.
-        let row_y = |r: usize| head_y + head_h + r as f32 * ROW_H;
+        let row_y = |r: usize| rows_y + r as f32 * ROW_H;
         let col_x = |f: usize| o.x + LAYER_W + f as f32 * cell_w;
         let range = self.cel_range.and_then(|r| r.clamp(sp)).filter(|r| r.size() > 1);
 
-        // Tags über den Frame-Nummern.
-        for t in &sp.tags {
-            let r = egui::Rect::from_min_max(Pos2::new(col_x(t.from) + 1.0, o.y), Pos2::new(col_x(t.to + 1) - 1.0, o.y + TAG_H));
-            let [cr, cg, cb] = t.color;
-            painter.rect_filled(r, 3.0, Color32::from_rgb(cr, cg, cb).gamma_multiply(0.45));
-            painter.rect_filled(egui::Rect::from_min_size(r.min, Vec2::new(3.0, TAG_H)), 1.0, Color32::from_rgb(cr, cg, cb));
-            let mark = match t.direction {
-                Direction::Forward => "",
-                Direction::Reverse => "« ",
-                Direction::PingPong => "↔ ",
-            };
-            painter.with_clip_rect(r).text(r.left_center() + Vec2::new(6.0, 0.0), Align2::LEFT_CENTER, format!("{mark}{}", t.name), FontId::proportional(11.0), Color32::WHITE);
-        }
+        let paint_head = |painter: &egui::Painter| {
+            // Grund unter Tags und Kopfzeile — die gescrollten Zeilen verschwinden dahinter.
+            painter.rect_filled(egui::Rect::from_min_size(Pos2::new(o.x, top), Vec2::new(size.x, tag_h + head_h)), 0.0, ui.visuals().panel_fill);
+            // Tags über den Frame-Nummern.
+            for t in &sp.tags {
+                let r = egui::Rect::from_min_max(Pos2::new(col_x(t.from) + 1.0, top), Pos2::new(col_x(t.to + 1) - 1.0, top + TAG_H));
+                let [cr, cg, cb] = t.color;
+                painter.rect_filled(r, 3.0, Color32::from_rgb(cr, cg, cb).gamma_multiply(0.45));
+                painter.rect_filled(egui::Rect::from_min_size(r.min, Vec2::new(3.0, TAG_H)), 1.0, Color32::from_rgb(cr, cg, cb));
+                let mark = match t.direction {
+                    Direction::Forward => "",
+                    Direction::Reverse => "« ",
+                    Direction::PingPong => "↔ ",
+                };
+                painter.with_clip_rect(r).text(r.left_center() + Vec2::new(6.0, 0.0), Align2::LEFT_CENTER, format!("{mark}{}", t.name), FontId::proportional(11.0), Color32::WHITE);
+            }
 
-        // Kopfzeile: Frame-Nummern (1-basiert, wie in der Web-Version).
-        for f in 0..n {
-            let c = egui::Rect::from_min_size(Pos2::new(col_x(f), head_y), Vec2::new(cell_w, head_h));
-            if f == sp.frame {
-                painter.rect_filled(c.shrink(1.0), 3.0, ACCENT.gamma_multiply(0.35));
-            } else if self.frame_sel.contains(&f) {
-                painter.rect_filled(c.shrink(1.0), 3.0, ACCENT.gamma_multiply(0.2));
+            // Kopfzeile: Frame-Nummern (1-basiert, wie in der Web-Version).
+            for f in 0..n {
+                let c = egui::Rect::from_min_size(Pos2::new(col_x(f), head_y), Vec2::new(cell_w, head_h));
+                if f == sp.frame {
+                    painter.rect_filled(c.shrink(1.0), 3.0, ACCENT.gamma_multiply(0.35));
+                } else if self.frame_sel.contains(&f) {
+                    painter.rect_filled(c.shrink(1.0), 3.0, ACCENT.gamma_multiply(0.2));
+                }
+                let num = egui::Rect::from_min_size(c.min, Vec2::new(cell_w, HEAD_H));
+                painter.text(num.center(), Align2::CENTER_CENTER, format!("{}", tl.label(f)), font.clone(), if f == sp.frame { Color32::WHITE } else { DIM });
+                if let Some(Some(id)) = thumbs.get(f) {
+                    // Vorschaubild im Seitenverhältnis des Sprites, mittig.
+                    let k = thumb / sp.width.max(sp.height) as f32;
+                    let size = Vec2::new(sp.width as f32 * k, sp.height as f32 * k);
+                    let r = egui::Rect::from_center_size(Pos2::new(c.center().x, c.min.y + HEAD_H + 2.0 + thumb / 2.0), size);
+                    painter.rect_filled(r.expand(1.0), 1.0, tlmenu_ui::THUMB_FRAME);
+                    painter.image(*id, r, egui::Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
+                }
             }
-            let num = egui::Rect::from_min_size(c.min, Vec2::new(cell_w, HEAD_H));
-            painter.text(num.center(), Align2::CENTER_CENTER, format!("{}", tl.label(f)), font.clone(), if f == sp.frame { Color32::WHITE } else { DIM });
-            if let Some(Some(id)) = thumbs.get(f) {
-                // Vorschaubild im Seitenverhältnis des Sprites, mittig.
-                let k = thumb / sp.width.max(sp.height) as f32;
-                let size = Vec2::new(sp.width as f32 * k, sp.height as f32 * k);
-                let r = egui::Rect::from_center_size(Pos2::new(c.center().x, c.min.y + HEAD_H + 2.0 + thumb / 2.0), size);
-                painter.rect_filled(r.expand(1.0), 1.0, tlmenu_ui::THUMB_FRAME);
-                painter.image(*id, r, egui::Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
-            }
-        }
+        };
 
         for r in 0..nl {
             let l = nl - 1 - r;
@@ -353,10 +357,34 @@ impl SpritebitApp {
             }
         }
 
+        paint_head(&painter);
+
+        // Trennlinie unter den Vorschaubildern: nach unten ziehen macht sie größer.
+        if tl.thumbs {
+            let y = head_y + head_h - 1.0;
+            let strip = egui::Rect::from_min_max(Pos2::new(o.x, y - 3.0), Pos2::new(o.x + size.x, y + 4.0));
+            let grip = ui.interact(strip, ui.id().with("tl-thumb-grip"), Sense::click_and_drag()).on_hover_cursor(egui::CursorIcon::ResizeVertical);
+            let hot = grip.hovered() || grip.dragged();
+            painter.hline(o.x..=o.x + size.x, y, Stroke::new(if hot { 2.0 } else { 1.0 }, if hot { ACCENT } else { Color32::from_gray(60) }));
+            if grip.dragged() {
+                let s = &mut self.tl.thumb_size;
+                *s = (*s + grip.drag_delta().y).clamp(tlmenu_ui::THUMB_MIN, tlmenu_ui::THUMB_MAX);
+            }
+            if grip.double_clicked() {
+                self.tl.thumb_size = tlmenu_ui::THUMB_DEFAULT;
+            }
+            if grip.drag_stopped() || grip.double_clicked() {
+                self.save_tl_opts();
+            }
+            let tip = tr("Ziehen: Vorschaubilder größer oder kleiner · Doppelklick: Standardgröße");
+            grip.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, tip));
+            grip.on_hover_text(tip);
+        }
+
         // Ziehen: Frame-Nummer → Frame verschieben, Ebenen-Name → Ebene verschieben.
         let at_pos = |p: Pos2| {
             let fx = ((p.x - o.x - LAYER_W) / cell_w).floor();
-            let ry = ((p.y - head_y - head_h) / ROW_H).floor();
+            let ry = ((p.y - rows_y) / ROW_H).floor();
             ((fx >= 0.0 && (fx as usize) < n).then_some(fx as usize), (ry >= 0.0 && (ry as usize) < nl).then(|| nl - 1 - ry as usize))
         };
         if resp.drag_started() {
@@ -376,7 +404,7 @@ impl SpritebitApp {
                 (TlDrag::Frame(_), Some(f), _) => {
                     painter.line_segment([Pos2::new(col_x(f), head_y), Pos2::new(col_x(f), head_y + head_h)], mark);
                 }
-                (TlDrag::Layer(_), _, Some(l)) => {
+                (TlDrag::Layer(_), _, Some(l)) if p.y >= head_y + head_h => {
                     let y = row_y(nl - 1 - l);
                     painter.line_segment([Pos2::new(o.x, y), Pos2::new(o.x + LAYER_W - 4.0, y)], mark);
                 }
@@ -401,7 +429,7 @@ impl SpritebitApp {
         let double = resp.double_clicked();
         if let Some(p) = resp.interact_pointer_pos().filter(|_| resp.clicked() || double) {
             let fx = ((p.x - o.x - LAYER_W) / cell_w).floor();
-            let ry = ((p.y - head_y - head_h) / ROW_H).floor();
+            let ry = ((p.y - rows_y) / ROW_H).floor();
             let frame_at = (fx >= 0.0 && (fx as usize) < n).then_some(fx as usize);
             if p.y < head_y {
                 // Tag-Spur
