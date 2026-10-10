@@ -187,6 +187,23 @@ fn trennlinie_unter_den_vorschaubildern_zieht_die_groesse() {
 }
 
 #[test]
+fn grosser_pinsel_malt_die_ganze_flaeche() {
+    let mut h = app();
+    {
+        let a = h.state_mut();
+        a.tool = crate::tools_ui::Tool::Brush;
+        a.size = crate::tools_ui::MAX_SIZE;
+        a.strength = 100;
+    }
+    h.run();
+    drag(&mut h, (10.0, 10.0), (20.0, 12.0));
+    let s = h.state().project.sprite();
+    for (x, y) in [(0, 0), (s.width - 1, 0), (0, s.height - 1), (s.width - 1, s.height - 1), (15, 11)] {
+        assert_eq!(px(&h, x, y), 5, "Pixel ({x}, {y}) vom 1000er-Pinsel getroffen");
+    }
+}
+
+#[test]
 fn stift_malt_einen_strich_ohne_luecken() {
     let mut h = app();
     drag(&mut h, (10.0, 10.0), (20.0, 10.0));

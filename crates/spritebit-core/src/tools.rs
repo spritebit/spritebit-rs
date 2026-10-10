@@ -44,6 +44,42 @@ pub fn stamp(x: i64, y: i64, size: u32) -> Span3 {
     Span3 { y0: y + lo, y1: y + hi, x0: x + lo, x1: x + hi }
 }
 
+/// Ab dieser Größe malt ein Strich die überstrichene Fläche (`swept_stamp`)
+/// statt einen Stempel je Linienpunkt — darunter bleibt es Pixel für Pixel genau.
+pub const SWEEP_FROM: u32 = 8;
+
+/// Fläche, die ein Stempel der Größe `size` überstreicht, wenn er von `a`
+/// nach `b` gezogen wird: je Zeile ein Abschnitt. Das ist die Hülle der
+/// Stempel an allen Punkten der Strecke — so viele Zeilen wie der Strich hoch
+/// ist, egal wie lang er ist. Bis auf höchstens ein Pixel am Rand dasselbe
+/// wie ein Stempel je Punkt der Linie.
+pub fn swept_stamp(a: (i64, i64), b: (i64, i64), size: u32) -> Vec<Span> {
+    let n = size.max(1) as i64;
+    let lo = -(n - 1) / 2;
+    let hi = lo + n - 1;
+    let (ax, ay, bx, by) = (a.0 as f64, a.1 as f64, b.0 as f64, b.1 as f64);
+    let (y_min, y_max) = (a.1.min(b.1) + lo, a.1.max(b.1) + hi);
+    let mut out = Vec::with_capacity((y_max - y_min + 1) as usize);
+    for y in y_min..=y_max {
+        // Welche Stellen t der Strecke (0..1) treffen mit ihrem Stempel Zeile y?
+        // Ein halber Pixel Spielraum: die gerasterte Linie (line) weicht um
+        // bis zu so viel von der genauen Strecke ab.
+        let (t0, t1) = if a.1 == b.1 {
+            (0.0, 1.0)
+        } else {
+            let ta = ((y - hi) as f64 - 0.5 - ay) / (by - ay);
+            let tb = ((y - lo) as f64 + 0.5 - ay) / (by - ay);
+            (ta.min(tb).max(0.0), ta.max(tb).min(1.0))
+        };
+        if t0 > t1 {
+            continue;
+        }
+        let (xa, xb) = (ax + t0 * (bx - ax), ax + t1 * (bx - ax));
+        out.push((y, xa.min(xb).floor() as i64 + lo, xa.max(xb).ceil() as i64 + hi));
+    }
+    out
+}
+
 /// Ein Rechteck aus Zeilen `y0..=y1` und Spalten `x0..=x1`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Span3 {
@@ -425,6 +461,36 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn ueberstrichene_flaeche_wie_stempel_je_punkt() {
+        // Gegen den einfachen Weg prüfen: jeder Pixel, den ein Stempel je
+        // Linienpunkt trifft, liegt in der Fläche — und die ist höchstens
+        // ein Pixel je Seite breiter.
+        for &(a, b, size) in &[((10, 10), (60, 35), 12u32), ((5, 40), (5, 2), 20), ((0, 0), (90, 0), 9), ((50, 50), (20, 80), 33)] {
+            let mut want: std::collections::BTreeMap<i64, (i64, i64)> = Default::default();
+            for (x, y) in line(a.0, a.1, b.0, b.1) {
+                for (yy, x0, x1) in stamp(x, y, size).spans() {
+                    let e = want.entry(yy).or_insert((x0, x1));
+                    *e = (e.0.min(x0), e.1.max(x1));
+                }
+            }
+            let got = swept_stamp(a, b, size);
+            assert_eq!(got.len(), want.len(), "gleich viele Zeilen ({a:?}→{b:?}, {size})");
+            for (y, x0, x1) in got {
+                let (w0, w1) = want[&y];
+                assert!(x0 <= w0 && x1 >= w1, "Zeile {y}: {x0}..{x1} deckt {w0}..{w1}");
+                assert!(w0 - x0 <= 1 && x1 - w1 <= 1, "Zeile {y}: höchstens ein Pixel mehr");
+            }
+        }
+    }
+
+    #[test]
+    fn grosser_pinsel_bleibt_schnell() {
+        // 1000 px über 300 px Weg: eine Zeile je Pixel Höhe, nicht 300 Stempel.
+        let spans = swept_stamp((100, 100), (400, 300), 1000);
+        assert_eq!(spans.len(), 1000 + 200);
+    }
 
     fn painted(spans: &[Span]) -> std::collections::BTreeSet<(i64, i64)> {
         spans.iter().flat_map(|&(y, a, b)| (a..=b).map(move |x| (x, y))).collect()

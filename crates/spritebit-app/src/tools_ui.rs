@@ -111,11 +111,14 @@ impl Tool {
 }
 
 /// Was die Zeichenfläche über die Maus weiß.
-/// Alt + rechte Maustaste ziehen: so viele Bildschirmpixel je Größenstufe
-/// (fein genug, dass auch große Größen ohne meterlangen Mausweg gehen).
+/// Alt + rechte Maustaste ziehen: kleine Größen in Einerschritten, eine Stufe
+/// je SIZE_STEP_PX Bildschirmpixel; große wachsen schneller und verdoppeln
+/// sich alle SIZE_DOUBLE_PX — wie im Web (js/sizedrag.js).
 const SIZE_STEP_PX: f32 = 6.0;
-/// Größte Größe von Pinsel, Radierer und Spray — wie im Web.
-pub(crate) const MAX_SIZE: u32 = 64;
+const SIZE_DOUBLE_PX: f32 = 160.0;
+/// Größte Größe von Pinsel, Radierer und Spray (im Web 300 — der Desktop
+/// schafft größere Flächen).
+pub(crate) const MAX_SIZE: u32 = 1000;
 
 /// Laufendes Größe-Ziehen: Startpunkt, Größe beim Start und die Zelle, an
 /// der die Vorschau stehen bleibt.
@@ -125,9 +128,14 @@ pub(crate) struct SizeDrag {
     cell: Option<(i64, i64)>,
 }
 
-/// Neue Größe aus dem Mausweg seit dem Start (1–64).
+/// Neue Größe aus dem Mausweg seit dem Start (1 … MAX_SIZE).
 pub(crate) fn dragged_size(start_size: u32, dx: f32) -> u32 {
-    (start_size as i64 + (dx / SIZE_STEP_PX).round() as i64).clamp(1, MAX_SIZE as i64) as u32
+    let start = start_size as f32;
+    let steps = start + dx / SIZE_STEP_PX;
+    let grow = start * 2f32.powf(dx / SIZE_DOUBLE_PX);
+    // Was schneller vorankommt: bei kleinen Größen die Stufen, bei großen das Verdoppeln.
+    let n = if dx >= 0.0 { steps.max(grow) } else { steps.min(grow) };
+    (n.round() as i64).clamp(1, MAX_SIZE as i64) as u32
 }
 
 /// Umschalt beim Malen: wo die gerade Linie beginnt und ihre Richtung
@@ -194,10 +202,12 @@ impl SpritebitApp {
             ui.separator();
             if self.tool.sized() {
                 ui.label(tr("Größe"));
-                // 1–64: Regler und Zahlenfeld (auch Alt + Rechts ziehen).
-                ui.add(egui::Slider::new(&mut self.size, 1..=MAX_SIZE).show_value(false))
+                // 1–1000: Regler logarithmisch (kleine Größen bleiben treffbar),
+                // Zahlenfeld schneller, je größer (auch Alt + Rechts ziehen).
+                ui.add(egui::Slider::new(&mut self.size, 1..=MAX_SIZE).logarithmic(true).show_value(false))
                     .on_hover_text(tr("Größe von Pinsel, Radierer und Spray — auch mit Alt + rechter Maustaste ziehen"));
-                ui.add(egui::DragValue::new(&mut self.size).range(1..=MAX_SIZE).speed(0.2).suffix(" px"));
+                let speed = (self.size as f64 * 0.03).max(0.2);
+                ui.add(egui::DragValue::new(&mut self.size).range(1..=MAX_SIZE).speed(speed).suffix(" px"));
             }
             if matches!(self.tool, Tool::Brush | Tool::Spray | Tool::Eraser) {
                 ui.label(tr("Stärke")).on_hover_text(tr("Pinsel und Radierer: Dichte — Spray: Menge je Schritt"));
@@ -527,7 +537,13 @@ impl SpritebitApp {
             return;
         }
         let size = if self.tool == Tool::Pencil { 1 } else { self.size };
-        let spans: Vec<Span> = tools::line(a.0, a.1, b.0, b.1).into_iter().flat_map(|(x, y)| tools::stamp(x, y, size).spans()).collect();
+        // Große Pinsel: die ganze überstrichene Fläche auf einmal statt eines
+        // Stempels je Punkt der Linie — bei 1000 px sonst Millionen Pixel je Zug.
+        let spans: Vec<Span> = if size > tools::SWEEP_FROM {
+            tools::swept_stamp(a, b, size)
+        } else {
+            tools::line(a.0, a.1, b.0, b.1).into_iter().flat_map(|(x, y)| tools::stamp(x, y, size).spans()).collect()
+        };
         // Stärke = Dichte bei Pinsel und Radierer: jedes Pixel nur mit dieser
         // Wahrscheinlichkeit (wie im Web). Der Stift malt immer voll.
         let density = self.strength as f64 / 100.0;
@@ -601,7 +617,9 @@ mod size_tests {
         assert_eq!(dragged_size(3, 12.0), 5, "zwei Stufen");
         assert_eq!(dragged_size(3, 2.0), 3, "unter einer halben Stufe bleibt es");
         assert_eq!(dragged_size(3, -100.0), 1);
-        assert_eq!(dragged_size(3, 5000.0), 64);
+        assert_eq!(dragged_size(3, 5000.0), 1000);
         assert_eq!(dragged_size(10, 60.0), 20, "auch über 9 hinaus");
+        assert_eq!(dragged_size(100, 160.0), 200, "große Größen: alle 160 px doppelt");
+        assert_eq!(dragged_size(200, -160.0), 100);
     }
 }
