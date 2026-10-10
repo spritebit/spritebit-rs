@@ -419,6 +419,7 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Lädt die neue Version, prüft sie und tauscht die App aus — ohne ZIP und ohne Entpacken.", "Downloads the new version, checks it and swaps the app — no ZIP, no unpacking.", ""),
     ("Was ist neu?", "What's new?", ""),
     ("Was diese Version mitbringt", "What this version brings", ""),
+    ("spritebit: {w} × {h} Pixel", "spritebit: {w} × {h} pixels", ""),
     ("Jetzt nach Updates suchen", "Check for updates now", ""),
     ("Fragt sofort bei GitHub nach, ob es eine neuere Version gibt.", "Asks GitHub right away whether there is a newer version.", ""),
     ("spritebit {v} ist die neueste Version.", "spritebit {v} is the latest version.", ""),

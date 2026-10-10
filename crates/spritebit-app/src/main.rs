@@ -172,6 +172,9 @@ struct SpritebitApp {
     /// Zwischenablage: das Stück und woher seine Farben stammen (Palette und
     /// freie Farben des Quell-Sprites) — siehe selection_ui.rs `paste_clipboard`.
     clipboard: Option<selection_ui::ClipSrc>,
+    /// Text für die Zwischenablage des Systems, sobald kopiert wurde
+    /// (selection_ui.rs) — damit Strg+V dort ankommt.
+    clip_text: Option<String>,
     /// Toleranz von Farbwahl und Zauberstab, 0.0–1.0.
     tolerance: f64,
     /// Symmetrie: an der senkrechten (x) bzw. waagerechten (y) Mitte spiegeln.
@@ -278,6 +281,7 @@ impl SpritebitApp {
             float: None,
             sel_drag: None,
             clipboard: None,
+            clip_text: None,
             tolerance: 0.25,
             mirror_x: false,
             mirror_y: false,
@@ -1408,6 +1412,31 @@ mod tests {
         h.run();
         assert_eq!(px(&h, 10, 10), 5, "Undo holt sie zurück");
         assert_eq!(px(&h, 30, 20), 0);
+    }
+
+    /// Im echten Fenster kommen Strg+C/X/V nicht als Tasten an, sondern als
+    /// Copy/Cut/Paste (egui-winit) — so wie hier.
+    #[test]
+    fn kopieren_und_einfuegen_wie_im_fenster() {
+        let mut h = app();
+        drag(&mut h, (2.0, 2.0), (3.0, 2.0));
+        h.key_press_modifiers(Modifiers::COMMAND, Key::A);
+        h.run();
+        h.event(egui::Event::Copy);
+        h.run();
+        assert!(h.state().clipboard.is_some(), "Strg+C kopiert");
+        h.key_press(Key::Escape);
+        h.run();
+        h.event(egui::Event::Paste("spritebit".into()));
+        h.run();
+        assert!(h.state().float.is_some(), "Strg+V fügt ein");
+        h.key_press(Key::Escape);
+        h.run();
+        h.key_press_modifiers(Modifiers::COMMAND, Key::A);
+        h.run();
+        h.event(egui::Event::Cut);
+        h.run();
+        assert_eq!(px(&h, 2, 2), 0, "Strg+X schneidet aus");
     }
 
     #[test]

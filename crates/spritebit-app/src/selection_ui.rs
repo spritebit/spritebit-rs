@@ -260,6 +260,7 @@ impl SpritebitApp {
             }
         };
         let pal = self.project.current_palette();
+        self.clip_text = Some(trf("spritebit: {w} × {h} Pixel", &[("w", &clip.w), ("h", &clip.h)]));
         self.clipboard = Some(ClipSrc { clip, pal, free: self.sprite().free.clone() });
     }
 
@@ -358,18 +359,43 @@ impl SpritebitApp {
 
     /// Tasten für die Auswahl. Gibt es keine Auswahl, bleiben die Pfeile frei.
     pub(crate) fn selection_keys(&mut self, ctx: &egui::Context) {
+        // Die Pixel liegen in der eigenen Zwischenablage. Ins System kommt
+        // nur eine Zeile Text: egui meldet Strg+V nur, wenn dort Text liegt
+        // (egui-winit, is_paste_command) — sonst käme Einfügen nie an.
+        if let Some(text) = self.clip_text.take() {
+            ctx.copy_text(text);
+        }
         if ctx.egui_wants_keyboard_input() {
             return;
         }
         let cmd = Modifiers::COMMAND;
         let (all, copy, cut, paste_raw, paste) = ctx.input_mut(|i| {
+            // Im Fenster kommen Strg+C/X/V als Copy/Cut/Paste an, nicht als
+            // Tasten (egui-winit). Die Tasten bleiben für Tests und andere Wege.
+            let (mut copy, mut cut, mut paste) = (false, false, false);
+            i.events.retain(|e| match e {
+                egui::Event::Copy => {
+                    copy = true;
+                    false
+                }
+                egui::Event::Cut => {
+                    cut = true;
+                    false
+                }
+                egui::Event::Paste(_) => {
+                    paste = true;
+                    false
+                }
+                _ => true,
+            });
+            let raw = paste && i.modifiers.command && i.modifiers.shift;
             (
                 i.consume_key(cmd, Key::A),
-                i.consume_key(cmd, Key::C),
-                i.consume_key(cmd, Key::X),
+                copy || i.consume_key(cmd, Key::C),
+                cut || i.consume_key(cmd, Key::X),
                 // Strg+Umschalt+V zuerst: Nummern übernehmen statt Farben.
-                i.consume_key(cmd | Modifiers::SHIFT, Key::V),
-                i.consume_key(cmd, Key::V),
+                raw || i.consume_key(cmd | Modifiers::SHIFT, Key::V),
+                (paste && !raw) || i.consume_key(cmd, Key::V),
             )
         });
         if paste_raw {
