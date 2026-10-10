@@ -286,6 +286,11 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("+ Farbe", "+ Color", "+ Farb"),
     ("− Letzte", "− Last", "− De letzte"),
     ("Palette: {name}", "Palette: {name}", "Palettn: {name}"),
+    (
+        "Ziehen: Panel verschieben oder in eine Leiste andocken",
+        "Drag: move the panel or dock it into a bar",
+        "Ziagn: Panel vaschiabn oder in a Leistn eihängen",
+    ),
     // ── Timeline ──
     (
         "Ziehen: Vorschaubilder größer oder kleiner · Doppelklick: Standardgröße",

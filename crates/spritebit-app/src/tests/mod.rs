@@ -384,6 +384,54 @@ fn aufgeklapptes_panel_an_der_kopfzeile_verschieben() {
     assert!(d.is_pinned(PanelId::Colors));
 }
 
+/// Ziehen von A nach B in kleinen Schritten (erst ab ein paar Pixeln wird gezogen).
+fn drag_from_to(h: &mut Harness<'_, SpritebitApp>, from: Pos2, to: Pos2) {
+    let btn = egui::PointerButton::Primary;
+    h.hover_at(from);
+    h.step();
+    h.event(egui::Event::PointerButton { pos: from, button: btn, pressed: true, modifiers: Modifiers::NONE });
+    h.step();
+    for k in 1..=10 {
+        h.event(egui::Event::PointerMoved(from + (to - from) * (k as f32 / 10.0)));
+        h.step();
+    }
+    h.event(egui::Event::PointerButton { pos: to, button: btn, pressed: false, modifiers: Modifiers::NONE });
+    h.run();
+}
+
+#[test]
+fn panel_an_der_freien_stelle_der_kopfzeile_verschieben() {
+    use dock_ui::PanelId;
+    let mut h = app();
+    h.state_mut().dock.toggle_pin(PanelId::Light);
+    h.run();
+    h.get_by_label("Licht — Klick klappt auf").click();
+    h.run();
+    let before = h.state().dock.flyout.expect("offen").1;
+    // Zwischen Name und Pin — dort lag früher kein Griff.
+    let from = h.get_by_label("Schließen").rect().center() - Vec2::new(90.0, 0.0);
+    drag_from_to(&mut h, from, from - Vec2::new(200.0, 0.0));
+    let (_, at) = h.state().dock.flyout.expect("bleibt offen");
+    assert!((at.x - (before.x - 200.0)).abs() < 2.0, "an der Kopfzeile verschoben: {before:?} → {at:?}");
+}
+
+#[test]
+fn icon_am_rand_ziehen_nimmt_das_fenster_nicht_mit() {
+    use dock_ui::{PanelId, Side};
+    let mut h = app();
+    h.state_mut().dock.toggle_pin(PanelId::Light);
+    h.run();
+    h.get_by_label("Licht — Klick klappt auf").click();
+    h.run();
+    assert!(h.state().dock.flyout.is_some());
+    let from = h.get_by_label("Licht — Klick klappt auf").rect().center();
+    let to = h.get_by_label("Sprites — angepinnt, Klick springt hin").rect().center() + Vec2::new(0.0, 6.0);
+    drag_from_to(&mut h, from, to);
+    let d = &h.state().dock;
+    assert!(d.flyout.is_none(), "das Fenster wandert nicht mit, es klappt zu");
+    assert!(d.all_on(Side::Left).contains(&PanelId::Light), "Icon in die linke Leiste umgezogen: {:?}", d.all_on(Side::Left));
+}
+
 #[test]
 fn aufgeklapptes_panel_frei_verschieben() {
     use dock_ui::PanelId;

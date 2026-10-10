@@ -546,21 +546,27 @@ impl SpritebitApp {
             Side::Left => Align2::LEFT_TOP,
             Side::Right => Align2::RIGHT_TOP,
         };
-        // Wird das Panel an der Kopfzeile gezogen, wandert das Fenster mit.
-        // Klicks gehen dabei durch — darunter liegen die Leisten und Spalten,
-        // in die man es andocken kann. Lässt man es woanders los, bleibt es
-        // dort stehen.
+        // Wird das Panel an seiner Kopfzeile gezogen (flyout_grab), wandert
+        // das Fenster mit. Klicks gehen dabei durch — darunter liegen die
+        // Leisten und Spalten, in die man es andocken kann. Lässt man es
+        // woanders los, bleibt es dort stehen.
+        // Zieht man stattdessen sein Icon am Rand, ist das Umsortieren — das
+        // Fenster wird dafür nicht gebraucht und klappt zu.
         let dragging = egui::DragAndDrop::payload::<PanelId>(ctx).is_some_and(|p| *p == id);
         let mut at = at;
-        if dragging {
-            if let Some(p) = ctx.pointer_interact_pos() {
-                let grab = *self.dock.flyout_grab.get_or_insert_with(|| at - ctx.input(|i| i.pointer.press_origin()).unwrap_or(p));
-                let screen = ctx.content_rect();
-                at = (p + grab).clamp(screen.min, screen.max - egui::vec2(40.0, 40.0));
-                self.dock.flyout = Some((id, at));
+        match (dragging, self.dock.flyout_grab) {
+            (true, Some(grab)) => {
+                if let Some(p) = ctx.pointer_interact_pos() {
+                    let screen = ctx.content_rect();
+                    at = (p + grab).clamp(screen.min, screen.max - egui::vec2(40.0, 40.0));
+                    self.dock.flyout = Some((id, at));
+                }
             }
-        } else {
-            self.dock.flyout_grab = None;
+            (true, None) => {
+                self.dock.flyout = None;
+                return;
+            }
+            (false, _) => self.dock.flyout_grab = None,
         }
         let (mut close, mut pin) = (false, false);
         egui::Window::new(id.title())
@@ -573,12 +579,23 @@ impl SpritebitApp {
             .default_width(270.0)
             .max_height(ctx.content_rect().height() - at.y - 40.0)
             .show(ctx, |ui| {
+                // Die ganze Kopfzeile ist der Griff. Er wird ZUERST angelegt,
+                // damit Pin und × darüber liegen und ihre Klicks behalten.
+                let head_rect = egui::Rect::from_min_size(ui.cursor().min, egui::vec2(ui.available_width(), ui.spacing().interact_size.y));
+                let head = ui
+                    .interact(head_rect, ui.id().with("flyout-head"), egui::Sense::drag())
+                    .on_hover_cursor(egui::CursorIcon::Grab)
+                    .on_hover_text(tr("Ziehen: Panel verschieben oder in eine Leiste andocken"));
+                head.dnd_set_drag_payload(id);
+                if head.drag_started() {
+                    let p = ctx.input(|i| i.pointer.press_origin()).or(head.interact_pointer_pos()).unwrap_or(at);
+                    self.dock.flyout_grab = Some(at - p);
+                }
                 let row = ui
                     .horizontal(|ui| {
                         let c = ui.visuals().text_color();
-                        let grip = ui.add(icons::image(id.icon(), c).sense(egui::Sense::drag()));
-                        let name = ui.add(egui::Label::new(egui::RichText::new(id.title()).strong()).selectable(false).sense(egui::Sense::drag()));
-                        (grip | name).dnd_set_drag_payload(id);
+                        ui.add(icons::image(id.icon(), c));
+                        ui.add(egui::Label::new(egui::RichText::new(id.title()).strong()).selectable(false));
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             let tip = tr("Schließen");
                             close = ui.add(egui::Button::image(icons::image(icons::CLOSE, c).alt_text(tip)).frame(false)).on_hover_text(tip).clicked();
@@ -614,7 +631,7 @@ impl SpritebitApp {
         let Some(p) = ctx.pointer_interact_pos() else { return };
         ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
         // Das aufgeklappte Fenster wandert selbst mit — kein Schild nötig.
-        if self.dock.flyout.is_some_and(|(f, _)| f == *id) {
+        if self.dock.flyout_grab.is_some() && self.dock.flyout.is_some_and(|(f, _)| f == *id) {
             return;
         }
         let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::new("dock-drag")));
