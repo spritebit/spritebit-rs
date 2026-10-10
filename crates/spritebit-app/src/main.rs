@@ -1329,6 +1329,27 @@ mod tests {
         assert_eq!(h.state().panel_open("p-light"), Some(false));
     }
 
+    /// Brechen die Werkzeuge um, laufen die Einstellungen in derselben
+    /// Zeile weiter — keine dritte Zeile, solange in der zweiten Platz ist.
+    #[test]
+    fn werkzeugleiste_ohne_unnoetige_dritte_zeile() {
+        for width in [860.0, 1000.0, 1700.0] {
+            let mut h = Harness::builder().with_size(Vec2::new(width, 900.0)).build_eframe(|cc| {
+                egui_extras::install_image_loaders(&cc.egui_ctx);
+                SpritebitApp::new()
+            });
+            h.run();
+            let top = |h: &Harness<'_, SpritebitApp>, label: &str| h.get_by_label(label).rect().top();
+            let (hand, wand, clean) = (top(&h, "Hand"), top(&h, "Zauberstab"), top(&h, "Clean Stroke"));
+            eprintln!("{width}: Hand {hand}, Zauberstab {wand}, Clean Stroke {clean}");
+            if wand > hand + 1.0 {
+                assert!((clean - wand).abs() < 6.0, "{width} px: Werkzeuge brechen um, Clean Stroke muss in ihrer zweiten Zeile stehen");
+            } else {
+                assert!(clean > hand + 1.0, "{width} px: Werkzeuge in einer Zeile, Einstellungen darunter");
+            }
+        }
+    }
+
     #[test]
     fn was_ist_neu_zeigt_die_notizen_im_band() {
         let mut h = app();
