@@ -308,9 +308,9 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ),
     ("{n} Farben — ein GIF fasst höchstens 255.", "{n} colors — a GIF holds at most 255.", "{n} Farben — a GIF packt höchstns 255."),
     ("Speichern fehlgeschlagen: {e}", "Saving failed: {e}", "Speichern is danebn gaunga: {e}"),
-    // ── Bild und Aufräumen ──
+    // ── Bild und Feinschliff ──
     ("Bild", "Image", "Buidl"),
-    ("Aufräumen", "Cleanup", "Zammraman"),
+    ("Feinschliff", "Finishing", "Feinschliff"),
     ("Wirkt auf: Auswahl", "Acts on: selection", "Wirkt auf: Auswoi"),
     ("Wirkt auf: Sprite", "Acts on: sprite", ""),
     ("↔ Spiegeln", "↔ Flip", "↔ Spiagln"),
@@ -350,6 +350,14 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Nichts zu glätten gefunden.", "Nothing found to despeckle.", "Nix zum Glattmochn gfundn."),
     ("Outline", "Outline", "Umrandung"),
     ("Outline-Farbe", "Outline color", "Farb vo da Umrandung"),
+    ("außen", "outside", "aussn"),
+    ("innen", "inside", ""),
+    ("beides", "both", ""),
+    (
+        "Wo die Kante entsteht: um die Figur, auf ihren Randpixeln oder beides",
+        "Where the edge goes: around the shape, on its border pixels, or both",
+        "Wo d’Kantn hinkummt: rundumadum, auf de Randpixel oder beides",
+    ),
     ("Outline gezeichnet — {n} Pixel.", "Outline drawn — {n} pixels.", "Umrandung zeichnet — {n} Pixel."),
     ("Keine Outline nötig — Sprite leer?", "No outline needed — is the sprite empty?", "Ka Umrandung nötig — is da Sprite laar?"),
     // ── Licht ──

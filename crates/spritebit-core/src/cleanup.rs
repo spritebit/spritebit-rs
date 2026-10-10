@@ -1,4 +1,4 @@
-//! Aufräumen und Farben zusammenfassen — wie `spritefx.js` der Web-Version.
+//! Feinschliff (Panel) und Farben zusammenfassen — wie `spritefx.js` der Web-Version.
 //!
 //! * [`remove_background`] — vom Rand her ähnliche Flächen löschen
 //! * [`despeckle`] — einzelne Streupixel auf die Mehrheit der Nachbarn setzen
@@ -103,9 +103,74 @@ pub fn despeckle(img: &mut Image) -> usize {
     changed
 }
 
-/// Outline: transparente Pixel, die (4er-Nachbarschaft) an Gefülltes
-/// grenzen, bekommen `value`; `thickness` Durchläufe. Gibt die Zahl neuer Pixel.
-pub fn outline(img: &mut Image, value: Px, thickness: u32) -> usize {
+/// Wo die Outline entsteht.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum OutlineMode {
+    /// Um alles Gefüllte herum (die Figur wird größer).
+    #[default]
+    Outside,
+    /// Auf den gefüllten Randpixeln selbst; der Bildrand zählt nicht als Kante.
+    Inside,
+    /// Beides.
+    Both,
+}
+
+/// Outline in `value`, `thickness` Durchläufe dick — wie `outlineGrid` im Web.
+/// Gibt die Zahl geänderter Pixel.
+pub fn outline(img: &mut Image, value: Px, thickness: u32, mode: OutlineMode) -> usize {
+    let mut changed = 0;
+    // Innen zuerst — färbt nur Gefülltes um, die Außenkante bleibt gleich.
+    if mode != OutlineMode::Outside {
+        changed += inner_outline(img, value, thickness);
+    }
+    if mode != OutlineMode::Inside {
+        changed += outer_outline(img, value, thickness);
+    }
+    changed
+}
+
+/// Gefüllte Pixel, die (4er-Nachbarschaft) an Transparentes grenzen, bekommen
+/// `value`; jeder weitere Durchlauf geht eine Reihe nach innen.
+fn inner_outline(img: &mut Image, value: Px, thickness: u32) -> usize {
+    let (w, h) = (img.width() as i64, img.height() as i64);
+    let mut edge = vec![false; (w * h) as usize];
+    for _ in 0..thickness {
+        let mut mark = Vec::new();
+        for y in 0..h {
+            for x in 0..w {
+                if img.get(x as u32, y as u32) == 0 || edge[(y * w + x) as usize] {
+                    continue;
+                }
+                // Außen = transparent oder schon als Kante markiert.
+                let out = |nx: i64, ny: i64| {
+                    nx >= 0 && ny >= 0 && nx < w && ny < h && (img.get(nx as u32, ny as u32) == 0 || edge[(ny * w + nx) as usize])
+                };
+                if out(x - 1, y) || out(x + 1, y) || out(x, y - 1) || out(x, y + 1) {
+                    mark.push((y * w + x) as usize);
+                }
+            }
+        }
+        if mark.is_empty() {
+            break;
+        }
+        for i in mark {
+            edge[i] = true;
+        }
+    }
+    let mut changed = 0;
+    for (i, _) in edge.iter().enumerate().filter(|(_, e)| **e) {
+        let (x, y) = ((i as i64 % w) as u32, (i as i64 / w) as u32);
+        if img.get(x, y) != value {
+            img.set(x, y, value);
+            changed += 1;
+        }
+    }
+    changed
+}
+
+/// Transparente Pixel, die (4er-Nachbarschaft) an Gefülltes grenzen, bekommen
+/// `value`; `thickness` Durchläufe.
+fn outer_outline(img: &mut Image, value: Px, thickness: u32) -> usize {
     let (w, h) = (img.width() as i64, img.height() as i64);
     let mut added = 0;
     for _ in 0..thickness {
@@ -237,12 +302,49 @@ mod tests {
     fn outline_ein_und_zwei_pixel() {
         let mut img = Image::new(7, 7);
         img.set(3, 3, 1);
-        assert_eq!(outline(&mut img, 3, 1), 4);
+        assert_eq!(outline(&mut img, 3, 1, OutlineMode::Outside), 4);
         assert_eq!(img.get(3, 2), 3);
         assert_eq!(img.get(2, 2), 0, "nur 4er-Nachbarn");
         let mut img = Image::new(7, 7);
         img.set(3, 3, 1);
-        assert_eq!(outline(&mut img, 3, 2), 4 + 8);
+        assert_eq!(outline(&mut img, 3, 2, OutlineMode::Outside), 4 + 8);
+    }
+
+    /// 3×3-Block in der Mitte eines 7×7-Bilds.
+    fn block() -> Image {
+        let mut img = Image::new(7, 7);
+        for y in 2..=4 {
+            for x in 2..=4 {
+                img.set(x, y, 1);
+            }
+        }
+        img
+    }
+
+    #[test]
+    fn outline_innen_und_beides() {
+        let mut img = block();
+        assert_eq!(outline(&mut img, 3, 1, OutlineMode::Inside), 8);
+        assert_eq!(img.get(3, 3), 1, "Mitte bleibt");
+        assert_eq!(img.get(2, 2), 3);
+        assert_eq!(img.get(3, 1), 0, "außen bleibt leer");
+        let mut img = block();
+        assert_eq!(outline(&mut img, 3, 2, OutlineMode::Inside), 9, "zweiter Durchlauf erreicht die Mitte");
+        let mut img = block();
+        img.set(2, 2, 3);
+        assert_eq!(outline(&mut img, 3, 1, OutlineMode::Inside), 7, "schon gleich gefärbt zählt nicht");
+        let mut full = Image::new(3, 3);
+        for y in 0..3 {
+            for x in 0..3 {
+                full.set(x, y, 1);
+            }
+        }
+        assert_eq!(outline(&mut full, 3, 1, OutlineMode::Inside), 0, "Bildrand ist keine Kante");
+        let mut img = block();
+        assert_eq!(outline(&mut img, 3, 1, OutlineMode::Both), 8 + 12);
+        assert_eq!(img.get(3, 3), 1);
+        assert_eq!(img.get(2, 2), 3);
+        assert_eq!(img.get(3, 1), 3);
     }
 
     #[test]

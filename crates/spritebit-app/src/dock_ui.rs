@@ -85,7 +85,7 @@ impl PanelId {
             PanelId::Preview => tr("Vorschau"),
             PanelId::Palette => tr("Palette"),
             PanelId::Image => tr("Bild"),
-            PanelId::Cleanup => tr("Aufräumen"),
+            PanelId::Cleanup => tr("Feinschliff"),
             PanelId::Light => tr("Licht"),
             PanelId::Tiles => tr("Kacheln"),
             PanelId::Guides => tr("Hilfslinien"),

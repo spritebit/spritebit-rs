@@ -242,7 +242,7 @@ struct SpritebitApp {
     unsaved_ask: Option<Pending>,
     /// Schließen ist bestätigt (nach Speichern oder Verwerfen).
     allow_close: bool,
-    /// Panels „Bild“ und „Aufräumen“.
+    /// Panels „Bild“ und „Feinschliff“.
     image: image_ui::ImagePanel,
     /// Panel „Kacheln“ (Tilemap-Ebenen).
     tiles: tiles_ui::TileState,

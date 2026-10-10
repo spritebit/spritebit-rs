@@ -1,10 +1,10 @@
-//! Panels „Bild“ und „Aufräumen“ der rechten Leiste.
+//! Panels „Bild“ und „Feinschliff“ der rechten Leiste.
 //!
 //! Bild: spiegeln, 90° und frei drehen, zuschneiden, zentrieren, Leinwand,
 //! skalieren. Mit Auswahl wirken Spiegeln und Drehen nur auf sie (ihr
 //! Inhalt wird dafür angehoben), sonst auf den ganzen Sprite.
 //!
-//! Aufräumen: Hintergrund entfernen, glätten, Outline — auf die aktive Zelle.
+//! Feinschliff: Hintergrund entfernen, glätten, Outline — auf die aktive Zelle.
 //!
 //! Licht: Lichtquelle aus 8 Richtungen, Kantenlicht und Schlagschatten —
 //! nicht-destruktiv als eigene Ebenen über bzw. unter der Figur
@@ -14,7 +14,8 @@ use eframe::egui;
 use spritebit_core::selection::{Clip, Selection};
 use spritebit_core::transform::{self as tf, TransformResult};
 use spritebit_core::light::{self, FxColor, FxKind, LayerFx, LightDir, LightOpts};
-use spritebit_core::{cleanup, Image, Rgb};
+use spritebit_core::cleanup::{self, OutlineMode};
+use spritebit_core::{Image, Rgb};
 
 use crate::i18n::{tr, trf};
 use crate::icons;
@@ -83,6 +84,7 @@ pub(crate) struct ImagePanel {
     pub bg_tolerance: f64,
     pub outline_color: Rgb,
     pub outline_thickness: u32,
+    pub outline_mode: OutlineMode,
     /// Woher das Licht kommt.
     pub light_dir: LightDir,
     pub light: LightOpts,
@@ -114,6 +116,7 @@ impl Default for ImagePanel {
             bg_tolerance: 0.25,
             outline_color: [0x1a, 0x1a, 0x1a],
             outline_thickness: 1,
+            outline_mode: OutlineMode::Outside,
             light_dir: (-1, -1),
             light: LightOpts::default(),
             cast_color: [0x1a, 0x1a, 0x1a],
@@ -466,13 +469,26 @@ impl SpritebitApp {
                         ui.selectable_value(&mut self.image.outline_thickness, t, format!("{t} px"));
                     }
                 });
+            let modes = [(OutlineMode::Outside, "außen"), (OutlineMode::Inside, "innen"), (OutlineMode::Both, "beides")];
+            let current = modes.iter().find(|m| m.0 == self.image.outline_mode).map_or("außen", |m| m.1);
+            egui::ComboBox::from_id_salt("outline-mode")
+                .width(70.0)
+                .selected_text(tr(current))
+                .show_ui(ui, |ui| {
+                    for (mode, label) in modes {
+                        ui.selectable_value(&mut self.image.outline_mode, mode, tr(label));
+                    }
+                })
+                .response
+                .on_hover_text(tr("Wo die Kante entsteht: um die Figur, auf ihren Randpixeln oder beides"));
             if ui.button(tr("Anwenden")).clicked() {
                 let th = self.image.outline_thickness;
+                let mode = self.image.outline_mode;
                 // Farbe wie beim Farbwähler: Palettennummer, sonst freie Farbe.
                 let keep = self.color;
                 self.set_rgb(self.image.outline_color);
                 let value = std::mem::replace(&mut self.color, keep);
-                if let Some(n) = self.clean(|img, _, _| cleanup::outline(img, value, th)) {
+                if let Some(n) = self.clean(|img, _, _| cleanup::outline(img, value, th, mode)) {
                     self.hint = Some(if n > 0 { trf("Outline gezeichnet — {n} Pixel.", &[("n", &n)]) } else { tr("Keine Outline nötig — Sprite leer?").into() });
                 }
             }
@@ -767,7 +783,7 @@ impl SpritebitApp {
 
     #[cfg(test)]
     pub(crate) fn clean_for_test_outline(&mut self) -> usize {
-        self.clean(|img, _, _| cleanup::outline(img, 1, 1)).unwrap_or(0)
+        self.clean(|img, _, _| cleanup::outline(img, 1, 1, OutlineMode::Outside)).unwrap_or(0)
     }
 
     #[cfg(test)]

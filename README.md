@@ -118,7 +118,7 @@ cargo build --release           # schnelle Fassung (target/release)
 | Strg+E | Export: PNG (Frame oder alle), GIF (ganz oder je Tag), Spritesheet + JSON-Atlas |
 | Ansicht → Sprache | Deutsch, English, Österreichisch (wird gemerkt) |
 | Reiter | Geöffnete Sprites über der Zeichenfläche: Klick wechselt, × / Mittelklick / Strg+W schließt, Strg+Tab schaltet weiter, Ziehen ordnet |
-| Rechte Leiste | Vorschau, Palette (Bibliothek), Bild, Aufräumen, Licht (Lichtquelle, Kantenlicht, Schlagschatten — als eigene Ebenen, jederzeit umstellbar), Kacheln, Hilfslinien, Schablone, Code & Export |
+| Rechte Leiste | Vorschau, Palette (Bibliothek), Bild, Feinschliff, Licht (Lichtquelle, Kantenlicht, Schlagschatten — als eigene Ebenen, jederzeit umstellbar), Kacheln, Hilfslinien, Schablone, Code & Export |
 | Panel Kacheln | Tilemap-Ebene anlegen oder umwandeln; *Pixel malen* (eine Kachel ändert sich überall, Auto/Manuell) oder *Kacheln setzen* (Stift setzt, Radierer/Rechts leert, Füllen füllt, Alt+Klick nimmt auf); Export für Godot 4 (PNG + .tscn + JSON) |
 | Pinselgröße | 1–64 per Regler oder Zahlenfeld, Alt + rechte Maustaste ziehen |
 | Größenfelder | rechnen: `24 * 4`, `24x4`, `(16+8)*2`, `96 : 4` |
