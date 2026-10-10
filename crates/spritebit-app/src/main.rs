@@ -2869,7 +2869,7 @@ mod shot {
             // SPRITEBIT_SHOT_LAYERS=n: n Ebenen (Timeline mit Überlauf).
             let layers: usize = std::env::var("SPRITEBIT_SHOT_LAYERS").ok().and_then(|v| v.parse().ok()).unwrap_or(2);
             for k in 2..layers {
-                s.add_layer(k, &format!("Ebene {}", k + 1));
+                s.add_layer(k, format!("Ebene {}", k + 1));
             }
             // SPRITEBIT_SHOT_FRAMES=n: n Frames, jeder etwas anders (Timeline).
             let frames: usize = std::env::var("SPRITEBIT_SHOT_FRAMES").ok().and_then(|v| v.parse().ok()).unwrap_or(1);
