@@ -2758,6 +2758,12 @@ mod shot {
             h.get_by_label("Licht — Klick klappt auf").click();
             h.run();
         }
+        // SPRITEBIT_SHOT_PAL=1: Farbwähler am Farbfeld 3 offen.
+        if std::env::var_os("SPRITEBIT_SHOT_PAL").is_some() {
+            let ctx = h.ctx.clone();
+            h.state_mut().open_swatch_editor(&ctx, 3);
+            h.run();
+        }
         let img = h.render().expect("Bild");
         img.save(path).expect("speichern");
     }

@@ -57,11 +57,26 @@ pub(crate) struct ReduceModal {
     pub after: Option<(usize, egui::TextureHandle)>,
 }
 
+/// Was im Rechtsklick-Menü eines Farbfelds gewählt wurde.
+#[derive(Clone, Copy)]
+enum SwatchAction {
+    /// Das „+“-Feld: neue Farbe anhängen und gleich ändern.
+    Add,
+    Duplicate(Px),
+    Copy(Px),
+    Paste(Px),
+    Edit(Px),
+    RemoveLast,
+}
+
 #[derive(Default)]
 pub(crate) struct PalState {
-    pub quick_edit: bool,
-    /// Farbwähler im Schnell-Bearbeiten offen (ein Undo-Schritt je Öffnen).
+    /// Nummer, deren Farbwähler gerade am Feld offen ist.
+    pub edit_idx: Option<Px>,
+    /// Für den offenen Farbwähler schon ein Undo-Schritt angelegt.
     pub picking: bool,
+    /// „Farbe kopieren“ — für „Farbe einfügen“.
+    pub copied: Option<Rgb>,
     pub preview: Option<String>,
     pub search: String,
     pub filter: Option<PalFilter>,
@@ -354,9 +369,14 @@ impl SpritebitApp {
         });
         ui.add_space(6.0);
 
-        // Farbzeile: Klick wählt, Ziehen sortiert um.
+        // Farbzeile: Klick wählt, Doppelklick ändert, Rechtsklick öffnet das
+        // Menü, Ziehen sortiert um. Das „+“ am Ende hängt eine Farbe an.
         let mut drop_on: Option<Px> = None;
         let dragging = self.pal.drag_from;
+        let mut action: Option<SwatchAction> = None;
+        let mut edit_anchor: Option<egui::Response> = None;
+        let copied = self.pal.copied;
+        let last = palette.len() as Px;
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = Vec2::splat(4.0);
             for i in 0..=palette.len() as Px {
@@ -364,6 +384,38 @@ impl SpritebitApp {
                 let resp = swatch(ui, palette.get(i), 22.0, self.color == i, sense);
                 if resp.clicked() {
                     self.color = i;
+                }
+                if i > 0 && resp.double_clicked() {
+                    action = Some(SwatchAction::Edit(i));
+                }
+                if i > 0 {
+                    resp.context_menu(|ui| {
+                        if ui.button(tr("Duplizieren")).clicked() {
+                            action = Some(SwatchAction::Duplicate(i));
+                        }
+                        if ui.button(tr("Farbe kopieren")).clicked() {
+                            action = Some(SwatchAction::Copy(i));
+                        }
+                        let paste = match copied {
+                            Some(c) => trf("{hex} einfügen", &[("hex", &hex(c))]),
+                            None => tr("Farbe einfügen").to_string(),
+                        };
+                        if ui.add_enabled(copied.is_some(), egui::Button::new(paste)).clicked() {
+                            action = Some(SwatchAction::Paste(i));
+                        }
+                        if ui.button(tr("Farbe ändern …")).clicked() {
+                            action = Some(SwatchAction::Edit(i));
+                        }
+                        if i == last && last > 1 {
+                            ui.separator();
+                            if ui.button(tr("Entfernen")).clicked() {
+                                action = Some(SwatchAction::RemoveLast);
+                            }
+                        }
+                    });
+                }
+                if self.pal.edit_idx == Some(i) {
+                    edit_anchor = Some(resp.clone());
                 }
                 if i > 0 && resp.drag_started() {
                     self.pal.drag_from = Some(i);
@@ -379,10 +431,24 @@ impl SpritebitApp {
                 }
                 resp.on_hover_text(match palette.get(i) {
                     None => tr("0 · Transparent (Radierer)").to_string(),
-                    Some(c) => format!("{i} · {}", hex(c)),
+                    Some(c) => format!("{i} · {}\n{}", hex(c), tr("Doppelklick: ändern · Rechtsklick: duplizieren, kopieren …")),
                 });
             }
+            if palette.len() < MAX_COLORS {
+                let (rect, resp) = ui.allocate_exact_size(Vec2::splat(22.0), Sense::click());
+                let col = if resp.hovered() { ui.visuals().strong_text_color() } else { ui.visuals().weak_text_color() };
+                ui.painter().rect_stroke(rect.shrink(0.5), 3.0, Stroke::new(1.0, col), egui::StrokeKind::Inside);
+                ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "+", egui::FontId::proportional(16.0), col);
+                if resp.clicked() {
+                    action = Some(SwatchAction::Add);
+                }
+                resp.on_hover_text(tr("Neue Farbe hinzufügen"));
+            }
         });
+        if let Some(a) = action {
+            self.swatch_action(ui.ctx(), a);
+        }
+        self.swatch_editor(ui, edit_anchor);
         if dragging.is_some() && ui.input(|i| i.pointer.any_released()) {
             if let (Some(from), Some(to)) = (self.pal.drag_from.take(), drop_on) {
                 if from != to {
@@ -423,58 +489,123 @@ impl SpritebitApp {
             }
         }
 
-        // Schnell bearbeiten: Farbe der gewählten Nummer ändern
-        ui.add_space(4.0);
-        ui.checkbox(&mut self.pal.quick_edit, tr("Palette bearbeiten"));
-        if self.pal.quick_edit {
-            if !self.project.is_custom(&palette.name) {
-                ui.weak(tr("Eingebaute Palette — Änderungen gehen in eine Kopie."));
+        ui.weak(trf("Palette: {name}", &[("name", &palette.name)]));
+    }
+
+    fn swatch_action(&mut self, ctx: &egui::Context, action: SwatchAction) {
+        let palette = self.project.current_palette();
+        match action {
+            SwatchAction::Add | SwatchAction::Duplicate(_) => {
+                if palette.len() >= MAX_COLORS {
+                    self.hint = Some(trf("Die Palette ist voll ({n} Farben).", &[("n", &MAX_COLORS)]));
+                    return;
+                }
+                let rgb = match action {
+                    SwatchAction::Duplicate(n) => palette.get(n),
+                    _ => self.current_rgb().or(palette.colors.last().copied()),
+                }
+                .unwrap_or([0x88, 0x88, 0x88]);
+                self.pal_step();
+                let i = self.own_palette();
+                self.project.palettes[i].colors.push(rgb);
+                let n = self.project.palettes[i].colors.len() as Px;
+                self.color = n;
+                if matches!(action, SwatchAction::Add) {
+                    self.open_swatch_editor(ctx, n);
+                }
+                self.changed();
             }
-            if (1..=palette.len() as Px).contains(&self.color) {
-                let mut rgb = palette.get(self.color).unwrap_or([0, 0, 0]);
+            SwatchAction::Copy(n) => {
+                if let Some(c) = palette.get(n) {
+                    self.pal.copied = Some(c);
+                    ctx.copy_text(hex(c));
+                }
+            }
+            SwatchAction::Paste(n) => {
+                if let Some(c) = self.pal.copied {
+                    self.set_palette_color(n, c);
+                }
+            }
+            SwatchAction::Edit(n) => self.open_swatch_editor(ctx, n),
+            SwatchAction::RemoveLast => {
+                self.pal_step();
+                let i = self.own_palette();
+                self.project.palettes[i].colors.pop();
+                self.clamp_color();
+                self.changed();
+            }
+        }
+    }
+
+    /// Farbe der Nummer `n` setzen — als eigener Undo-Schritt.
+    fn set_palette_color(&mut self, n: Px, rgb: Rgb) {
+        self.pal_step();
+        let i = self.own_palette();
+        self.project.palettes[i].colors[n as usize - 1] = rgb;
+        self.changed();
+    }
+
+    pub(crate) fn open_swatch_editor(&mut self, ctx: &egui::Context, n: Px) {
+        self.pal.edit_idx = Some(n);
+        self.pal.picking = false;
+        egui::Popup::open_id(ctx, egui::Id::new("pal-swatch-edit"));
+    }
+
+    /// Farbwähler direkt am Feld (Doppelklick, „+“, „Farbe ändern …“).
+    /// Ein Undo-Schritt je Öffnen, nicht je Zug.
+    fn swatch_editor(&mut self, ui: &mut egui::Ui, anchor: Option<egui::Response>) {
+        let Some(n) = self.pal.edit_idx else { return };
+        let id = egui::Id::new("pal-swatch-edit");
+        // Das Feld gibt es erst ab dem nächsten Bild (nach „+“) — dann warten.
+        let Some(anchor) = anchor else {
+            if !egui::Popup::is_id_open(ui.ctx(), id) {
+                self.pal.edit_idx = None;
+            }
+            return;
+        };
+        let Some(cur) = self.project.current_palette().get(n) else {
+            self.pal.edit_idx = None;
+            return;
+        };
+        let builtin = !self.project.is_custom(&self.project.sprite().palette);
+        let mut picked: Option<Rgb> = None;
+        let mut typed: Option<Rgb> = None;
+        let shown = egui::Popup::from_response(&anchor)
+            .id(id)
+            .open_memory(None)
+            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+            .show(|ui| {
+                ui.label(trf("Farbe {n}", &[("n", &n)]));
+                if builtin {
+                    ui.weak(tr("Eingebaute Palette — Änderungen gehen in eine Kopie."));
+                }
+                let mut c = Color32::from_rgb(cur[0], cur[1], cur[2]);
+                ui.spacing_mut().slider_width = 220.0;
+                if egui::color_picker::color_picker_color32(ui, &mut c, egui::color_picker::Alpha::Opaque) {
+                    picked = Some([c.r(), c.g(), c.b()]);
+                }
                 ui.horizontal(|ui| {
-                    ui.label(trf("Farbe {n}", &[("n", &self.color)]));
-                    let r = egui::color_picker::color_edit_button_srgb(ui, &mut rgb);
-                    if let Some(typed) = hex_field(ui, "edit-hex", Some(rgb)) {
-                        self.pal_step();
-                        let i = self.own_palette();
-                        self.project.palettes[i].colors[self.color as usize - 1] = typed;
-                        self.changed();
-                    }
-                    if r.changed() {
-                        // Ein Undo-Schritt je Öffnen des Farbwählers, nicht je Zug.
-                        if !self.pal.picking {
-                            self.pal_step();
-                            self.pal.picking = true;
-                        }
-                        let i = self.own_palette();
-                        self.project.palettes[i].colors[self.color as usize - 1] = rgb;
-                        self.changed();
-                    }
-                    if !egui::Popup::is_any_open(ui.ctx()) {
-                        self.pal.picking = false;
+                    typed = hex_field(ui, "swatch-hex", Some(cur));
+                    if ui.button(tr("Fertig")).clicked() {
+                        ui.close();
                     }
                 });
-            }
-            ui.horizontal(|ui| {
-                if ui.add_enabled(palette.len() < MAX_COLORS, egui::Button::new(tr("+ Farbe"))).clicked() {
-                    self.pal_step();
-                    let i = self.own_palette();
-                    let last = self.project.palettes[i].colors.last().copied().unwrap_or([0, 0, 0]);
-                    self.project.palettes[i].colors.push(last);
-                    self.color = self.project.palettes[i].colors.len() as Px;
-                    self.changed();
-                }
-                if ui.add_enabled(palette.len() > 1, egui::Button::new(tr("− Letzte"))).clicked() {
-                    self.pal_step();
-                    let i = self.own_palette();
-                    self.project.palettes[i].colors.pop();
-                    self.clamp_color();
-                    self.changed();
-                }
             });
+        if let Some(rgb) = typed {
+            self.set_palette_color(n, rgb);
+        } else if let Some(rgb) = picked.filter(|&c| c != cur) {
+            if !self.pal.picking {
+                self.pal_step();
+                self.pal.picking = true;
+            }
+            let i = self.own_palette();
+            self.project.palettes[i].colors[n as usize - 1] = rgb;
+            self.changed();
         }
-        ui.weak(trf("Palette: {name}", &[("name", &palette.name)]));
+        if shown.is_none() {
+            self.pal.edit_idx = None;
+            self.pal.picking = false;
+        }
     }
 
     // ── Rechte Leiste: Bibliothek ───────────────────────────────────
