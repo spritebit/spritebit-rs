@@ -59,6 +59,9 @@ fn main() -> eframe::Result {
         Box::new(|cc| {
             // SVG-Icons (icons.rs) brauchen den Bild-Lader von egui_extras.
             egui_extras::install_image_loaders(&cc.egui_ctx);
+            // Beschriftungen nicht mit der Maus markierbar — sonst färbt Ziehen
+            // über Reiter und Panels Text blau. Eingabefelder bleiben es.
+            cc.egui_ctx.all_styles_mut(|s| s.interaction.selectable_labels = false);
             let mut app = SpritebitApp::new();
             // Wie im Browser: die zuletzt geladene Schablone ist wieder da.
             app.restore_template(&cc.egui_ctx);
