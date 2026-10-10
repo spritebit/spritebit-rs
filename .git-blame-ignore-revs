@@ -1,0 +1,6 @@
+# Reine Formatierungs-Commits — git blame überspringt sie:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# (GitHub macht das von selbst.)
+
+# cargo fmt, Breite 160
+9a3f950957d6d6454182903a7309c83c52e9c7e1

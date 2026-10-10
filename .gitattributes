@@ -1,0 +1,8 @@
+# Zeilenenden: im Repo und in der Arbeitskopie immer LF — unabhängig von
+# core.autocrlf auf dem jeweiligen Rechner. Git erkennt Binärdateien selbst.
+* text=auto eol=lf
+
+# Windows-Skripte brauchen CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
