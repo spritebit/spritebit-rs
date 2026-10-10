@@ -47,6 +47,15 @@ pub(crate) struct PalModal {
     pub edit: Option<String>,
     pub name: String,
     pub colors: Vec<Rgb>,
+    /// Name je Farbe (leer = „Farbe 3“), parallel zu `colors`.
+    pub names: Vec<String>,
+}
+
+impl PalModal {
+    fn new(edit: Option<String>, name: String, pal: &Palette) -> Self {
+        let names = (1..=pal.len() as Px).map(|i| pal.name_of(i).unwrap_or_default().to_string()).collect();
+        PalModal { edit, name, colors: pal.colors.clone(), names }
+    }
 }
 
 /// Dialog „Bild » Palette“.
@@ -66,7 +75,7 @@ enum SwatchAction {
     Copy(Px),
     Paste(Px),
     Edit(Px),
-    RemoveLast,
+    Remove(Px),
 }
 
 #[derive(Default)]
@@ -239,17 +248,58 @@ impl SpritebitApp {
         if self.color > 0 && (self.color as usize) <= order.len() {
             self.color = order.iter().position(|&o| o == self.color as usize).map_or(self.color, |k| k as Px + 1);
         }
+        // Namen wandern mit ihrer Farbe.
+        let names = order.iter().enumerate().filter_map(|(k, &o)| Some((k as Px + 1, pal.name_of(o as Px)?.to_string()))).collect();
         if self.project.is_custom(&pal.name) && !shared {
             let i = self.project.palettes.iter().position(|p| p.name == pal.name).expect("eigene Palette");
             self.project.palettes[i].colors = colors;
+            self.project.palettes[i].names = names;
         } else {
             let name = self.project.unique_palette_name(&format!("{}_kopie", pal.name));
-            self.project.palettes.push(Palette::new(name.clone(), colors));
+            let mut copy = Palette::new(name.clone(), colors);
+            copy.names = names;
+            self.project.palettes.push(copy);
             self.project.sprite_mut().palette = name.clone();
             self.hint = Some(trf("Umsortiert in der Kopie „{name}“.", &[("name", &name)]));
         }
         self.changed();
         true
+    }
+
+    /// Farbe `n` entfernen; die Nummern dahinter rücken auf, das Bild bleibt
+    /// gleich (palops::remove_color). Eingebaute — oder mit anderen Sprites
+    /// geteilte — Paletten werden dafür für diesen Sprite kopiert.
+    fn remove_color(&mut self, n: Px) {
+        let pal = self.project.current_palette();
+        let cur = self.project.current;
+        let shared = self.project.sprites.iter().enumerate().any(|(i, s)| i != cur && s.palette == pal.name);
+        self.pal_step();
+        let mut new = pal.clone();
+        let Some(freed) = palops::remove_color(&mut new, n as usize, &mut [&mut self.project.sprites[cur]]) else {
+            self.histories[cur].drop_last();
+            return;
+        };
+        if self.project.is_custom(&pal.name) && !shared {
+            let i = self.project.palettes.iter().position(|p| p.name == pal.name).expect("eigene Palette");
+            self.project.palettes[i] = new;
+            self.hint = Some(if freed > 0 {
+                trf("Farbe {n} entfernt — {k} Pixel bleiben als freie Farbe.", &[("n", &n), ("k", &freed)])
+            } else {
+                trf("Farbe {n} entfernt.", &[("n", &n)])
+            });
+        } else {
+            new.name = self.project.unique_palette_name(&format!("{}_kopie", pal.name));
+            self.project.sprite_mut().palette = new.name.clone();
+            self.hint = Some(trf("Farbe {n} entfernt — in der Kopie „{name}“.", &[("n", &n), ("name", &new.name)]));
+            self.project.palettes.push(new);
+        }
+        if self.color == n {
+            self.color = n.saturating_sub(1).max(1);
+        } else if self.color > n && self.color < FREE_BASE {
+            self.color -= 1;
+        }
+        self.clamp_color();
+        self.changed();
     }
 
     /// Palette `name` dem Sprite zuweisen. `keep_look`: das Bild sieht gleich
@@ -334,7 +384,10 @@ impl SpritebitApp {
                 let label = match (self.color, cur) {
                     (0, _) => tr("Transparent").to_string(),
                     (c, Some(rgb)) if c >= FREE_BASE => trf("Freie Farbe {hex}", &[("hex", &hex(rgb))]),
-                    (c, Some(rgb)) => trf("Nr. {c} · {hex}", &[("c", &c), ("hex", &hex(rgb))]),
+                    (c, Some(rgb)) => match palette.name_of(c) {
+                        Some(name) => trf("Nr. {c} · {name} · {hex}", &[("c", &c), ("name", &name), ("hex", &hex(rgb))]),
+                        None => trf("Nr. {c} · {hex}", &[("c", &c), ("hex", &hex(rgb))]),
+                    },
                     (c, None) => trf("Nr. {c}", &[("c", &c)]),
                 };
                 ui.label(label);
@@ -406,11 +459,9 @@ impl SpritebitApp {
                         if ui.button(tr("Farbe ändern …")).clicked() {
                             action = Some(SwatchAction::Edit(i));
                         }
-                        if i == last && last > 1 {
-                            ui.separator();
-                            if ui.button(tr("Entfernen")).clicked() {
-                                action = Some(SwatchAction::RemoveLast);
-                            }
+                        ui.separator();
+                        if ui.add_enabled(last > 1, egui::Button::new(tr("Entfernen"))).clicked() {
+                            action = Some(SwatchAction::Remove(i));
                         }
                     });
                 }
@@ -431,7 +482,10 @@ impl SpritebitApp {
                 }
                 resp.on_hover_text(match palette.get(i) {
                     None => tr("0 · Transparent (Radierer)").to_string(),
-                    Some(c) => format!("{i} · {}\n{}", hex(c), tr("Doppelklick: ändern · Rechtsklick: duplizieren, kopieren …")),
+                    Some(c) => {
+                        let name = palette.name_of(i).map(|n| format!("{n} · ")).unwrap_or_default();
+                        format!("{i} · {name}{}\n{}", hex(c), tr("Doppelklick: ändern · Rechtsklick: duplizieren, kopieren …"))
+                    }
                 });
             }
             if palette.len() < MAX_COLORS {
@@ -527,13 +581,7 @@ impl SpritebitApp {
                 }
             }
             SwatchAction::Edit(n) => self.open_swatch_editor(ctx, n),
-            SwatchAction::RemoveLast => {
-                self.pal_step();
-                let i = self.own_palette();
-                self.project.palettes[i].colors.pop();
-                self.clamp_color();
-                self.changed();
-            }
+            SwatchAction::Remove(n) => self.remove_color(n),
         }
     }
 
@@ -543,6 +591,15 @@ impl SpritebitApp {
         let i = self.own_palette();
         self.project.palettes[i].colors[n as usize - 1] = rgb;
         self.changed();
+    }
+
+    /// Für das Bild der Oberfläche (Test): Dialog mit zwei benannten Farben.
+    #[cfg(test)]
+    pub(crate) fn open_palette_modal_for_shot(&mut self) {
+        let mut pal = self.project.current_palette();
+        pal.names.insert(1, "Licht".into());
+        pal.names.insert(5, "Kontur".into());
+        self.pal.modal = Some(PalModal::new(Some(pal.name.clone()), pal.name.clone(), &pal));
     }
 
     pub(crate) fn open_swatch_editor(&mut self, ctx: &egui::Context, n: Px) {
@@ -684,11 +741,11 @@ impl SpritebitApp {
         });
         ui.horizontal_wrapped(|ui| {
             if ui.button(tr("+ Palette")).clicked() {
-                self.pal.modal = Some(PalModal { edit: None, name: self.project.unique_palette_name("meine_palette"), colors: pal.colors.clone() });
+                self.pal.modal = Some(PalModal::new(None, self.project.unique_palette_name("meine_palette"), &pal));
             }
             if self.project.is_custom(&shown) {
                 if ui.button(tr("Bearbeiten")).clicked() {
-                    self.pal.modal = Some(PalModal { edit: Some(shown.clone()), name: shown.clone(), colors: pal.colors.clone() });
+                    self.pal.modal = Some(PalModal::new(Some(shown.clone()), shown.clone(), &pal));
                 }
                 if ui.button(tr("Löschen …")).clicked() {
                     self.pal.delete = Some(shown.clone());
@@ -703,7 +760,7 @@ impl SpritebitApp {
                 } else {
                     self.pal.preview = Some(name.clone());
                 }
-                self.pal.modal = Some(PalModal { edit: Some(name.clone()), name: name.clone(), colors: pal.colors.clone() });
+                self.pal.modal = Some(PalModal::new(Some(name.clone()), name.clone(), &pal));
                 self.changed();
             }
             if ui
@@ -788,10 +845,18 @@ impl SpritebitApp {
             });
             ui.label(trf("{n} Farben", &[("n", &m.colors.len())]));
             egui::ScrollArea::vertical().max_height(320.0).show(ui, |ui| {
-                for (i, c) in m.colors.iter_mut().enumerate() {
+                m.names.resize(m.colors.len(), String::new());
+                for (i, (c, name)) in m.colors.iter_mut().zip(m.names.iter_mut()).enumerate() {
                     ui.horizontal(|ui| {
                         ui.monospace(format!("{:>3}", i + 1));
                         egui::color_picker::color_edit_button_srgb(ui, c);
+                        ui.add(
+                            egui::TextEdit::singleline(name)
+                                .hint_text(trf("Farbe {n}", &[("n", &(i + 1))]))
+                                .char_limit(40)
+                                .desired_width(140.0),
+                        )
+                        .on_hover_text(tr("Name der Farbe — leer lassen für „Farbe 3“"));
                         ui.monospace(hex(*c));
                     });
                 }
@@ -800,9 +865,11 @@ impl SpritebitApp {
                 if ui.add_enabled(m.colors.len() < MAX_COLORS, egui::Button::new(tr("+ Farbe"))).clicked() {
                     let last = m.colors.last().copied().unwrap_or([0x88, 0x88, 0x88]);
                     m.colors.push(last);
+                    m.names.push(String::new());
                 }
                 if ui.add_enabled(m.colors.len() > 1, egui::Button::new(tr("− Letzte"))).clicked() {
                     m.colors.pop();
+                    m.names.pop();
                 }
             });
             ui.separator();
@@ -812,7 +879,8 @@ impl SpritebitApp {
             });
         });
         if let Some(src) = load {
-            m.colors = self.project.palette(&src).colors;
+            let p = self.project.palette(&src);
+            *m = PalModal::new(m.edit.take(), std::mem::take(&mut m.name), &p);
         }
         if cancel {
             self.pal.modal = None;
@@ -824,6 +892,13 @@ impl SpritebitApp {
         let name = clean_name(&m.name);
         let editing = m.edit.clone();
         let colors = m.colors.clone();
+        let names: std::collections::BTreeMap<Px, String> = m
+            .names
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| !n.trim().is_empty())
+            .map(|(i, n)| (i as Px + 1, n.trim().to_string()))
+            .collect();
         if name.is_empty() {
             self.hint = Some(tr("Bitte einen Namen eingeben.").into());
             return;
@@ -842,6 +917,7 @@ impl SpritebitApp {
                 if let Some(p) = self.project.palettes.iter_mut().find(|p| p.name == old) {
                     p.name = name.clone();
                     p.colors = colors;
+                    p.names = names;
                 }
                 for s in &mut self.project.sprites {
                     if s.palette == old {
@@ -853,7 +929,9 @@ impl SpritebitApp {
                 }
             }
             None => {
-                self.project.palettes.push(Palette::new(name.clone(), colors));
+                let mut p = Palette::new(name.clone(), colors);
+                p.names = names;
+                self.project.palettes.push(p);
                 self.pal.preview = Some(name);
             }
         }

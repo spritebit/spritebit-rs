@@ -534,7 +534,16 @@ impl SpritebitApp {
                 ui.separator();
                 egui::ScrollArea::vertical().show(ui, |ui| self.panel_body(id, ui));
             });
-        if close {
+        // Klick daneben schließt — wie in der Web-Version. Nur auf der Fläche
+        // dahinter (Leisten, Zeichenfläche): Klicks in Menüs, Farbwähler oder
+        // Dialoge, die das Panel geöffnet hat, liegen auf eigenen Ebenen
+        // davor. Die Icon-Leisten schalten selbst um.
+        let outside = ctx.input(|i| i.pointer.any_pressed().then(|| i.pointer.press_origin()).flatten()).is_some_and(|p| {
+            let screen = ctx.content_rect();
+            let on_rail = p.x < screen.left() + RAIL_W || p.x > screen.right() - RAIL_W;
+            !on_rail && ctx.layer_id_at(p).is_none_or(|l| l.order == egui::Order::Background)
+        });
+        if close || outside {
             self.dock.flyout = None;
         }
         if pin {

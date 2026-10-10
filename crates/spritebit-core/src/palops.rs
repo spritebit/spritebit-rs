@@ -111,6 +111,45 @@ pub fn add_color(sp: &mut Sprite, colors: &[Rgb], rgb: Rgb) -> Option<Vec<Rgb>> 
     Some(out)
 }
 
+/// Farbe Nummer `idx` aus `pal` entfernen; die Nummern dahinter rücken auf
+/// (samt Namen). Das Bild bleibt gleich: Pixel der entfernten Farbe zeigen
+/// auf dieselbe Farbe an anderer Stelle — oder werden zur freien Farbe.
+/// Gibt die Zahl der Pixel zurück, die frei geworden sind; `None`, wenn es
+/// die Nummer nicht gibt oder es die letzte Farbe ist.
+pub fn remove_color(pal: &mut Palette, idx: usize, sprites: &mut [&mut Sprite]) -> Option<usize> {
+    if idx == 0 || idx > pal.colors.len() || pal.colors.len() <= 1 {
+        return None;
+    }
+    let rgb = pal.colors[idx - 1];
+    let twin = (1..=pal.colors.len()).find(|&i| i != idx && pal.colors[i - 1] == rgb).map(|t| if t > idx { t - 1 } else { t });
+    let idx_px = idx as Px;
+    let mut freed = 0;
+    for sp in sprites.iter_mut() {
+        remap_pixels(sp, |sp, v| {
+            if v == idx_px {
+                match twin {
+                    Some(t) => t as Px,
+                    None => {
+                        freed += 1;
+                        sp.free_color(rgb)
+                    }
+                }
+            } else if v > idx_px && v < FREE_BASE {
+                v - 1
+            } else {
+                v
+            }
+        });
+    }
+    pal.colors.remove(idx - 1);
+    pal.names = std::mem::take(&mut pal.names)
+        .into_iter()
+        .filter(|&(i, _)| i != idx_px)
+        .map(|(i, n)| (if i > idx_px { i - 1 } else { i }, n))
+        .collect();
+    Some(freed)
+}
+
 /// HSL eines Farbwerts: Farbton 0–360, Sättigung und Helligkeit 0–1.
 fn hsl(c: Rgb) -> (f64, f64, f64) {
     let [r, g, b] = c.map(|v| v as f64 / 255.0);
@@ -242,6 +281,32 @@ mod tests {
         let img = sp.cel(0, 0);
         assert_eq!([img.get(0, 0), img.get(1, 0), img.get(3, 0)], [2, 1, 1]);
         assert_eq!(rgb_of(img.get(2, 0), &new, &sp.free), Some([1, 2, 3]));
+    }
+
+    #[test]
+    fn farbe_entfernen_ohne_dass_sich_das_bild_aendert() {
+        let mut p = pal(&[[1, 1, 1], [2, 2, 2], [3, 3, 3], [2, 2, 2]]);
+        p.names.insert(3, "drei".into());
+        p.names.insert(2, "zwei".into());
+        let mut sp = Sprite::new("t", 3, 1).unwrap();
+        sp.active().set(0, 0, 2); // hat einen Zwilling (Nr. 4 → danach Nr. 3)
+        sp.active().set(1, 0, 3); // rückt auf Nr. 2
+        sp.active().set(2, 0, 1);
+        assert_eq!(remove_color(&mut p, 2, &mut [&mut sp]), Some(0));
+        assert_eq!(p.colors, vec![[1, 1, 1], [3, 3, 3], [2, 2, 2]]);
+        assert_eq!(p.name_of(2), Some("drei"));
+        assert_eq!(p.names.len(), 1);
+        let img = sp.cel(0, 0);
+        assert_eq!([img.get(0, 0), img.get(1, 0), img.get(2, 0)], [3, 2, 1]);
+        // Ohne Zwilling: freie Farbe
+        assert_eq!(remove_color(&mut p, 2, &mut [&mut sp]), Some(1));
+        assert_eq!(rgb_of(sp.cel(0, 0).get(1, 0), &p, &sp.free), Some([3, 3, 3]));
+        let mut q = pal(&[[1, 1, 1], [5, 5, 5]]);
+        let mut s2 = Sprite::new("t", 1, 1).unwrap();
+        s2.active().set(0, 0, 2);
+        assert_eq!(remove_color(&mut q, 2, &mut [&mut s2]), Some(1));
+        assert_eq!(rgb_of(s2.cel(0, 0).get(0, 0), &q, &s2.free), Some([5, 5, 5]));
+        assert_eq!(remove_color(&mut q, 1, &mut [&mut s2]), None);
     }
 
     #[test]

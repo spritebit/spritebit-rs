@@ -1455,6 +1455,44 @@ mod tests {
     }
 
     #[test]
+    fn geloestes_panel_geht_bei_klick_daneben_zu() {
+        let mut h = Harness::builder().with_size(Vec2::new(1400.0, 860.0)).build_eframe(|cc| {
+            egui_extras::install_image_loaders(&cc.egui_ctx);
+            SpritebitApp::new()
+        });
+        h.run();
+        h.state_mut().dock.toggle_pin(dock_ui::PanelId::Light);
+        h.run();
+        let click = |h: &mut Harness<'_, SpritebitApp>, p: egui::Pos2| {
+            h.hover_at(p);
+            h.run();
+            h.drag_at(p);
+            h.run();
+            h.drop_at(p);
+            h.run();
+        };
+        let open = |h: &mut Harness<'_, SpritebitApp>| {
+            h.get_by_label("Licht — Klick klappt auf").click();
+            h.run();
+            assert!(h.state().dock.flyout.is_some(), "Panel aufgeklappt");
+        };
+        open(&mut h);
+        // Klick ins Panel selbst: bleibt offen
+        let inside = h.get_by_label("Schließen").rect().center() - Vec2::new(60.0, 0.0);
+        click(&mut h, inside);
+        assert!(h.state().dock.flyout.is_some(), "Klick ins Panel lässt es offen");
+        // Klick auf die Zeichenfläche: zu
+        click(&mut h, egui::pos2(700.0, 430.0));
+        assert!(h.state().dock.flyout.is_none(), "Klick daneben schließt");
+        // Angepinnt bleibt es ohnehin stehen
+        open(&mut h);
+        h.state_mut().dock.toggle_pin(dock_ui::PanelId::Light);
+        h.run();
+        click(&mut h, egui::pos2(700.0, 430.0));
+        assert!(h.state().dock.is_pinned(dock_ui::PanelId::Light));
+    }
+
+    #[test]
     fn stift_malt_einen_strich_ohne_luecken() {
         let mut h = app();
         drag(&mut h, (10.0, 10.0), (20.0, 10.0));
@@ -2762,6 +2800,12 @@ mod shot {
         if std::env::var_os("SPRITEBIT_SHOT_PAL").is_some() {
             let ctx = h.ctx.clone();
             h.state_mut().open_swatch_editor(&ctx, 3);
+            h.run();
+        }
+        // SPRITEBIT_SHOT_PALMODAL=1: Dialog „Palette bearbeiten“ mit Farbnamen.
+        if std::env::var_os("SPRITEBIT_SHOT_PALMODAL").is_some() {
+            h.state_mut().open_palette_modal_for_shot();
+            h.run();
             h.run();
         }
         let img = h.render().expect("Bild");

@@ -1,5 +1,7 @@
 //! Paletten: bis zu 255 Farben, Nummer 0 ist immer transparent.
 
+use std::collections::BTreeMap;
+
 /// Eine Farbe ohne Alpha.
 pub type Rgb = [u8; 3];
 
@@ -11,13 +13,16 @@ pub struct Palette {
     pub name: String,
     /// `colors[i - 1]` ist Farbe Nummer `i` (1..=len).
     pub colors: Vec<Rgb>,
+    /// Eigene Namen einzelner Farben (Nummer → Name), z. B. „Haut“.
+    /// Ohne Eintrag heißt die Farbe schlicht „Farbe 3“.
+    pub names: BTreeMap<u16, String>,
 }
 
 impl Palette {
     pub fn new(name: impl Into<String>, colors: Vec<Rgb>) -> Self {
         let mut colors = colors;
         colors.truncate(MAX_COLORS);
-        Palette { name: name.into(), colors }
+        Palette { name: name.into(), colors, names: BTreeMap::new() }
     }
 
     /// Farbe Nummer `index` — `None` für 0 (transparent) und unbelegte Plätze.
@@ -26,6 +31,11 @@ impl Palette {
             return None;
         }
         self.colors.get(index as usize - 1).copied()
+    }
+
+    /// Eigener Name der Farbe Nummer `index`, falls vergeben.
+    pub fn name_of(&self, index: u16) -> Option<&str> {
+        self.names.get(&index).map(String::as_str).filter(|s| !s.is_empty())
     }
 
     pub fn len(&self) -> usize {

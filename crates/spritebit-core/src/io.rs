@@ -188,6 +188,22 @@ fn parse_materials(v: Option<&Value>) -> BTreeMap<String, BTreeMap<u16, String>>
         .collect()
 }
 
+/// Farbnamen einer Palette: `{ "3": "Haut" }` — so auch in der Web-Version.
+fn names_json(n: &BTreeMap<u16, String>) -> Value {
+    Value::Object(n.iter().map(|(i, s)| (i.to_string(), Value::String(s.clone()))).collect())
+}
+
+fn parse_names(v: Option<&Value>) -> BTreeMap<u16, String> {
+    let Some(o) = v.and_then(Value::as_object) else { return BTreeMap::new() };
+    o.iter()
+        .filter_map(|(i, s)| {
+            let i = i.parse::<u16>().ok().filter(|&i| i >= 1)?;
+            let s = s.as_str()?.trim();
+            (!s.is_empty()).then(|| (i, s.chars().take(40).collect()))
+        })
+        .collect()
+}
+
 fn palette_json(p: &Palette) -> Value {
     Value::Array(p.colors.iter().map(|&c| Value::String(hex(c))).collect())
 }
@@ -218,7 +234,7 @@ pub fn save_native(p: &Project) -> Vec<u8> {
     let header = json!({
         "name": p.name,
         "current": p.current,
-        "palettes": p.palettes.iter().map(|pal| json!({ "name": pal.name, "colors": palette_json(pal) })).collect::<Vec<_>>(),
+        "palettes": p.palettes.iter().map(|pal| json!({ "name": pal.name, "colors": palette_json(pal), "names": names_json(&pal.names) })).collect::<Vec<_>>(),
         "materials": materials_json(&p.materials),
         "sprites": sprites.iter().map(|s| json!({
             "name": s.name, "width": s.width, "height": s.height, "palette": s.palette, "fps": s.fps,
@@ -299,7 +315,9 @@ pub fn load_native(bytes: &[u8]) -> Result<Project, IoError> {
                     let colors = p["colors"].as_array().map_or_else(Vec::new, |c| {
                         c.iter().map(|h| h.as_str().and_then(parse_hex).unwrap_or([0, 0, 0])).collect()
                     });
-                    Palette::new(p["name"].as_str().unwrap_or("palette"), colors)
+                    let mut pal = Palette::new(p["name"].as_str().unwrap_or("palette"), colors);
+                    pal.names = parse_names(p.get("names"));
+                    pal
                 })
                 .collect()
         })
@@ -384,7 +402,9 @@ pub fn import_web(text: &str) -> Result<Project, IoError> {
             let colors = (1..=max)
                 .map(|i| obj.get(&i.to_string()).and_then(Value::as_str).and_then(parse_hex).unwrap_or([0, 0, 0]))
                 .collect();
-            palettes.push(Palette::new(name.clone(), colors));
+            let mut pal = Palette::new(name.clone(), colors);
+            pal.names = parse_names(v.get("paletteColorNames").and_then(|n| n.get(name)));
+            palettes.push(pal);
         }
     }
 
@@ -534,7 +554,11 @@ pub fn export_web(p: &Project) -> String {
         );
     }
     let mut custom = Map::new();
+    let mut names = Map::new();
     for pal in &p.palettes {
+        if !pal.names.is_empty() {
+            names.insert(pal.name.clone(), names_json(&pal.names));
+        }
         let obj: Map<String, Value> = pal.colors.iter().enumerate().map(|(i, &c)| ((i + 1).to_string(), json!(hex(c)))).collect();
         custom.insert(pal.name.clone(), Value::Object(obj));
     }
@@ -544,6 +568,7 @@ pub fn export_web(p: &Project) -> String {
         "sprites": sprites,
         "customPalettes": custom,
         "paletteMaterials": materials_json(&p.materials),
+        "paletteColorNames": names,
         "ui": { "curSprite": ids.get(p.current) },
     });
     serde_json::to_string(&doc).expect("JSON aus eigenen Daten")
@@ -584,7 +609,9 @@ mod tests {
         let b = Sprite::new("Zweiter", 4, 4).unwrap();
         let mut materials = BTreeMap::new();
         materials.insert("meine".to_string(), BTreeMap::from([(2u16, "sand".to_string())]));
-        Project { name: "Mein Spiel".into(), sprites: vec![a, b], palettes: vec![Palette::new("meine", vec![[9, 9, 9], [8, 8, 8], [7, 7, 7]])], current: 1, materials }
+        let mut meine = Palette::new("meine", vec![[9, 9, 9], [8, 8, 8], [7, 7, 7]]);
+        meine.names.insert(2, "Haut".into());
+        Project { name: "Mein Spiel".into(), sprites: vec![a, b], palettes: vec![meine], current: 1, materials }
     }
 
     fn assert_same(a: &Project, b: &Project) {
