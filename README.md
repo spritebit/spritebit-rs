@@ -42,7 +42,9 @@ Nach einem Update erscheint das einmal von selbst, später unter Hilfe → „Wa
 2. Die Notizen dazu schreiben: `notes/1.1.0.md` mit den Abschnitten `## Deutsch` und
    `## English`, darin kurze Punkte (`- …`) in der Sprache der Nutzer. Sie werden der
    Text der Release und „Was ist neu?“ in der App. Fehlen sie, schlagen die Tests fehl
-   und der Release-Lauf bricht ab.
+   und der Release-Lauf bricht ab. Ausführlich nur neue Funktionen; kleine Fixes und
+   Änderungen an der Oberfläche fasst ein allgemeiner Punkt am Ende zusammen
+   („Kleinere Verbesserungen und Fehlerbehebungen.“).
 3. Den passenden Tag pushen:
    ```
    git tag v1.1.0

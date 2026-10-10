@@ -763,7 +763,7 @@ impl SpritebitApp {
                 self.update_menu(ui);
                 ui.separator();
                 if ui
-                    .button(tr("spritebit unterstützen (Ko-fi)"))
+                    .button(tr("spritebit unterstützen"))
                     .on_hover_text(tr("Kostenlos bleibt spritebit sowieso. Spenden fließen in ein Code-Signatur-Zertifikat, damit Windows bei der Desktop-App nicht mehr warnt."))
                     .clicked()
                 {
@@ -1083,7 +1083,7 @@ impl SpritebitApp {
                     ui.label(tr("© 2026 Marco Jan · freie Software unter der MIT-Lizenz"));
                     ui.hyperlink_to(tr("Neue Versionen auf GitHub"), "https://github.com/spritebit/spritebit-rs/releases");
                     ui.add_space(6.0);
-                    ui.hyperlink_to(tr("spritebit unterstützen (Ko-fi)"), DONATE_URL)
+                    ui.hyperlink_to(tr("spritebit unterstützen"), DONATE_URL)
                         .on_hover_text(tr("Kostenlos bleibt spritebit sowieso. Spenden fließen in ein Code-Signatur-Zertifikat, damit Windows bei der Desktop-App nicht mehr warnt."));
                 });
         }
