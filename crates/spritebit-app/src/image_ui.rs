@@ -17,6 +17,7 @@ use spritebit_core::light::{self, FxColor, FxKind, LayerFx, LightDir, LightOpts}
 use spritebit_core::{cleanup, Image, Rgb};
 
 use crate::i18n::{tr, trf};
+use crate::icons;
 use crate::SpritebitApp;
 
 /// Welche Panels der rechten Leiste offen sind — überlebt den Neustart.
@@ -287,44 +288,76 @@ impl SpritebitApp {
 
     /// Die rechte Leiste: aufklappbare Panels wie in der Web-Version.
     pub(crate) fn right_panels(&mut self, ui: &mut egui::Ui) {
-        self.panel(ui, tr("Vorschau"), "p-preview", true, None, |s, ui| s.preview_panel(ui));
-        self.panel(ui, tr("Palette"), "p-palette", true, None, |s, ui| s.palette_library(ui));
-        self.panel(ui, tr("Bild"), "p-image", true, None, |s, ui| s.image_panel(ui));
-        self.panel(ui, tr("Aufräumen"), "p-cleanup", false, None, |s, ui| s.cleanup_panel(ui));
-        self.panel(ui, tr("Licht"), "p-light", false, None, |s, ui| s.light_panel(ui));
-        self.panel(ui, tr("Kacheln"), "p-tiles", false, None, |s, ui| s.tiles_panel(ui));
-        self.panel(ui, tr("Hilfslinien"), "p-guides", false, None, |s, ui| s.guides_panel(ui));
-        self.panel(ui, tr("Schablone"), "p-template", false, None, |s, ui| s.template_panel(ui));
+        self.panel(ui, tr("Vorschau"), icons::PREVIEW, "p-preview", true, None, |s, ui| s.preview_panel(ui));
+        self.panel(ui, tr("Palette"), icons::PALETTE, "p-palette", true, None, |s, ui| s.palette_library(ui));
+        self.panel(ui, tr("Bild"), icons::IMAGE, "p-image", true, None, |s, ui| s.image_panel(ui));
+        self.panel(ui, tr("Aufräumen"), icons::CLEANUP, "p-cleanup", false, None, |s, ui| s.cleanup_panel(ui));
+        self.panel(ui, tr("Licht"), icons::LIGHT, "p-light", false, None, |s, ui| s.light_panel(ui));
+        self.panel(ui, tr("Kacheln"), icons::TILES, "p-tiles", false, None, |s, ui| s.tiles_panel(ui));
+        self.panel(ui, tr("Hilfslinien"), icons::GUIDES, "p-guides", false, None, |s, ui| s.guides_panel(ui));
+        self.panel(ui, tr("Schablone"), icons::TEMPLATE, "p-template", false, None, |s, ui| s.template_panel(ui));
         // „Exportieren …“ im Menü klappt dieses Panel auf und scrollt hin.
         let focus = std::mem::take(&mut self.out.focus);
-        let r = self.panel(ui, tr("Code & Export"), "p-output", false, focus.then_some(true), |s, ui| s.output_panel(ui));
+        let r = self.panel(ui, tr("Code & Export"), icons::OUTPUT, "p-output", false, focus.then_some(true), |s, ui| s.output_panel(ui));
         if focus {
             r.scroll_to_me(Some(egui::Align::TOP));
         }
         self.panels.applied = true;
     }
 
-    /// Ein aufklappbares Panel, das sich merkt, ob es offen ist — beim
-    /// nächsten Start der App steht es wieder so da (PanelMemory).
-    fn panel(&mut self, ui: &mut egui::Ui, title: &str, id: &'static str, default: bool, force: Option<bool>, body: impl FnOnce(&mut Self, &mut egui::Ui)) -> egui::Response {
+    /// Ein aufklappbares Panel mit Icon, das sich merkt, ob es offen ist —
+    /// beim nächsten Start der App steht es wieder so da (PanelMemory).
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn panel(&mut self, ui: &mut egui::Ui, title: &str, icon: egui::ImageSource<'static>, id: &'static str, default: bool, force: Option<bool>, body: impl FnOnce(&mut Self, &mut egui::Ui)) -> egui::Response {
+        self.panel_with(ui, title, icon, id, default, force, |_, _| {}, body)
+    }
+
+    /// Wie [`Self::panel`], mit Knöpfen rechts in der Kopfzeile (`extra`,
+    /// z. B. „+“ bei den Sprites).
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn panel_with(
+        &mut self,
+        ui: &mut egui::Ui,
+        title: &str,
+        icon: egui::ImageSource<'static>,
+        id: &'static str,
+        default: bool,
+        force: Option<bool>,
+        extra: impl FnOnce(&mut Self, &mut egui::Ui),
+        body: impl FnOnce(&mut Self, &mut egui::Ui),
+    ) -> egui::Response {
+        use egui::collapsing_header::CollapsingState;
+        let cid = ui.make_persistent_id(id);
+        let mut state = CollapsingState::load_with_default_open(ui.ctx(), cid, default);
         // Nur im ersten Durchlauf den gespeicherten Zustand setzen — danach
-        // gehört das Auf- und Zuklappen wieder dem Nutzer.
-        let start = (!self.panels.applied).then(|| self.panels.open.get(id).copied().unwrap_or(default));
-        let r = egui::CollapsingHeader::new(title)
-            .id_salt(id)
-            .default_open(default)
-            .open(force.or(start))
-            .show(ui, |ui| body(self, ui));
-        // Der Stand folgt dem Klick auf die Kopfzeile (die Animation wandert
-        // über mehrere Bilder und taugt nicht als Zustand). Aufgezwungen
+        // gehört das Auf- und Zuklappen wieder dem Nutzer. Aufgezwungen
         // (Menü „Exportieren …“) zählt als offen.
-        let prev = self.panels.open.get(id).copied().unwrap_or(default);
-        let open = force.unwrap_or(if r.header_response.clicked() { !prev } else { prev });
-        if prev != open {
+        if !self.panels.applied {
+            state.set_open(self.panels.open.get(id).copied().unwrap_or(default));
+        }
+        if let Some(open) = force {
+            state.set_open(open);
+        }
+        let color = ui.visuals().text_color();
+        let header = state.show_header(ui, |ui| {
+            ui.add(icons::image(icon, color));
+            let name = ui.add(egui::Label::new(egui::RichText::new(title).strong()).selectable(false).sense(egui::Sense::click()));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| extra(self, ui));
+            name
+        });
+        let (_, head, _) = header.body(|ui| body(self, ui));
+        // Auch ein Klick auf den Namen klappt auf und zu, nicht nur der Pfeil.
+        let mut state = CollapsingState::load_with_default_open(ui.ctx(), cid, default);
+        if head.inner.clicked() {
+            state.toggle(ui);
+            state.store(ui.ctx());
+        }
+        let open = state.is_open();
+        if self.panels.open.get(id).copied().unwrap_or(default) != open {
             self.panels.open.insert(id.to_string(), open);
             self.panels.save();
         }
-        r.header_response
+        head.response
     }
 
     pub(crate) fn image_panel(&mut self, ui: &mut egui::Ui) {

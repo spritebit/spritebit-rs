@@ -791,21 +791,26 @@ impl SpritebitApp {
 
     // ── Linke Leiste: Sprites und Farben ────────────────────────────
     fn side_panel(&mut self, ui: &mut egui::Ui) {
-        ui.add_space(6.0);
-        ui.horizontal(|ui| {
-            ui.strong(tr("Sprites"));
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if ui.small_button("+").on_hover_text(tr("Neuer Sprite")).clicked() {
-                    self.open_new_sprite();
-                }
-            });
-        });
-        self.sprite_list(ui);
-
-        ui.add_space(10.0);
-        ui.strong(tr("Farben"));
         ui.add_space(4.0);
-        self.colors_panel(ui);
+        // Aufklappbar wie die Panels rechts (image_ui.rs panel).
+        self.panel_with(
+            ui,
+            tr("Sprites"),
+            icons::SPRITES,
+            "p-sprites",
+            true,
+            None,
+            |s, ui| {
+                if ui.small_button("+").on_hover_text(tr("Neuer Sprite")).clicked() {
+                    s.open_new_sprite();
+                }
+            },
+            |s, ui| s.sprite_list(ui),
+        );
+        self.panel(ui, tr("Farben"), icons::COLORS, "p-colors", true, None, |s, ui| {
+            ui.add_space(4.0);
+            s.colors_panel(ui);
+        });
     }
 
     // ── Statusleiste ────────────────────────────────────────────────
@@ -1376,6 +1381,19 @@ mod tests {
         h.state_mut().update.notes_view = Some(update::NotesView::Next);
         h.run();
         assert!(h.query_by_label("Zu dieser Version gibt es keine Notizen.").is_some());
+    }
+
+    #[test]
+    fn sprites_und_farben_lassen_sich_einklappen() {
+        let mut h = app();
+        for (name, id) in [("Sprites", "p-sprites"), ("Farben", "p-colors")] {
+            h.get_by_label(name).click();
+            h.run();
+            assert_eq!(h.state().panel_open(id), Some(false), "{name} zugeklappt");
+            h.get_by_label(name).click();
+            h.run();
+            assert_eq!(h.state().panel_open(id), Some(true), "{name} wieder offen");
+        }
     }
 
     #[test]
