@@ -92,15 +92,17 @@ fn re(p: &str) -> Regex {
 fn normalize_hex(h: &str) -> Option<Rgb> {
     let s = h.trim();
     let s = s.strip_prefix('#').unwrap_or(s);
+    // Erst prüfen, dann schneiden: mit anderen Zeichen als Hex-Ziffern läge
+    // Byte 6 womöglich mitten in einem Zeichen (Absturz statt „unlesbar“).
+    if !s.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
     let full = match s.len() {
         3 => s.chars().flat_map(|c| [c, c]).collect::<String>(),
         6 => s.to_string(),
         8 => s[..6].to_string(),
         _ => return None,
     };
-    if !full.chars().all(|c| c.is_ascii_hexdigit()) {
-        return None;
-    }
     parse_hex(&format!("#{full}"))
 }
 
@@ -840,6 +842,9 @@ mod tests {
         assert_eq!(normalize_hex("#ABC"), Some([0xaa, 0xbb, 0xcc]));
         assert_eq!(normalize_hex("aabbccdd"), Some([0xaa, 0xbb, 0xcc]));
         assert_eq!(normalize_hex("#ab"), None);
+        // 8 Bytes, aber ein Zeichen aus mehreren Bytes — vorher ein Absturz.
+        assert_eq!(normalize_hex("#ab\u{fffd}cde"), None);
+        assert_eq!(normalize_hex("#äbcdef"), None);
     }
 
     #[test]
