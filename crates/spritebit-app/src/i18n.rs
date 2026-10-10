@@ -168,6 +168,7 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Ansicht", "View", "Aunsicht"),
     ("Einpassen", "Fit to window", "Einipassn"),
     ("Gitter", "Grid", ""),
+    ("Linien zwischen den Pixeln — sichtbar ab 800 % Zoom, darunter wären sie dichter als das Bild.", "Lines between the pixels — visible from 800 % zoom; below that they would be denser than the picture.", ""),
     ("Sprache", "Language", "Sproch"),
     ("Hilfe", "Help", ""),
     ("Über spritebit", "About spritebit", ""),

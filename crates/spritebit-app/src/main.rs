@@ -747,7 +747,9 @@ impl SpritebitApp {
                 if ui.button("100 %").clicked() {
                     self.zoom = 1.0;
                 }
-                ui.checkbox(&mut self.show_grid, tr("Gitter"));
+                // Die Linien erscheinen erst ab GRID_FROM — darunter wären
+                // sie dichter als die Pixel. Ohne Hinweis wirkte das wie kaputt.
+                ui.checkbox(&mut self.show_grid, tr("Gitter")).on_hover_text(tr("Linien zwischen den Pixeln — sichtbar ab 800 % Zoom, darunter wären sie dichter als das Bild."));
                 ui.separator();
                 self.view_menu(ui);
                 ui.separator();
