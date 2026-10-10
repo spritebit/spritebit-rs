@@ -286,35 +286,9 @@ impl SpritebitApp {
         self.panels.open.get(id).copied()
     }
 
-    /// Die rechte Leiste: aufklappbare Panels wie in der Web-Version.
-    pub(crate) fn right_panels(&mut self, ui: &mut egui::Ui) {
-        self.panel(ui, tr("Ebenen"), icons::LAYERS, "p-layers", true, None, |s, ui| s.layers_panel(ui));
-        self.panel(ui, tr("Vorschau"), icons::PREVIEW, "p-preview", true, None, |s, ui| s.preview_panel(ui));
-        self.panel(ui, tr("Palette"), icons::PALETTE, "p-palette", true, None, |s, ui| s.palette_library(ui));
-        self.panel(ui, tr("Bild"), icons::IMAGE, "p-image", true, None, |s, ui| s.image_panel(ui));
-        self.panel(ui, tr("Aufräumen"), icons::CLEANUP, "p-cleanup", false, None, |s, ui| s.cleanup_panel(ui));
-        self.panel(ui, tr("Licht"), icons::LIGHT, "p-light", false, None, |s, ui| s.light_panel(ui));
-        self.panel(ui, tr("Kacheln"), icons::TILES, "p-tiles", false, None, |s, ui| s.tiles_panel(ui));
-        self.panel(ui, tr("Hilfslinien"), icons::GUIDES, "p-guides", false, None, |s, ui| s.guides_panel(ui));
-        self.panel(ui, tr("Schablone"), icons::TEMPLATE, "p-template", false, None, |s, ui| s.template_panel(ui));
-        // „Exportieren …“ im Menü klappt dieses Panel auf und scrollt hin.
-        let focus = std::mem::take(&mut self.out.focus);
-        let r = self.panel(ui, tr("Code & Export"), icons::OUTPUT, "p-output", false, focus.then_some(true), |s, ui| s.output_panel(ui));
-        if focus {
-            r.scroll_to_me(Some(egui::Align::TOP));
-        }
-        self.panels.applied = true;
-    }
-
     /// Ein aufklappbares Panel mit Icon, das sich merkt, ob es offen ist —
     /// beim nächsten Start der App steht es wieder so da (PanelMemory).
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn panel(&mut self, ui: &mut egui::Ui, title: &str, icon: egui::ImageSource<'static>, id: &'static str, default: bool, force: Option<bool>, body: impl FnOnce(&mut Self, &mut egui::Ui)) -> egui::Response {
-        self.panel_with(ui, title, icon, id, default, force, |_, _| {}, body)
-    }
-
-    /// Wie [`Self::panel`], mit Knöpfen rechts in der Kopfzeile (`extra`,
-    /// z. B. „+“ bei den Sprites).
+    /// `extra`: Knöpfe rechts in der Kopfzeile (dock_ui.rs panel_header).
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn panel_with(
         &mut self,
@@ -328,7 +302,9 @@ impl SpritebitApp {
         body: impl FnOnce(&mut Self, &mut egui::Ui),
     ) -> egui::Response {
         use egui::collapsing_header::CollapsingState;
-        let cid = ui.make_persistent_id(id);
+        // An den Schlüssel gebunden, nicht an die Spalte — so bleibt der
+        // Zustand, wenn das Panel die Seite wechselt.
+        let cid = egui::Id::new(("panel", id));
         let mut state = CollapsingState::load_with_default_open(ui.ctx(), cid, default);
         // Nur im ersten Durchlauf den gespeicherten Zustand setzen — danach
         // gehört das Auf- und Zuklappen wieder dem Nutzer. Aufgezwungen
@@ -660,7 +636,12 @@ impl SpritebitApp {
                         continue;
                     }
                     let on = self.image.light_dir == (dx, dy);
-                    if ui.add_sized([28.0, 24.0], egui::Button::selectable(on, arrow)).on_hover_text(tr(tip)).clicked() && !on {
+                    // Gedrehtes Pfeil-Icon statt Zeichen — die eingebaute
+                    // Schrift hat ↑ ← → ↓ nicht (sie erschienen als Kästchen).
+                    let angle = (dx as f32).atan2(-(dy as f32));
+                    let c = if on { ui.visuals().strong_text_color() } else { ui.visuals().text_color() };
+                    let img = crate::icons::image(crate::icons::UP, c).rotate(angle, egui::Vec2::splat(0.5)).alt_text(tr(tip));
+                    if ui.add_sized([28.0, 24.0], egui::Button::selectable(on, img)).on_hover_text(tr(tip)).clicked() && !on {
                         self.image.light_dir = (dx, dy);
                         light_changed = true;
                         shadow_changed = true;

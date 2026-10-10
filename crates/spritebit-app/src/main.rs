@@ -10,6 +10,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod bitty_ui;
+mod dock_ui;
 mod export_ui;
 mod guides_ui;
 mod i18n;
@@ -197,6 +198,8 @@ struct SpritebitApp {
     tl_persist: bool,
     tl_menu_open: bool,
     tl_cache: tlmenu_ui::TlCache,
+    /// Wo welches Panel steht (dock_ui.rs).
+    dock: dock_ui::DockLayout,
     /// Vorschaubilder im Ebenen-Panel (layers_ui.rs).
     layer_thumbs: layers_ui::LayerThumbs,
     /// Hintergrund, Vollbild, „Farbe zeigen“, Hilfe, Sitzungssicherung.
@@ -299,6 +302,7 @@ impl SpritebitApp {
             tl_persist: false,
             tl_menu_open: false,
             tl_cache: tlmenu_ui::TlCache::default(),
+            dock: dock_ui::DockLayout::load(),
             layer_thumbs: layers_ui::LayerThumbs::default(),
             view: view_ui::ViewState::default(),
             bitty: bitty_ui::BittyState::default(),
@@ -795,30 +799,6 @@ impl SpritebitApp {
         });
     }
 
-    // ── Linke Leiste: Sprites und Farben ────────────────────────────
-    fn side_panel(&mut self, ui: &mut egui::Ui) {
-        ui.add_space(4.0);
-        // Aufklappbar wie die Panels rechts (image_ui.rs panel).
-        self.panel_with(
-            ui,
-            tr("Sprites"),
-            icons::SPRITES,
-            "p-sprites",
-            true,
-            None,
-            |s, ui| {
-                if ui.small_button("+").on_hover_text(tr("Neuer Sprite")).clicked() {
-                    s.open_new_sprite();
-                }
-            },
-            |s, ui| s.sprite_list(ui),
-        );
-        self.panel(ui, tr("Farben"), icons::COLORS, "p-colors", true, None, |s, ui| {
-            ui.add_space(4.0);
-            s.colors_panel(ui);
-        });
-    }
-
     // ── Statusleiste ────────────────────────────────────────────────
     fn status_bar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
@@ -1201,12 +1181,33 @@ impl eframe::App for SpritebitApp {
             tlmenu_ui::Zone::Left => egui::Panel::left("timeline-left").resizable(true).default_size(360.0).show(ui, |ui| self.timeline(ui)),
             tlmenu_ui::Zone::Right => egui::Panel::right("timeline-right").resizable(true).default_size(360.0).show(ui, |ui| self.timeline(ui)),
         };
-        egui::Panel::left("side").resizable(true).default_size(180.0).show(ui, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| self.side_panel(ui));
-        });
-        egui::Panel::right("panels").resizable(true).default_size(230.0).show(ui, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| self.right_panels(ui));
-        });
+        // Seitenleisten (dock_ui.rs): außen die Icons gelöster Panels, innen
+        // die Spalten mit den angepinnten.
+        use dock_ui::{PanelId, Side};
+        // „Exportieren …“ im Menü: das Panel aufklappen (oder, gelöst, aufklappen lassen).
+        let focus_output = std::mem::take(&mut self.out.focus);
+        if focus_output && !self.dock.is_pinned(PanelId::Output) {
+            let r = ctx.content_rect();
+            let at = match self.dock.side_of(PanelId::Output) {
+                Side::Left => Pos2::new(r.left() + 42.0, r.top() + 90.0),
+                Side::Right => Pos2::new(r.right() - 42.0, r.top() + 90.0),
+            };
+            self.dock.flyout = Some((PanelId::Output, at));
+        }
+        self.dock_rail(ui, Side::Left);
+        self.dock_rail(ui, Side::Right);
+        if !self.dock.pinned(Side::Left).is_empty() {
+            egui::Panel::left("side").resizable(true).default_size(180.0).show(ui, |ui| {
+                egui::ScrollArea::vertical().id_salt("side-scroll").show(ui, |ui| self.dock_column(ui, Side::Left, focus_output));
+            });
+        }
+        if !self.dock.pinned(Side::Right).is_empty() {
+            egui::Panel::right("panels").resizable(true).default_size(230.0).show(ui, |ui| {
+                egui::ScrollArea::vertical().id_salt("panels-scroll").show(ui, |ui| self.dock_column(ui, Side::Right, focus_output));
+            });
+        }
+        // Erst nach beiden Spalten: der gespeicherte Auf-/Zu-Stand ist gesetzt.
+        self.panels.applied = true;
         egui::CentralPanel::default().show(ui, |ui| {
             // Reiter direkt auf der Zeichenfläche, ohne Spalt dazwischen.
             ui.spacing_mut().item_spacing.y = 0.0;
@@ -1217,6 +1218,7 @@ impl eframe::App for SpritebitApp {
         let down = ctx.input(|i| i.pointer.any_down());
         self.tile_sync(down);
         self.dialogs(&ctx);
+        self.dock_flyout(&ctx);
         self.notes_window(&ctx);
         self.import_window(&ctx);
         self.tl_menu(&ctx);
@@ -1387,6 +1389,30 @@ mod tests {
         h.state_mut().update.notes_view = Some(update::NotesView::Next);
         h.run();
         assert!(h.query_by_label("Zu dieser Version gibt es keine Notizen.").is_some());
+    }
+
+    #[test]
+    fn panel_loesen_aufklappen_und_wieder_anpinnen() {
+        use dock_ui::{PanelId, Side};
+        let mut h = app();
+        // Pin-Knopf in der Kopfzeile von „Licht“: das wievielte Panel rechts?
+        let i = h.state().dock.pinned(Side::Right).iter().position(|p| *p == PanelId::Light).unwrap();
+        let left = h.state().dock.pinned(Side::Left).len();
+        let tip = "Lösen — das Panel steht dann nur noch als Icon in der Leiste am Rand";
+        h.get_all_by_label(tip).nth(left + i).unwrap().click();
+        h.run();
+        assert!(!h.state().dock.is_pinned(PanelId::Light), "gelöst");
+        assert_eq!(h.state().dock.loose_on(Side::Right), [PanelId::Light]);
+        // Icon in der Leiste klappt es auf …
+        h.get_by_label("Licht").click();
+        h.run();
+        assert_eq!(h.state().dock.flyout.map(|f| f.0), Some(PanelId::Light));
+        assert!(h.query_by_label("Lichtquelle").is_some(), "der Inhalt steht im Fenster");
+        // … „Anpinnen“ holt es zurück in die Spalte.
+        h.get_by_label("Anpinnen").click();
+        h.run();
+        assert!(h.state().dock.is_pinned(PanelId::Light));
+        assert!(h.state().dock.flyout.is_none());
     }
 
     #[test]
@@ -2000,7 +2026,7 @@ mod tests {
         assert!(h.state().image.preview.is_none(), "keine Vorschau mehr, die Ebene zeigt es");
 
         // Andere Richtung: neu gerechnet, die alten Kanten sind weg.
-        h.get_by_label("↘").click();
+        h.get_by_label("Licht von unten rechts").click();
         h.run();
         assert_eq!(cel(&h, 1, 13, 13), 2, "unten rechts jetzt hell");
         assert_ne!(cel(&h, 1, 10, 10), 2);
@@ -2363,6 +2389,7 @@ export const HELD = [[0,1],[2,1]];".into(),
 mod shot {
     use super::*;
     use egui_kittest::Harness;
+    use egui_kittest::kittest::Queryable;
 
     #[test]
     #[ignore = "nur zum Ansehen, braucht eine Grafikkarte"]
@@ -2379,6 +2406,17 @@ mod shot {
             app
         });
         h.run();
+        // SPRITEBIT_SHOT_DOCK=1: Panels gelöst und verschoben, eins aufgeklappt.
+        if std::env::var_os("SPRITEBIT_SHOT_DOCK").is_some() {
+            use dock_ui::PanelId;
+            let d = &mut h.state_mut().dock;
+            d.toggle_pin(PanelId::Light);
+            d.toggle_pin(PanelId::Tiles);
+            d.move_to_other_side(PanelId::Layers);
+            h.run();
+            h.get_by_label("Licht").click();
+            h.run();
+        }
         let img = h.render().expect("Bild");
         img.save(path).expect("speichern");
     }

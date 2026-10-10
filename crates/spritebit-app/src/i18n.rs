@@ -420,6 +420,15 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Lädt die neue Version, prüft sie und tauscht die App aus — ohne ZIP und ohne Entpacken.", "Downloads the new version, checks it and swaps the app — no ZIP, no unpacking.", ""),
     ("Was ist neu?", "What's new?", ""),
     ("Was diese Version mitbringt", "What this version brings", ""),
+    // ── Panels anordnen (dock_ui.rs) ──
+    ("Nach rechts", "To the right", "Noch rechts"),
+    ("Nach links", "To the left", "Noch links"),
+    ("Nach oben", "Move up", "Aufi"),
+    ("Nach unten", "Move down", "Obi"),
+    ("Panel verschieben", "Move panel", ""),
+    ("Lösen — das Panel steht dann nur noch als Icon in der Leiste am Rand", "Unpin — the panel then only shows as an icon in the bar at the edge", ""),
+    ("Anpinnen", "Pin", ""),
+    ("Das Panel steht dann offen in der Spalte", "The panel then stays open in the column", ""),
     // ── Ebenen-Panel (layers_ui.rs) ──
     ("Ebenen", "Layers", ""),
     ("Ebene ausblenden", "Hide layer", ""),
@@ -1022,6 +1031,7 @@ mod tests {
             include_str!("view_ui.rs"),
             include_str!("bitty_ui.rs"),
             include_str!("layers_ui.rs"),
+            include_str!("dock_ui.rs"),
         ];
         let mut missing = Vec::new();
         for src in sources {

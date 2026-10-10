@@ -132,7 +132,8 @@ impl SpritebitApp {
         if opacity < 1.0 {
             painter.text(Pos2::new(right, mid), Align2::RIGHT_CENTER, format!("{} %", (opacity * 100.0).round()), FontId::proportional(11.0), dim);
         }
-        painter.with_clip_rect(egui::Rect::from_min_max(Pos2::new(x, rect.min.y), Pos2::new(right - 34.0, rect.max.y))).text(Pos2::new(x, mid), Align2::LEFT_CENTER, &name, font, name_col);
+        let name_end = if opacity < 1.0 { right - 34.0 } else { right };
+        painter.with_clip_rect(egui::Rect::from_min_max(Pos2::new(x, rect.min.y), Pos2::new(name_end, rect.max.y))).text(Pos2::new(x, mid), Align2::LEFT_CENTER, &name, font, name_col);
 
         if eye_btn.clicked() {
             self.edit_sprite(|s| s.layers[l].visible = !s.layers[l].visible);
