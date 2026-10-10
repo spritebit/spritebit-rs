@@ -1166,7 +1166,7 @@ impl eframe::App for SpritebitApp {
         self.tool_keys(&ctx);
         self.advance_playback(&ctx);
         egui::Panel::top("menu").show(ui, |ui| self.menu_bar(ui));
-        self.poll_update();
+        self.poll_update(&ctx);
         self.poll_install();
         if self.update.available.is_some() || !matches!(self.update.install, selfupdate::Install::Idle) {
             // Auffällig: farbige Fläche statt grau in grau (update.rs banner_frame).
@@ -1198,6 +1198,7 @@ impl eframe::App for SpritebitApp {
         let down = ctx.input(|i| i.pointer.any_down());
         self.tile_sync(down);
         self.dialogs(&ctx);
+        self.notes_window(&ctx);
         self.import_window(&ctx);
         self.tl_menu(&ctx);
         self.help_window(&ctx);
@@ -1326,6 +1327,26 @@ mod tests {
         h.get_by_label("Licht").click();
         h.run();
         assert_eq!(h.state().panel_open("p-light"), Some(false));
+    }
+
+    #[test]
+    fn was_ist_neu_zeigt_die_notizen_im_band() {
+        let mut h = app();
+        h.state_mut().update.available = Some("9.9.9".into());
+        h.state_mut().update.next_notes = update::NextNotes::Ready("## Deutsch\n- Neuer Pinsel\n".into());
+        h.run();
+        h.get_by_label("Was ist neu?").click();
+        h.run();
+        assert!(h.query_by_label("Neu in spritebit 9.9.9").is_some());
+        assert!(h.query_by_label("Neuer Pinsel").is_some());
+        h.get_by_label("OK").click();
+        h.run();
+        assert_eq!(h.state().update.notes_view, None);
+        // Ohne Notizen (kein Netz): das Fenster sagt es, statt leer zu sein.
+        h.state_mut().update.next_notes = update::NextNotes::Failed;
+        h.state_mut().update.notes_view = Some(update::NotesView::Next);
+        h.run();
+        assert!(h.query_by_label("Zu dieser Version gibt es keine Notizen.").is_some());
     }
 
     #[test]

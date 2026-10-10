@@ -8,6 +8,12 @@
 //! Hilfe → „Beim Start nach Updates suchen“. Gemerkt wird das (und eine
 //! übersprungene Version) in `update.json` im Einstellungsordner.
 //!
+//! „Was ist neu?“: Jede Version hat Notizen in `notes/<version>.md` (im
+//! Repo, Abschnitte `## Deutsch` und `## English`). Die eigenen bettet
+//! build.rs ein — nach einem Update zeigt die App sie einmal von selbst.
+//! Die der neuen Version hängt release.yml als `notes.md` an die Release;
+//! das Band lädt sie, sobald es eine neuere Version meldet.
+//!
 //! Die Rechnung (Versionen vergleichen, Antwort lesen) steht in reinen
 //! Funktionen mit Tests; die Tests gehen nie ins Netz — die Abfrage startet
 //! nur `main()`, nicht `SpritebitApp::new()`.
@@ -17,13 +23,73 @@ use std::time::Duration;
 
 use eframe::egui::{self, Color32};
 
-use crate::i18n::{tr, trf};
+use crate::i18n::{lang, tr, trf, Lang};
 use crate::{SpritebitApp, VERSION};
 
 /// Neueste Release von spritebit-rs (öffentliche GitHub-API, ohne Konto).
 const LATEST_API: &str = "https://api.github.com/repos/spritebit/spritebit-rs/releases/latest";
 /// Dorthin führt „Herunterladen“: die Release-Seite mit Download und Änderungen.
 pub(crate) const LATEST_PAGE: &str = "https://github.com/spritebit/spritebit-rs/releases/latest";
+/// Alle Versionen mit ihren Notizen.
+const RELEASES_PAGE: &str = "https://github.com/spritebit/spritebit-rs/releases";
+
+/// Notizen dieser Version (`notes/<version>.md`, eingebettet von build.rs).
+pub(crate) const OWN_NOTES: &str = include_str!(concat!(env!("OUT_DIR"), "/notes.md"));
+/// Notizen einer Release — Datei neben der .exe (release.yml).
+const NOTES_ASSET: &str = "notes.md";
+/// Länger sind Notizen nie — eine Grenze gegen Unsinn aus dem Netz.
+const MAX_NOTES: u64 = 64 * 1024;
+
+/// Die Punkte der Notizen in einer Sprache: Abschnitt `## Deutsch`,
+/// `## English` oder `## Österreichisch`, darin Zeilen mit `- `; weitere
+/// Zeilen gehören zum Punkt davor. Fehlt die Sprache, gilt Deutsch.
+pub(crate) fn note_points(md: &str, lang: Lang) -> Vec<String> {
+    let section = |name: &str| {
+        let mut out: Vec<String> = Vec::new();
+        let mut inside = false;
+        for line in md.lines() {
+            let t = line.trim();
+            if let Some(h) = t.strip_prefix("## ") {
+                inside = h.trim().eq_ignore_ascii_case(name);
+                continue;
+            }
+            if !inside || t.is_empty() {
+                continue;
+            }
+            // Fett und Code-Schrift kann ein Label nicht — die Zeichen weg.
+            let t = t.replace("**", "").replace('`', "");
+            if let Some(p) = t.strip_prefix("- ").or_else(|| t.strip_prefix("* ")) {
+                out.push(p.trim().to_string());
+            } else if let Some(last) = out.last_mut() {
+                last.push(' ');
+                last.push_str(&t);
+            }
+        }
+        out
+    };
+    let name = match lang {
+        Lang::De => "Deutsch",
+        Lang::En => "English",
+        Lang::At => "Österreichisch",
+    };
+    let points = section(name);
+    if points.is_empty() { section("Deutsch") } else { points }
+}
+
+/// Notizen der Version `version` von ihrer Release (blockierend — eigener Thread).
+fn fetch_notes(version: &str) -> Option<String> {
+    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(10))).build().into();
+    let ua = format!("spritebit/{VERSION}");
+    let mut resp = agent.get(crate::selfupdate::asset_url(version, NOTES_ASSET)).header("User-Agent", &ua).call().ok()?;
+    let text = resp.body_mut().with_config().limit(MAX_NOTES).read_to_string().ok()?;
+    (!note_points(&text, Lang::De).is_empty()).then_some(text)
+}
+
+/// Geht „Jetzt aktualisieren“ hier? (In der Entwickler-Fassung mit
+/// SPRITEBIT_FAKE_UPDATE zum Ansehen auch.)
+fn can_self_update() -> bool {
+    crate::selfupdate::supported() || (cfg!(debug_assertions) && std::env::var_os("SPRITEBIT_FAKE_UPDATE").is_some())
+}
 
 /// "v1.2.3" oder "1.2.3" → (1, 2, 3).
 pub(crate) fn parse_version(s: &str) -> Option<(u32, u32, u32)> {
@@ -54,6 +120,12 @@ pub(crate) fn version_from_location(location: &str) -> Option<String> {
     let tag = location.trim().rsplit_once("/releases/tag/")?.1;
     let (a, b, c) = parse_version(tag.split(['?', '#']).next()?)?;
     Some(format!("{a}.{b}.{c}"))
+}
+
+/// Nach dem Start die eigenen Notizen zeigen? Nur wenn vorher eine ältere
+/// Version lief (oder eine, die sich das noch nicht merkte) und es Notizen gibt.
+pub(crate) fn show_own_notes(seen: Option<&str>, current: &str, notes: &str) -> bool {
+    seen.is_none_or(|s| is_newer(current, s)) && !note_points(notes, Lang::De).is_empty()
 }
 
 /// Ob ein Band gezeigt wird: neuer als diese Version und nicht übersprungen.
@@ -93,6 +165,25 @@ fn fetch_latest() -> Option<String> {
     version_from_release(&body)
 }
 
+/// Welche Notizen das Fenster „Was ist neu?“ zeigt.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NotesView {
+    /// Die dieser Version (eingebettet).
+    Own,
+    /// Die der neueren Version aus dem Band.
+    Next,
+}
+
+/// Notizen der neueren Version.
+#[derive(Default)]
+pub(crate) enum NextNotes {
+    #[default]
+    Idle,
+    Loading(Receiver<Option<String>>),
+    Ready(String),
+    Failed,
+}
+
 /// Zustand des Update-Hinweises.
 pub(crate) struct UpdateState {
     /// Beim Start nachsehen? (Hilfe-Menü)
@@ -108,11 +199,28 @@ pub(crate) struct UpdateState {
     pub install: crate::selfupdate::Install,
     /// Welche Version wohin — solange geladen wird.
     pub install_target: Option<(String, std::path::PathBuf)>,
+    /// Zuletzt gestartete Version — ist diese neuer, kommen ihre Notizen.
+    pub seen: Option<String>,
+    /// Offenes Fenster „Was ist neu?“.
+    pub notes_view: Option<NotesView>,
+    /// Notizen der Version in `available`.
+    pub next_notes: NextNotes,
 }
 
 impl Default for UpdateState {
     fn default() -> Self {
-        UpdateState { check: true, skipped: None, available: None, rx: None, persist: false, install: Default::default(), install_target: None }
+        UpdateState {
+            check: true,
+            skipped: None,
+            available: None,
+            rx: None,
+            persist: false,
+            install: Default::default(),
+            install_target: None,
+            seen: None,
+            notes_view: None,
+            next_notes: NextNotes::Idle,
+        }
     }
 }
 
@@ -124,11 +232,22 @@ impl SpritebitApp {
     /// Beim Start: Einstellungen laden und — wenn gewünscht — nachsehen.
     pub(crate) fn start_update_check(&mut self, ctx: &egui::Context) {
         self.update.persist = true;
-        if let Some(v) = settings_path().and_then(|p| std::fs::read_to_string(p).ok()).and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok()) {
+        let stored = settings_path().and_then(|p| std::fs::read_to_string(p).ok()).and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+        if let Some(v) = &stored {
             if let Some(c) = v.get("check").and_then(|c| c.as_bool()) {
                 self.update.check = c;
             }
             self.update.skipped = v.get("skip").and_then(|s| s.as_str()).map(str::to_string);
+            self.update.seen = v.get("seen").and_then(|s| s.as_str()).map(str::to_string);
+        }
+        // Neue Version (per Update oder von Hand): einmal ihre Notizen zeigen.
+        // Beim allerersten Start nicht — da ist alles neu.
+        if stored.is_some() && show_own_notes(self.update.seen.as_deref(), VERSION, OWN_NOTES) {
+            self.update.notes_view = Some(NotesView::Own);
+        }
+        if self.update.seen.as_deref() != Some(VERSION) {
+            self.update.seen = Some(VERSION.to_string());
+            self.save_update_settings();
         }
         if self.update.check {
             self.spawn_update_check(ctx);
@@ -139,6 +258,8 @@ impl SpritebitApp {
             if let Ok(v) = std::env::var("SPRITEBIT_FAKE_UPDATE") {
                 self.update.available = Some(v);
                 self.update.rx = None;
+                // Zum Ansehen: die eigenen Notizen stehen für die neue Version.
+                self.update.next_notes = NextNotes::Ready(OWN_NOTES.to_string());
             }
         }
     }
@@ -159,21 +280,39 @@ impl SpritebitApp {
         }
         if let Some(p) = settings_path() {
             let _ = p.parent().map(std::fs::create_dir_all);
-            let v = serde_json::json!({ "check": self.update.check, "skip": self.update.skipped });
+            let v = serde_json::json!({ "check": self.update.check, "skip": self.update.skipped, "seen": self.update.seen });
             let _ = std::fs::write(p, v.to_string());
         }
     }
 
-    /// Jeden Frame: ist die Antwort da?
-    pub(crate) fn poll_update(&mut self) {
+    /// Jeden Frame: ist die Antwort da? Sind die Notizen da?
+    pub(crate) fn poll_update(&mut self, ctx: &egui::Context) {
+        if let NextNotes::Loading(rx) = &self.update.next_notes {
+            if let Ok(found) = rx.try_recv() {
+                self.update.next_notes = found.map_or(NextNotes::Failed, NextNotes::Ready);
+            }
+        }
         let Some(rx) = &self.update.rx else { return };
         let Ok(found) = rx.try_recv() else { return };
         self.update.rx = None;
         if let Some(v) = found {
             if worth_showing(&v, VERSION, self.update.skipped.as_deref()) {
+                self.spawn_notes_fetch(&v, ctx);
                 self.update.available = Some(v);
             }
         }
+    }
+
+    /// Notizen der neueren Version gleich mitladen — „Was ist neu?“ soll
+    /// sofort etwas zeigen.
+    fn spawn_notes_fetch(&mut self, version: &str, ctx: &egui::Context) {
+        let (tx, rx) = mpsc::channel();
+        let (ctx, v) = (ctx.clone(), version.to_string());
+        std::thread::spawn(move || {
+            let _ = tx.send(fetch_notes(&v));
+            ctx.request_repaint();
+        });
+        self.update.next_notes = NextNotes::Loading(rx);
     }
 
     /// Rahmen des Bands: Blau für „neu da“ und „installiert“, Rot bei einem Fehler.
@@ -255,21 +394,26 @@ impl SpritebitApp {
             Install::Idle => {}
         }
         let Some(v) = self.update.available.clone() else { return };
-        let (mut later, mut skip, mut install) = (false, false, false);
+        let (mut later, mut skip, mut install, mut notes) = (false, false, false, false);
         ui.horizontal_wrapped(|ui| {
             Self::banner_title(ui, "⬆", &trf("Neue Version {new} verfügbar", &[("new", &v)]));
             ui.label(egui::RichText::new(trf("(du hast {old})", &[("old", &VERSION)])).color(soft));
             ui.add_space(8.0);
-            if crate::selfupdate::supported() || (cfg!(debug_assertions) && std::env::var_os("SPRITEBIT_FAKE_UPDATE").is_some()) {
+            if can_self_update() {
                 install = Self::banner_button(ui, tr("Jetzt aktualisieren"), tr("Lädt die neue Version, prüft sie und tauscht die App aus — ohne ZIP und ohne Entpacken."));
-                ui.hyperlink_to(egui::RichText::new(tr("Was ist neu?")).color(Color32::WHITE), LATEST_PAGE);
             } else {
                 ui.hyperlink_to(egui::RichText::new(tr("Herunterladen")).strong().color(Color32::WHITE), LATEST_PAGE);
             }
+            notes = ui
+                .add(egui::Button::new(egui::RichText::new(tr("Was ist neu?")).color(Color32::WHITE).underline()).frame(false))
+                .clicked();
             ui.add_space(8.0);
             later = Self::banner_link(ui, tr("Später"));
             skip = Self::banner_link(ui, tr("Diese Version überspringen"));
         });
+        if notes {
+            self.update.notes_view = Some(NotesView::Next);
+        }
         if install {
             self.start_install(v.clone(), ui.ctx());
             return;
@@ -283,8 +427,78 @@ impl SpritebitApp {
         }
     }
 
-    /// Eintrag im Hilfe-Menü.
+    /// Fenster „Was ist neu?“: die Punkte der Notizen, bei einer neueren
+    /// Version samt „Jetzt aktualisieren“.
+    pub(crate) fn notes_window(&mut self, ctx: &egui::Context) {
+        use crate::selfupdate::Install;
+        let Some(view) = self.update.notes_view else { return };
+        let (title, points, loading) = match (view, &self.update.available) {
+            (NotesView::Own, _) => (trf("Neu in spritebit {v}", &[("v", &VERSION)]), note_points(OWN_NOTES, lang()), false),
+            (NotesView::Next, Some(v)) => {
+                let title = trf("Neu in spritebit {v}", &[("v", v)]);
+                match &self.update.next_notes {
+                    NextNotes::Ready(t) => (title, note_points(t, lang()), false),
+                    NextNotes::Loading(_) => (title, Vec::new(), true),
+                    NextNotes::Idle | NextNotes::Failed => (title, Vec::new(), false),
+                }
+            }
+            // Das Band ist weg (Später, Überspringen): das Fenster auch.
+            (NotesView::Next, None) => {
+                self.update.notes_view = None;
+                return;
+            }
+        };
+        let can_install = view == NotesView::Next && matches!(self.update.install, Install::Idle) && can_self_update();
+        let (mut open, mut close, mut install) = (true, false, false);
+        egui::Window::new(title)
+            .id(egui::Id::new("whats-new"))
+            .collapsible(false)
+            .resizable(false)
+            .default_width(420.0)
+            .open(&mut open)
+            .show(ctx, |ui| {
+                ui.set_max_width(420.0);
+                if loading {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(tr("Notizen werden geladen …"));
+                    });
+                } else if points.is_empty() {
+                    ui.label(tr("Zu dieser Version gibt es keine Notizen."));
+                }
+                for p in &points {
+                    ui.horizontal_top(|ui| {
+                        ui.label("•");
+                        ui.add(egui::Label::new(p).wrap());
+                    });
+                    ui.add_space(2.0);
+                }
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    if can_install {
+                        install = ui.button(egui::RichText::new(tr("Jetzt aktualisieren")).strong()).clicked();
+                    }
+                    close = ui.button(tr("OK")).clicked();
+                    ui.add_space(8.0);
+                    ui.hyperlink_to(tr("Alle Versionen auf GitHub"), RELEASES_PAGE);
+                });
+            });
+        if !open || close || install {
+            self.update.notes_view = None;
+        }
+        if install {
+            if let Some(v) = self.update.available.clone() {
+                self.start_install(v, ctx);
+            }
+        }
+    }
+
+    /// Einträge im Hilfe-Menü.
     pub(crate) fn update_menu(&mut self, ui: &mut egui::Ui) {
+        if ui.button(tr("Was ist neu?")).on_hover_text(tr("Was diese Version mitbringt")).clicked() {
+            self.update.notes_view = Some(NotesView::Own);
+            ui.close();
+        }
         let before = self.update.check;
         ui.checkbox(&mut self.update.check, tr("Beim Start nach Updates suchen")).on_hover_text(tr(
             "Fragt beim Start einmal bei GitHub nach, ob es eine neuere Version gibt. Dabei wird nur die neueste Versionsnummer abgerufen — keine Daten aus deinen Projekten.",
@@ -343,6 +557,33 @@ mod tests {
         assert_eq!(version_from_location("/spritebit/spritebit-rs/releases/tag/v2.10.0?x=1").as_deref(), Some("2.10.0"));
         assert_eq!(version_from_location("https://github.com/spritebit/spritebit-rs/releases"), None, "ohne Release");
         assert_eq!(version_from_location("https://github.com/x/releases/tag/nightly"), None);
+    }
+
+    const NOTES: &str = "## Deutsch\n\n- Erster **Punkt**\n  geht weiter\n- Zweiter mit `code`\n\n## English\n\n- First point\n";
+
+    #[test]
+    fn notizen_lesen() {
+        assert_eq!(note_points(NOTES, Lang::De), ["Erster Punkt geht weiter", "Zweiter mit code"]);
+        assert_eq!(note_points(NOTES, Lang::En), ["First point"]);
+        assert_eq!(note_points(NOTES, Lang::At), note_points(NOTES, Lang::De), "ohne eigenen Abschnitt: Deutsch");
+        assert_eq!(note_points("## English\n- only\n", Lang::En), ["only"]);
+        assert!(note_points("", Lang::De).is_empty());
+        assert!(note_points("- ohne Abschnitt\n", Lang::De).is_empty());
+    }
+
+    #[test]
+    fn diese_version_hat_notizen() {
+        assert!(!note_points(OWN_NOTES, Lang::De).is_empty(), "notes/{VERSION}.md fehlt oder hat keinen Abschnitt „## Deutsch“");
+        assert!(!note_points(OWN_NOTES, Lang::En).is_empty());
+    }
+
+    #[test]
+    fn eigene_notizen_einmal_nach_neuer_version() {
+        assert!(show_own_notes(Some("1.1.9"), "1.1.10", NOTES));
+        assert!(show_own_notes(None, "1.1.10", NOTES), "Einstellungen von vor dieser Funktion");
+        assert!(!show_own_notes(Some("1.1.10"), "1.1.10", NOTES), "schon gesehen");
+        assert!(!show_own_notes(Some("1.2.0"), "1.1.10", NOTES), "zurückgestuft");
+        assert!(!show_own_notes(Some("1.1.9"), "1.1.10", ""), "ohne Notizen");
     }
 
     #[test]

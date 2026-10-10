@@ -30,7 +30,7 @@ use crate::i18n::{tr, trf};
 use crate::{SpritebitApp, VERSION};
 
 /// Wo die Dateien einer Release liegen (immer die genannte Version, nicht „latest“).
-fn asset_url(version: &str, file: &str) -> String {
+pub(crate) fn asset_url(version: &str, file: &str) -> String {
     format!("https://github.com/spritebit/spritebit-rs/releases/download/v{version}/{file}")
 }
 const EXE_ASSET: &str = "spritebit.exe";

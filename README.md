@@ -31,12 +31,19 @@ kein Entpacken. „Jetzt neu starten“ macht genau dort weiter, wo du warst, au
 Ungespeichertem. Liegt die App in einem schreibgeschützten Ordner, bleibt es beim
 Download von Hand.
 
+**„Was ist neu?“** im Band zeigt gleich in der App, was die neue Version mitbringt.
+Nach einem Update erscheint das einmal von selbst, später unter Hilfe → „Was ist neu?“.
+
 ## Neue Version veröffentlichen
 
 1. In `Cargo.toml` (Abschnitt `[workspace.package]`) die Version anheben, z. B. `1.1.0`,
    und committen. Sie steht in Titelleiste, Hilfe, „Über spritebit“ und den
    Dateieigenschaften der .exe.
-2. Den passenden Tag pushen:
+2. Die Notizen dazu schreiben: `notes/1.1.0.md` mit den Abschnitten `## Deutsch` und
+   `## English`, darin kurze Punkte (`- …`) in der Sprache der Nutzer. Sie werden der
+   Text der Release und „Was ist neu?“ in der App. Fehlen sie, schlagen die Tests fehl
+   und der Release-Lauf bricht ab.
+3. Den passenden Tag pushen:
    ```
    git tag v1.1.0
    git push origin v1.1.0
@@ -46,7 +53,7 @@ Passt der Tag nicht zur Version in `Cargo.toml`, bricht der Release-Lauf ab.
 
 GitHub Actions (`.github/workflows/release.yml`) testet, baut und hängt
 `spritebit-windows-x64.zip` an die Release — dazu `spritebit.exe` und
-`spritebit.exe.sha256` für das Aktualisieren aus der App. Der Download-Link oben zeigt immer
+`spritebit.exe.sha256` für das Aktualisieren aus der App und `notes.md` für „Was ist neu?“. Der Download-Link oben zeigt immer
 auf die neueste Version.
 
 ## Aufbau

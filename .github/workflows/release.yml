@@ -32,6 +32,18 @@ jobs:
           $tag = "${{ github.ref_name }}".TrimStart('v')
           if ($cargo -ne $tag) { Write-Error "Tag v$tag passt nicht zu Cargo.toml ($cargo) - erst die Version in Cargo.toml anheben."; exit 1 }
 
+      # Jede Version bringt ihre Notizen mit (notes/<version>.md, Abschnitte
+      # „## Deutsch“ und „## English“): Text der Release und „Was ist neu?“
+      # in der App (update.rs).
+      - name: Notizen pruefen
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}".TrimStart('v')
+          $f = "notes/$tag.md"
+          if (-not (Test-Path $f)) { Write-Error "$f fehlt - erst die Notizen zu dieser Version schreiben."; exit 1 }
+          if (-not (Select-String -Path $f -Pattern '^## Deutsch' -Quiet)) { Write-Error "$f hat keinen Abschnitt '## Deutsch'."; exit 1 }
+
       - name: Tests
         run: cargo test --workspace
 
@@ -51,6 +63,9 @@ jobs:
           Copy-Item dist/spritebit/spritebit.exe dist/spritebit.exe
           $h = (Get-FileHash dist/spritebit.exe -Algorithm SHA256).Hash.ToLower()
           Set-Content -Path dist/spritebit.exe.sha256 -Value "$h  spritebit.exe" -NoNewline -Encoding ascii
+          # „Was ist neu?“ im Update-Band laedt diese Datei (update.rs).
+          $v = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          if (Test-Path "notes/$v.md") { Copy-Item "notes/$v.md" dist/notes.md }
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -60,6 +75,8 @@ jobs:
             dist/spritebit-windows-x64.zip
             dist/spritebit.exe
             dist/spritebit.exe.sha256
+            dist/notes.md
+          body_path: dist/notes.md
           generate_release_notes: true
 
       - name: Als Artefakt (manueller Lauf ohne Tag)

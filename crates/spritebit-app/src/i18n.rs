@@ -418,6 +418,11 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Jetzt aktualisieren", "Update now", ""),
     ("Lädt die neue Version, prüft sie und tauscht die App aus — ohne ZIP und ohne Entpacken.", "Downloads the new version, checks it and swaps the app — no ZIP, no unpacking.", ""),
     ("Was ist neu?", "What's new?", ""),
+    ("Was diese Version mitbringt", "What this version brings", ""),
+    ("Neu in spritebit {v}", "New in spritebit {v}", ""),
+    ("Notizen werden geladen …", "Loading the notes …", ""),
+    ("Zu dieser Version gibt es keine Notizen.", "There are no notes for this version.", ""),
+    ("Alle Versionen auf GitHub", "All versions on GitHub", ""),
     // ── Hilfslinien gleichmäßig verteilen (guides_ui.rs) ──
     ("Gleichmäßig", "Evenly", ""),
     ("Anzahl eintippen — die Linien verteilen sich sofort gleichmäßig (4 Linien = 5 gleiche Teile). 0 entfernt sie.", "Type a number — the lines spread out evenly right away (4 lines = 5 equal parts). 0 removes them.", ""),
