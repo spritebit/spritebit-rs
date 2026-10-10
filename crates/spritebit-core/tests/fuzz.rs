@@ -1,4 +1,4 @@
-//! Zufallsdaten an die Lader (Projekt, Web/.bitty, Code-Import) — stürzt
+//! Zufallsdaten an die Lader (Projekt, Web/.bitty, Code-Import, Aseprite) — stürzt
 //! etwas ab? Läuft nicht bei jedem `cargo test`, nur von Hand:
 //!
 //!   FUZZ_SEED=123 cargo test --release -p spritebit-core --test fuzz -- --ignored
@@ -97,6 +97,7 @@ fn lader_ueberleben_kaputte_eingaben() {
     let one = export_sprite(&p, 0).into_bytes();
     let pal = p.current_palette();
     let codes: Vec<Vec<u8>> = Format::ALL.iter().map(|f| codegen::build(&p.sprites[0], &pal, *f, true, CodeLang::De, &BTreeMap::new()).into_bytes()).collect();
+    let ase = spritebit_core::aseprite::write(&p.sprites[0], &pal);
     let mut rng = Rng(std::env::var("FUZZ_SEED").ok().and_then(|s| s.parse().ok()).unwrap_or(0x9E3779B97F4A7C15));
     let mut bad = 0;
     for round in 0..8000 {
@@ -127,6 +128,14 @@ fn lader_ueberleben_kaputte_eingaben() {
         if !check(&format!("code-{}", round % codes.len()), &c, || {
             if let Ok(imp) = codeimport::parse(&cs) {
                 let _ = codeimport::to_sprite(&imp, "x", "graustufen");
+            }
+        }) {
+            bad += 1;
+        }
+        let a = mutate(&mut rng, &ase);
+        if !check("aseprite", &a, || {
+            if let Ok(imp) = spritebit_core::aseprite::read(&a, "x") {
+                let _ = spritebit_core::aseprite::write(&imp.sprite, &imp.palette);
             }
         }) {
             bad += 1;

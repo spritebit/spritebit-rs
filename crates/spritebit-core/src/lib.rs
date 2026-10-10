@@ -26,6 +26,7 @@
 //! * [`transform`] — spiegeln, drehen, zuschneiden, Leinwand, skalieren
 //! * [`builtin`] — die eingebauten Paletten der Web-Version
 
+pub mod aseprite;
 pub mod builtin;
 pub mod calc;
 pub mod cels;

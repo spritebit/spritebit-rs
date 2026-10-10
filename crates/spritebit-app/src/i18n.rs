@@ -442,6 +442,9 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Vor dem Anlegen eines neuen Projekts speichern?", "Save before creating a new project?", ""),
     ("Noch nichts — leg ein neues Projekt an oder öffne eins.", "Nothing yet — create a new project or open one.", ""),
     ("Leer weitermachen", "Continue empty", ""),
+    ("{path} — Klick benennt das Projekt um", "{path} — click to rename the project", ""),
+    ("Noch nicht gespeichert — Klick benennt das Projekt um", "Not saved yet — click to rename the project", ""),
+    ("ungespeichert", "unsaved", ""),
     ("Mit einem leeren, noch ungespeicherten Projekt anfangen", "Start with an empty project that is not saved yet", ""),
     // ── Panels anordnen (dock_ui.rs) ──
     ("Nach rechts", "To the right", "Noch rechts"),
@@ -449,6 +452,15 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Nach oben", "Move up", "Aufi"),
     ("Nach unten", "Move down", "Obi"),
     ("Anpinnen", "Pin", ""),
+    // ── Aseprite (main.rs, spritebit_core::aseprite) ──
+    ("Aseprite", "Aseprite", ""),
+    ("Als Aseprite speichern …", "Save as Aseprite …", ""),
+    ("Als Aseprite speichern", "Save as Aseprite", ""),
+    ("Den aktuellen Sprite als .aseprite-Datei — Ebenen, Frames, Tags, Palette und Tilemaps bleiben; Masken werden eingerechnet", "The current sprite as an .aseprite file — layers, frames, tags, palette and tilemaps stay; masks are baked in", ""),
+    ("Als Aseprite gespeichert: {name}", "Saved as Aseprite: {name}", ""),
+    ("Das ist keine Aseprite-Datei.", "This is not an Aseprite file.", ""),
+    ("Zu groß: {w} × {h} Pixel (höchstens 8192 × 8192).", "Too big: {w} × {h} pixels (at most 8192 × 8192).", ""),
+    ("Die Aseprite-Datei ist beschädigt ({why}).", "The Aseprite file is damaged ({why}).", ""),
     ("Lösen", "Unpin", ""),
     ("Angepinnt — klicken, um das Panel zu lösen (dann nur noch als Icon in der Leiste)", "Pinned — click to unpin the panel (then it only shows as an icon in the bar)", ""),
     ("Anpinnen — das Panel steht dann offen in der Spalte", "Pin — the panel then stays open in the column", ""),
@@ -1013,6 +1025,16 @@ pub fn io_error(e: &spritebit_core::IoError) -> String {
 }
 
 /// Fehler beim Export in der gewählten Sprache.
+/// Fehler beim Lesen einer Aseprite-Datei, für Menschen.
+pub fn ase_error(e: &spritebit_core::aseprite::AseError) -> String {
+    use spritebit_core::aseprite::AseError;
+    match e {
+        AseError::NotAse => tr("Das ist keine Aseprite-Datei.").into(),
+        AseError::TooBig { width, height } => trf("Zu groß: {w} × {h} Pixel (höchstens 8192 × 8192).", &[("w", width), ("h", height)]),
+        AseError::Corrupt(why) => trf("Die Aseprite-Datei ist beschädigt ({why}).", &[("why", why)]),
+    }
+}
+
 pub fn export_error(e: &spritebit_core::export::ExportError) -> String {
     use spritebit_core::export::{ExportError::*, MAX_OUTPUT};
     match e {

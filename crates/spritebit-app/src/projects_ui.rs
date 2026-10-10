@@ -152,6 +152,28 @@ impl SpritebitApp {
         self.hint = Some(trf("Neues Projekt „{name}“ angelegt.", &[("name", &self.project_display_name())]));
     }
 
+    /// In der Menüleiste: der Projektname, bei Ungespeichertem ein Hinweis.
+    /// Ein Klick benennt das Projekt um.
+    pub(crate) fn project_badge(&mut self, ui: &mut egui::Ui) {
+        let name = self.project_display_name();
+        let tip = match &self.path {
+            Some(p) => trf("{path} — Klick benennt das Projekt um", &[("path", &p.display())]),
+            None => tr("Noch nicht gespeichert — Klick benennt das Projekt um").to_string(),
+        };
+        // Mit Rahmen wie im Web — in der Menüleiste wären Knöpfe sonst flach.
+        let v = ui.visuals();
+        let (fill, line) = (v.widgets.inactive.bg_fill, v.widgets.noninteractive.bg_stroke.color);
+        let r = ui
+            .add(egui::Button::new(egui::RichText::new(&name).strong()).fill(fill).stroke(egui::Stroke::new(1.0, line)).corner_radius(6.0))
+            .on_hover_text(tip);
+        if r.clicked() {
+            self.projects.rename = Some(name);
+        }
+        if self.dirty {
+            ui.weak(tr("ungespeichert"));
+        }
+    }
+
     /// Einträge oben im Menü „Datei“.
     pub(crate) fn projects_menu(&mut self, ui: &mut egui::Ui) {
         if ui.add(egui::Button::new(tr("Neues Projekt …")).shortcut_text(keys("Strg+N"))).clicked() {

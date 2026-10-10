@@ -92,6 +92,13 @@ pub(crate) const EXT: &str = "sb";
 const OLD_EXT: &str = "spritebit";
 /// Ein einzelner Sprite: JSON wie in der Web-Version, dort genauso lesbar.
 const SPRITE_EXT: &str = "bitty";
+/// Aseprite-Dateien (spritebit_core::aseprite): lesen beide, geschrieben wird .aseprite.
+const ASE_EXTS: [&str; 2] = ["aseprite", "ase"];
+
+/// Ist das eine Aseprite-Datei (nach der Endung)?
+fn is_ase(path: &Path) -> bool {
+    path.extension().is_some_and(|e| ASE_EXTS.iter().any(|a| e.eq_ignore_ascii_case(a)))
+}
 /// Version aus Cargo.toml — steht in Titelleiste, Hilfe und „Über“.
 pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// Unterstützen (Ko-fi) — fließt in ein Code-Signatur-Zertifikat. Wie im Web (js/site-links.js).
@@ -418,7 +425,8 @@ impl SpritebitApp {
     fn open_now(&mut self) {
         let Some(path) = rfd::FileDialog::new()
             .set_title(tr("Projekt öffnen"))
-            .add_filter(tr("spritebit-Projekt"), &[EXT, OLD_EXT, SPRITE_EXT, "json"])
+            .add_filter(tr("spritebit-Projekt"), &[EXT, OLD_EXT, SPRITE_EXT, "json", "aseprite", "ase"])
+            .add_filter(tr("Aseprite"), &ASE_EXTS)
             .add_filter(tr("Alle Dateien"), &["*"])
             .pick_file()
         else {
@@ -430,6 +438,11 @@ impl SpritebitApp {
     /// Eine Datei öffnen: Projekt (.sb, .spritebit), Web-Projekt (.json)
     /// oder einzelner Sprite (.bitty, kommt dazu).
     pub(crate) fn open_path(&mut self, path: PathBuf) {
+        // Aseprite: ein Sprite — kommt dazu wie eine .bitty-Datei.
+        if is_ase(&path) {
+            self.add_ase(&path);
+            return;
+        }
         // Ein einzelner Sprite ersetzt das Projekt nicht, er kommt dazu — wie im Web.
         if path.extension().is_some_and(|e| e.eq_ignore_ascii_case(SPRITE_EXT)) {
             match std::fs::read_to_string(&path).map_err(|e| e.to_string()) {
@@ -538,12 +551,17 @@ impl SpritebitApp {
     fn add_sprites(&mut self) {
         let Some(path) = rfd::FileDialog::new()
             .set_title(tr("Sprite hinzufügen"))
-            .add_filter(tr("spritebit-Sprite oder -Projekt"), &[SPRITE_EXT, EXT, OLD_EXT, "json"])
+            .add_filter(tr("spritebit-Sprite oder -Projekt"), &[SPRITE_EXT, EXT, OLD_EXT, "json", "aseprite", "ase"])
+            .add_filter(tr("Aseprite"), &ASE_EXTS)
             .add_filter(tr("Alle Dateien"), &["*"])
             .pick_file()
         else {
             return;
         };
+        if is_ase(&path) {
+            self.add_ase(&path);
+            return;
+        }
         let other = match std::fs::read(&path) {
             Err(e) => {
                 self.error = Some(trf("{path} konnte nicht gelesen werden: {e}", &[("path", &path.display()), ("e", &e)]));
@@ -557,6 +575,44 @@ impl SpritebitApp {
         match other {
             Ok(other) => self.merge_project(other),
             Err(e) => self.error = Some(i18n::io_error(&e)),
+        }
+    }
+
+    /// Eine Aseprite-Datei als neuen Sprite dazunehmen — samt ihrer Palette.
+    pub(crate) fn add_ase(&mut self, path: &Path) {
+        let name = path.file_stem().map_or_else(|| "aseprite".to_string(), |s| s.to_string_lossy().into_owned());
+        let bytes = match std::fs::read(path) {
+            Ok(b) => b,
+            Err(e) => {
+                self.error = Some(trf("{path} konnte nicht gelesen werden: {e}", &[("path", &path.display()), ("e", &e)]));
+                return;
+            }
+        };
+        match spritebit_core::aseprite::read(&bytes, &name) {
+            Ok(a) => {
+                let p = Project { name: String::new(), sprites: vec![a.sprite], palettes: vec![a.palette], current: 0, materials: Default::default() };
+                self.merge_project(p);
+            }
+            Err(e) => self.error = Some(i18n::ase_error(&e)),
+        }
+    }
+
+    /// Den aktuellen Sprite als Aseprite-Datei sichern.
+    fn save_ase_as(&mut self) {
+        self.commit_float();
+        let name = format!("{}.aseprite", projects_ui::file_stem_for(&self.sprite().name));
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title(tr("Als Aseprite speichern"))
+            .add_filter(tr("Aseprite"), &["aseprite"])
+            .set_file_name(name)
+            .save_file()
+        {
+            let path = if path.extension().is_none() { path.with_extension("aseprite") } else { path };
+            let bytes = spritebit_core::aseprite::write(self.sprite(), &self.project.current_palette());
+            match std::fs::write(&path, bytes) {
+                Ok(()) => self.hint = Some(trf("Als Aseprite gespeichert: {name}", &[("name", &path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned()))])),
+                Err(e) => self.error = Some(trf("{path} konnte nicht gespeichert werden: {e}", &[("path", &path.display()), ("e", &e)])),
+            }
         }
     }
 
@@ -736,6 +792,9 @@ impl SpritebitApp {
                 if ui.button(tr("Sprite hinzufügen …")).clicked() {
                     self.add_sprites();
                 }
+                if ui.button(tr("Als Aseprite speichern …")).on_hover_text(tr("Den aktuellen Sprite als .aseprite-Datei — Ebenen, Frames, Tags, Palette und Tilemaps bleiben; Masken werden eingerechnet")).clicked() {
+                    self.save_ase_as();
+                }
                 ui.separator();
                 if ui.add(egui::Button::new(tr("Exportieren …")).shortcut_text(keys("Strg+E"))).clicked() {
                     self.open_export();
@@ -819,6 +878,10 @@ impl SpritebitApp {
                     self.about_open = true;
                 }
             });
+            // Welches Projekt offen ist (wie die Schaltfläche im Web); ein
+            // Klick benennt es um (projects_ui.rs).
+            ui.separator();
+            self.project_badge(ui);
             // Immer sichtbar, rechts in der Leiste (wie im Web): ganz rechts
             // Bitty, daneben Hintergrund und Vollbild. Im Menü „Ansicht“ gibt
             // es die beiden auch.
@@ -1610,6 +1673,41 @@ mod tests {
         h.run();
         assert!(h.state().projects.new_name.is_some(), "Strg+N: neues Projekt");
         assert!(h.state().sprite_dialog.is_none());
+    }
+
+    #[test]
+    fn aseprite_datei_kommt_als_sprite_dazu() {
+        let mut h = app();
+        // Eine Aseprite-Datei aus einem Sprite mit eigener Palette bauen …
+        let pal = spritebit_core::Palette::new("aus aseprite", vec![[9, 8, 7], [1, 2, 3]]);
+        let mut sp = spritebit_core::Sprite::new("held", 6, 4).unwrap();
+        sp.cel_mut(0, 0).set(2, 1, 2);
+        let dir = std::env::temp_dir().join(format!("spritebit-ase-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("held.aseprite");
+        std::fs::write(&path, spritebit_core::aseprite::write(&sp, &pal)).unwrap();
+        // … und öffnen: ein Sprite mehr, mit der Palette der Datei.
+        let before = h.state().project.sprites.len();
+        h.state_mut().open_path(path.clone());
+        h.run();
+        let a = h.state();
+        assert_eq!(a.project.sprites.len(), before + 1);
+        assert_eq!(a.sprite().name, "held");
+        assert_eq!((a.sprite().width, a.sprite().height), (6, 4));
+        assert_eq!(a.project.current_palette().colors, vec![[9, 8, 7], [1, 2, 3]]);
+        assert_eq!(a.sprite().cel(0, 0).get(2, 1), 2);
+        assert!(a.dirty);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn projektname_steht_in_der_menuleiste() {
+        let mut h = app();
+        h.state_mut().project.name = "Mein Spiel".into();
+        h.run();
+        h.get_by_label("Mein Spiel").click();
+        h.run();
+        assert_eq!(h.state().projects.rename.as_deref(), Some("Mein Spiel"), "Klick benennt um");
     }
 
     #[test]
@@ -2554,6 +2652,7 @@ mod shot {
         let mut h = Harness::builder().with_size(Vec2::new(1400.0, 860.0)).wgpu().build_eframe(|cc| {
             egui_extras::install_image_loaders(&cc.egui_ctx);
             let mut app = SpritebitApp::new();
+            app.project.name = "Mein Spiel".into();
             let s = app.project.sprite_mut();
             s.add_layer(1, "Figur");
             for x in 4..12 {
