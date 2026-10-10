@@ -94,8 +94,10 @@ pub(crate) struct TlCache {
     thumbs_sprite: usize,
 }
 
-/// Größe der Vorschaubilder in der Kopfzeile.
-pub(crate) const THUMB: f32 = 20.0;
+/// Größe der Vorschaubilder in der Kopfzeile: die Höhe der Timeline
+/// bestimmt sie (timeline.rs), zwischen diesen Grenzen.
+pub(crate) const THUMB_MIN: f32 = 20.0;
+pub(crate) const THUMB_MAX: f32 = 128.0;
 
 impl SpritebitApp {
     /// Beim Start: gemerkte Einstellungen laden; ab dann auch speichern.
@@ -286,7 +288,7 @@ impl SpritebitApp {
         let key = format!("{:?}|{:?}|{}|{}", sp.frames[f].cels, layers, stamp, sp.palette);
         if self.tl_cache.thumbs.get(&f).is_none_or(|c| c.0 != key) {
             let pal = self.project.current_palette();
-            let step = sp.width.max(sp.height).div_ceil(THUMB as u32 * 2).max(1);
+            let step = sp.width.max(sp.height).div_ceil(THUMB_MAX as u32 * 2).max(1);
             let (rgba, w, h) = render_rgba_step(sp, &pal, f, Rect { x: 0, y: 0, w: sp.width, h: sp.height }, step);
             let img = egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], &rgba);
             let tex = ctx.load_texture(format!("thumb-{f}"), img, egui::TextureOptions::NEAREST);

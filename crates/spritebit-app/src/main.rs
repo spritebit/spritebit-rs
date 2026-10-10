@@ -1273,8 +1273,8 @@ impl eframe::App for SpritebitApp {
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
         // Die Timeline dockt dort an, wo man sie im ⚙-Menü hinstellt.
         match self.tl.zone {
-            tlmenu_ui::Zone::Bottom => egui::Panel::bottom("timeline").resizable(true).default_size(150.0).show(ui, |ui| self.timeline(ui)),
-            tlmenu_ui::Zone::Top => egui::Panel::top("timeline-top").resizable(true).default_size(150.0).show(ui, |ui| self.timeline(ui)),
+            tlmenu_ui::Zone::Bottom => egui::Panel::bottom("timeline").resizable(true).default_size(190.0).show(ui, |ui| self.timeline(ui)),
+            tlmenu_ui::Zone::Top => egui::Panel::top("timeline-top").resizable(true).default_size(190.0).show(ui, |ui| self.timeline(ui)),
             tlmenu_ui::Zone::Left => egui::Panel::left("timeline-left").resizable(true).default_size(360.0).show(ui, |ui| self.timeline(ui)),
             tlmenu_ui::Zone::Right => egui::Panel::right("timeline-right").resizable(true).default_size(360.0).show(ui, |ui| self.timeline(ui)),
         };
@@ -2774,6 +2774,14 @@ mod shot {
             s.add_layer(1, "Figur");
             for x in 4..12 {
                 s.cel_mut(0, 1).set(x, 6, 5);
+            }
+            // SPRITEBIT_SHOT_FRAMES=n: n Frames, jeder etwas anders (Timeline).
+            let frames: usize = std::env::var("SPRITEBIT_SHOT_FRAMES").ok().and_then(|v| v.parse().ok()).unwrap_or(1);
+            for f in 1..frames {
+                let k = s.add_frame(f - 1, true);
+                for y in 10..40 {
+                    s.cel_mut(k, 1).set(10 + 4 * f as u32, y, 3);
+                }
             }
             app
         });

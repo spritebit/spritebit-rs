@@ -73,7 +73,13 @@ impl SpritebitApp {
     pub(crate) fn timeline(&mut self, ui: &mut egui::Ui) {
         self.timeline_buttons(ui);
         ui.add_space(4.0);
-        egui::ScrollArea::both().auto_shrink([false, false]).show(ui, |ui| self.timeline_grid(ui));
+        // Die Vorschaubilder füllen die Höhe, die über den Ebenen-Zeilen
+        // frei ist — die Trennlinie der Timeline ziehen macht sie größer.
+        let sp = self.project.sprite();
+        let tag_h = if sp.tags.is_empty() { 0.0 } else { TAG_H + 2.0 };
+        let free = ui.available_height() - tag_h - HEAD_H - 4.0 - sp.layers.len() as f32 * ROW_H - 4.0 - 16.0;
+        let thumb = free.clamp(tlmenu_ui::THUMB_MIN, tlmenu_ui::THUMB_MAX).floor();
+        egui::ScrollArea::both().auto_shrink([false, false]).show(ui, |ui| self.timeline_grid(ui, thumb));
         self.timeline_windows(ui.ctx());
     }
 
@@ -227,23 +233,25 @@ impl SpritebitApp {
         });
     }
 
-    fn timeline_grid(&mut self, ui: &mut egui::Ui) {
+    fn timeline_grid(&mut self, ui: &mut egui::Ui, thumb: f32) {
         let tl = self.tl;
         // Vorschaubilder vorher holen — sie brauchen `&mut self`.
         let thumbs: Vec<Option<egui::TextureId>> =
             if tl.thumbs { (0..self.project.sprite().frames.len()).map(|f| self.thumb(ui.ctx(), f)).collect() } else { Vec::new() };
-        let head_h = HEAD_H + if tl.thumbs { tlmenu_ui::THUMB + 4.0 } else { 0.0 };
+        let head_h = HEAD_H + if tl.thumbs { thumb + 4.0 } else { 0.0 };
+        // Mit Vorschaubildern breitere Spalten — die Bilder sollen etwas zeigen.
+        let cell_w = if tl.thumbs { thumb + 8.0 } else { CELL_W };
         let sp = self.project.sprite();
         let (n, nl) = (sp.frames.len(), sp.layers.len());
         let tag_h = if sp.tags.is_empty() { 0.0 } else { TAG_H + 2.0 };
-        let size = Vec2::new(LAYER_W + n as f32 * CELL_W + 8.0, tag_h + head_h + nl as f32 * ROW_H + 4.0);
+        let size = Vec2::new(LAYER_W + n as f32 * cell_w + 8.0, tag_h + head_h + nl as f32 * ROW_H + 4.0);
         let (resp, painter) = ui.allocate_painter(size, Sense::click_and_drag());
         let o = resp.rect.min;
         let font = FontId::proportional(12.0);
         let head_y = o.y + tag_h;
         // Zeile `r` von oben zeigt Ebene nl-1-r — oberste Ebene oben.
         let row_y = |r: usize| head_y + head_h + r as f32 * ROW_H;
-        let col_x = |f: usize| o.x + LAYER_W + f as f32 * CELL_W;
+        let col_x = |f: usize| o.x + LAYER_W + f as f32 * cell_w;
         let range = self.cel_range.and_then(|r| r.clamp(sp)).filter(|r| r.size() > 1);
 
         // Tags über den Frame-Nummern.
@@ -262,19 +270,19 @@ impl SpritebitApp {
 
         // Kopfzeile: Frame-Nummern (1-basiert, wie in der Web-Version).
         for f in 0..n {
-            let c = egui::Rect::from_min_size(Pos2::new(col_x(f), head_y), Vec2::new(CELL_W, head_h));
+            let c = egui::Rect::from_min_size(Pos2::new(col_x(f), head_y), Vec2::new(cell_w, head_h));
             if f == sp.frame {
                 painter.rect_filled(c.shrink(1.0), 3.0, ACCENT.gamma_multiply(0.35));
             } else if self.frame_sel.contains(&f) {
                 painter.rect_filled(c.shrink(1.0), 3.0, ACCENT.gamma_multiply(0.2));
             }
-            let num = egui::Rect::from_min_size(c.min, Vec2::new(CELL_W, HEAD_H));
+            let num = egui::Rect::from_min_size(c.min, Vec2::new(cell_w, HEAD_H));
             painter.text(num.center(), Align2::CENTER_CENTER, format!("{}", tl.label(f)), font.clone(), if f == sp.frame { Color32::WHITE } else { DIM });
             if let Some(Some(id)) = thumbs.get(f) {
                 // Vorschaubild im Seitenverhältnis des Sprites, mittig.
-                let k = tlmenu_ui::THUMB / sp.width.max(sp.height) as f32;
+                let k = thumb / sp.width.max(sp.height) as f32;
                 let size = Vec2::new(sp.width as f32 * k, sp.height as f32 * k);
-                let r = egui::Rect::from_center_size(Pos2::new(c.center().x, c.min.y + HEAD_H + 2.0 + tlmenu_ui::THUMB / 2.0), size);
+                let r = egui::Rect::from_center_size(Pos2::new(c.center().x, c.min.y + HEAD_H + 2.0 + thumb / 2.0), size);
                 painter.rect_filled(r.expand(1.0), 1.0, tlmenu_ui::THUMB_FRAME);
                 painter.image(*id, r, egui::Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
             }
@@ -312,7 +320,7 @@ impl SpritebitApp {
 
             // Zellen
             for f in 0..n {
-                let c = egui::Rect::from_min_size(Pos2::new(col_x(f), y), Vec2::new(CELL_W, ROW_H - 2.0));
+                let c = egui::Rect::from_min_size(Pos2::new(col_x(f), y), Vec2::new(cell_w, ROW_H - 2.0));
                 let active = f == sp.frame && l == sp.layer;
                 let in_range = range.is_some_and(|rg| rg.contains(f, l));
                 let bg = if active {
@@ -331,7 +339,7 @@ impl SpritebitApp {
                 // Verknüpft mit dem Nachbarn: Strich zwischen den Punkten.
                 if f + 1 < n && sp.frames[f + 1].cels[l] == id {
                     painter.line_segment(
-                        [c.center(), Pos2::new(col_x(f + 1) + CELL_W / 2.0, c.center().y)],
+                        [c.center(), Pos2::new(col_x(f + 1) + cell_w / 2.0, c.center().y)],
                         Stroke::new(2.0, DIM),
                     );
                 }
@@ -347,7 +355,7 @@ impl SpritebitApp {
 
         // Ziehen: Frame-Nummer → Frame verschieben, Ebenen-Name → Ebene verschieben.
         let at_pos = |p: Pos2| {
-            let fx = ((p.x - o.x - LAYER_W) / CELL_W).floor();
+            let fx = ((p.x - o.x - LAYER_W) / cell_w).floor();
             let ry = ((p.y - head_y - head_h) / ROW_H).floor();
             ((fx >= 0.0 && (fx as usize) < n).then_some(fx as usize), (ry >= 0.0 && (ry as usize) < nl).then(|| nl - 1 - ry as usize))
         };
@@ -392,7 +400,7 @@ impl SpritebitApp {
         let (shift, ctrl) = ui.input(|i| (i.modifiers.shift, i.modifiers.command));
         let double = resp.double_clicked();
         if let Some(p) = resp.interact_pointer_pos().filter(|_| resp.clicked() || double) {
-            let fx = ((p.x - o.x - LAYER_W) / CELL_W).floor();
+            let fx = ((p.x - o.x - LAYER_W) / cell_w).floor();
             let ry = ((p.y - head_y - head_h) / ROW_H).floor();
             let frame_at = (fx >= 0.0 && (fx as usize) < n).then_some(fx as usize);
             if p.y < head_y {
