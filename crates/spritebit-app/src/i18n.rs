@@ -1076,10 +1076,9 @@ pub fn io_error(e: &spritebit_core::IoError) -> String {
     match e {
         NotAProject(why) => trf("Keine spritebit-Projektdatei ({why}).", &[("why", why)]),
         Unsupported(why) => trf("Diese Projektdatei wird nicht unterstützt: {why}", &[("why", why)]),
-        TooBig { width, height } => trf(
-            "Fläche {w} × {h} ist zu groß (höchstens {max} × {max}).",
-            &[("w", width), ("h", height), ("max", &spritebit_core::MAX_SIDE)],
-        ),
+        TooBig { width, height } => {
+            trf("Fläche {w} × {h} ist zu groß (höchstens {max} × {max}).", &[("w", width), ("h", height), ("max", &spritebit_core::MAX_SIDE)])
+        }
         Corrupt(why) => trf("Die Datei ist beschädigt ({why}).", &[("why", why)]),
     }
 }

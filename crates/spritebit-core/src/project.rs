@@ -37,12 +37,7 @@ impl Default for Project {
 impl Project {
     /// Palette nach Namen: eigene vor eingebauten; unbekannt → Graustufen.
     pub fn palette(&self, name: &str) -> Palette {
-        self.palettes
-            .iter()
-            .find(|p| p.name == name)
-            .cloned()
-            .or_else(|| builtin::builtin(name))
-            .unwrap_or_else(Palette::grayscale)
+        self.palettes.iter().find(|p| p.name == name).cloned().or_else(|| builtin::builtin(name)).unwrap_or_else(Palette::grayscale)
     }
 
     pub fn sprite(&self) -> &Sprite {

@@ -410,7 +410,6 @@ mod tests {
         assert_eq!(square_end((5, 5), (2, 7)), (2, 8));
     }
 
-
     #[test]
     fn fuellen_mit_grenzen_aus_einer_vorlage() {
         // Vorlage 4×3: eine Linie (7) trennt links oben ab.
@@ -486,10 +485,7 @@ mod tests {
         let o = painted(&ellipse_spans(0, 0, 30, 18, false));
         // Jeder Umriss-Pixel hat mindestens zwei Nachbarn (auch diagonal) im Umriss.
         for &(x, y) in &o {
-            let n = (-1..=1)
-                .flat_map(|dx| (-1..=1).map(move |dy| (dx, dy)))
-                .filter(|&(dx, dy)| (dx, dy) != (0, 0) && o.contains(&(x + dx, y + dy)))
-                .count();
+            let n = (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (dx, dy))).filter(|&(dx, dy)| (dx, dy) != (0, 0) && o.contains(&(x + dx, y + dy))).count();
             assert!(n >= 2, "Lücke bei ({x}, {y})");
         }
     }

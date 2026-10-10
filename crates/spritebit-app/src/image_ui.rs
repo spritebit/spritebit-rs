@@ -11,10 +11,10 @@
 //! (spritebit_core::light), für alle Frames; jede Änderung rechnet sie neu.
 
 use eframe::egui;
+use spritebit_core::cleanup::{self, OutlineMode};
+use spritebit_core::light::{self, FxColor, FxKind, LayerFx, LightDir, LightOpts};
 use spritebit_core::selection::{Clip, Selection};
 use spritebit_core::transform::{self as tf, TransformResult};
-use spritebit_core::light::{self, FxColor, FxKind, LayerFx, LightDir, LightOpts};
-use spritebit_core::cleanup::{self, OutlineMode};
 use spritebit_core::{Image, Rgb};
 
 use crate::i18n::{tr, trf};
@@ -260,9 +260,7 @@ impl SpritebitApp {
     fn report(&mut self, r: TransformResult, nothing: &'static str) {
         self.hint = Some(match r {
             TransformResult::Done { w, h, lost: 0 } => trf("Jetzt {w} × {h} px.", &[("w", &w), ("h", &h)]),
-            TransformResult::Done { w, h, lost } => {
-                trf("Jetzt {w} × {h} px — {n} Pixel lagen außerhalb.", &[("w", &w), ("h", &h), ("n", &lost)])
-            }
+            TransformResult::Done { w, h, lost } => trf("Jetzt {w} × {h} px — {n} Pixel lagen außerhalb.", &[("w", &w), ("h", &h), ("n", &lost)]),
             TransformResult::Nothing => tr(nothing).to_string(),
             TransformResult::TooBig => tr("Zu groß — höchstens 8192 × 8192.").to_string(),
             TransformResult::TooSmall => tr("Zu klein — mindestens 1 × 1.").to_string(),
@@ -398,12 +396,10 @@ impl SpritebitApp {
             ui.label("px");
         });
         ui.horizontal(|ui| {
-            egui::ComboBox::from_id_salt("anchor")
-                .selected_text(if self.image.centered { tr("mittig") } else { tr("oben links") })
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.image.centered, true, tr("mittig"));
-                    ui.selectable_value(&mut self.image.centered, false, tr("oben links"));
-                });
+            egui::ComboBox::from_id_salt("anchor").selected_text(if self.image.centered { tr("mittig") } else { tr("oben links") }).show_ui(ui, |ui| {
+                ui.selectable_value(&mut self.image.centered, true, tr("mittig"));
+                ui.selectable_value(&mut self.image.centered, false, tr("oben links"));
+            });
             if ui.button(tr("Anwenden")).clicked() {
                 let (w, h, c) = (self.image.resize_w, self.image.resize_h, self.image.centered);
                 self.rebuild("Größe unverändert.", |s| tf::resize_canvas(s, w, h, c));
@@ -450,7 +446,8 @@ impl SpritebitApp {
         if ui.button(tr("Hintergrund entfernen")).clicked() {
             let tol = self.image.bg_tolerance;
             if let Some(n) = self.clean(|img, pal, free| cleanup::remove_background(img, pal, free, tol)) {
-                self.hint = Some(if n > 0 { trf("Hintergrund entfernt — {n} Pixel.", &[("n", &n)]) } else { tr("Nichts entfernt — Toleranz erhöhen?").into() });
+                self.hint =
+                    Some(if n > 0 { trf("Hintergrund entfernt — {n} Pixel.", &[("n", &n)]) } else { tr("Nichts entfernt — Toleranz erhöhen?").into() });
             }
         }
         if ui.button(tr("Glätten")).on_hover_text(tr("Einzelne Streupixel auf die Farbe ihrer Nachbarn setzen")).clicked() {
@@ -461,14 +458,11 @@ impl SpritebitApp {
         ui.horizontal(|ui| {
             ui.label(tr("Outline"));
             egui::color_picker::color_edit_button_srgb(ui, &mut self.image.outline_color).on_hover_text(tr("Outline-Farbe"));
-            egui::ComboBox::from_id_salt("outline-thick")
-                .width(50.0)
-                .selected_text(format!("{} px", self.image.outline_thickness))
-                .show_ui(ui, |ui| {
-                    for t in 1..=3 {
-                        ui.selectable_value(&mut self.image.outline_thickness, t, format!("{t} px"));
-                    }
-                });
+            egui::ComboBox::from_id_salt("outline-thick").width(50.0).selected_text(format!("{} px", self.image.outline_thickness)).show_ui(ui, |ui| {
+                for t in 1..=3 {
+                    ui.selectable_value(&mut self.image.outline_thickness, t, format!("{t} px"));
+                }
+            });
             let modes = [(OutlineMode::Outside, "außen"), (OutlineMode::Inside, "innen"), (OutlineMode::Both, "beides")];
             let current = modes.iter().find(|m| m.0 == self.image.outline_mode).map_or("außen", |m| m.1);
             egui::ComboBox::from_id_salt("outline-mode")
@@ -489,7 +483,8 @@ impl SpritebitApp {
                 self.set_rgb(self.image.outline_color);
                 let value = std::mem::replace(&mut self.color, keep);
                 if let Some(n) = self.clean(|img, _, _| cleanup::outline(img, value, th, mode)) {
-                    self.hint = Some(if n > 0 { trf("Outline gezeichnet — {n} Pixel.", &[("n", &n)]) } else { tr("Keine Outline nötig — Sprite leer?").into() });
+                    self.hint =
+                        Some(if n > 0 { trf("Outline gezeichnet — {n} Pixel.", &[("n", &n)]) } else { tr("Keine Outline nötig — Sprite leer?").into() });
                 }
             }
         });
@@ -698,7 +693,9 @@ impl SpritebitApp {
         light_changed |= ui.checkbox(&mut o.shadow, tr("Schattenkante (dunkler)")).changed();
         light_changed |= ui
             .checkbox(&mut o.allow_free, tr("Auch Farben außerhalb der Palette"))
-            .on_hover_text(tr("Fehlt in der Palette eine passende hellere oder dunklere Farbe, wird eine freie Farbe berechnet — sonst bleibt der Pixel, wie er ist"))
+            .on_hover_text(tr(
+                "Fehlt in der Palette eine passende hellere oder dunklere Farbe, wird eine freie Farbe berechnet — sonst bleibt der Pixel, wie er ist",
+            ))
             .changed();
         ui.separator();
         let cast_before = self.image.cast_on;

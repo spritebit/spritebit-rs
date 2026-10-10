@@ -142,9 +142,7 @@ fn inner_outline(img: &mut Image, value: Px, thickness: u32) -> usize {
                     continue;
                 }
                 // Außen = transparent oder schon als Kante markiert.
-                let out = |nx: i64, ny: i64| {
-                    nx >= 0 && ny >= 0 && nx < w && ny < h && (img.get(nx as u32, ny as u32) == 0 || edge[(ny * w + nx) as usize])
-                };
+                let out = |nx: i64, ny: i64| nx >= 0 && ny >= 0 && nx < w && ny < h && (img.get(nx as u32, ny as u32) == 0 || edge[(ny * w + nx) as usize]);
                 if out(x - 1, y) || out(x + 1, y) || out(x, y - 1) || out(x, y + 1) {
                     mark.push((y * w + x) as usize);
                 }
@@ -221,7 +219,13 @@ pub fn median_cut(pixels: &[Rgb], max: usize) -> Vec<Rgb> {
             let rg = range(bk);
             let m = *rg.iter().max().unwrap();
             if best.is_none_or(|b| m > b.1) {
-                let chan = if rg[0] >= rg[1] && rg[0] >= rg[2] { 0 } else if rg[1] >= rg[2] { 1 } else { 2 };
+                let chan = if rg[0] >= rg[1] && rg[0] >= rg[2] {
+                    0
+                } else if rg[1] >= rg[2] {
+                    1
+                } else {
+                    2
+                };
                 best = Some((i, m, chan));
             }
         }

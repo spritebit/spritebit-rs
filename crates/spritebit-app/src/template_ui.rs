@@ -153,10 +153,8 @@ impl SpritebitApp {
 
     pub(crate) fn template_panel(&mut self, ui: &mut egui::Ui) {
         if ui.button(tr("Bild laden …")).clicked() {
-            if let Some(path) = rfd::FileDialog::new()
-                .set_title(tr("Schablone laden"))
-                .add_filter(tr("Bilder"), &["png", "jpg", "jpeg", "gif", "webp", "bmp"])
-                .pick_file()
+            if let Some(path) =
+                rfd::FileDialog::new().set_title(tr("Schablone laden")).add_filter(tr("Bilder"), &["png", "jpg", "jpeg", "gif", "webp", "bmp"]).pick_file()
             {
                 self.load_template_file(ui.ctx(), &path);
             }

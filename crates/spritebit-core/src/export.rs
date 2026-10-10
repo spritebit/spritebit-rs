@@ -20,7 +20,10 @@ pub const MAX_OUTPUT: u32 = 16_384;
 
 #[derive(Debug, PartialEq)]
 pub enum ExportError {
-    TooBig { width: u64, height: u64 },
+    TooBig {
+        width: u64,
+        height: u64,
+    },
     /// GIF fasst 255 Farben plus Transparent.
     TooManyColors(usize),
     Encode(String),
@@ -201,11 +204,8 @@ pub fn sheet(p: &Project, scale: u32, image_name: &str) -> Result<(Vec<u8>, Stri
     let mut frames = Vec::new();
     for (i, sp) in p.sprites.iter().enumerate() {
         let pal = p.palette(&sp.palette);
-        let cells: Vec<(usize, u32, u32)> = if animated {
-            (0..sp.frames.len()).map(|f| (f, f as u32, i as u32)).collect()
-        } else {
-            vec![(sp.frame, i as u32 % cols, i as u32 / cols)]
-        };
+        let cells: Vec<(usize, u32, u32)> =
+            if animated { (0..sp.frames.len()).map(|f| (f, f as u32, i as u32)).collect() } else { vec![(sp.frame, i as u32 % cols, i as u32 / cols)] };
         for (f, col, row) in cells {
             let ox = col * cw + (cw - sp.width) / 2;
             let oy = row * ch + (ch - sp.height) / 2;
@@ -491,7 +491,10 @@ pub fn pdf(sp: &Sprite, pal: &Palette, f: usize, scale: u32, legend_text: Option
     );
     obj(
         &mut out,
-        format!("<< /Type /XObject /Subtype /Image /Width {w} /Height {h} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length {} >>", alpha.len()),
+        format!(
+            "<< /Type /XObject /Subtype /Image /Width {w} /Height {h} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode /Length {} >>",
+            alpha.len()
+        ),
         Some(&alpha),
     );
     let xref = out.len();
@@ -636,10 +639,7 @@ mod tests {
 
     #[test]
     fn spritesheet_ohne_animation_ist_ein_raster() {
-        let p = Project {
-            sprites: (0..3).map(|i| Sprite::new(format!("S{i}"), 2, 2).unwrap()).collect(),
-            ..Default::default()
-        };
+        let p = Project { sprites: (0..3).map(|i| Sprite::new(format!("S{i}"), 2, 2).unwrap()).collect(), ..Default::default() };
         let (png_bytes, json) = sheet(&p, 1, "s.png").unwrap();
         assert_eq!(u32::from_be_bytes(png_bytes[16..20].try_into().unwrap()), 4, "2 Spalten");
         assert_eq!(u32::from_be_bytes(png_bytes[20..24].try_into().unwrap()), 4, "2 Zeilen");

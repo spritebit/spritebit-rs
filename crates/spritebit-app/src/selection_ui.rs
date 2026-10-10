@@ -9,9 +9,9 @@
 use eframe::egui::{self, Color32, Key, Modifiers, Pos2, Stroke, Vec2};
 use spritebit_core::selection::{self, Clip, Handle, Selection};
 
+use crate::i18n::{keys, tr, trf};
 use crate::tools_ui::{Pointer, Tool};
 use crate::SpritebitApp;
-use crate::i18n::{tr, trf, keys};
 
 /// Inhalt der Zwischenablage samt Herkunft der Farben.
 #[derive(Clone)]

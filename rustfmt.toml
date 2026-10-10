@@ -1,0 +1,5 @@
+# Formatierung (cargo fmt). Breite 160 — passt zum bisherigen Stil mit
+# langen Zeilen; deploy.py formatiert vor jedem Push automatisch.
+edition = "2021"
+max_width = 160
+use_small_heuristics = "Max"

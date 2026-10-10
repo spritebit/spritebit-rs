@@ -66,7 +66,11 @@ fn recent_file() -> Option<PathBuf> {
 pub(crate) fn file_stem_for(name: &str) -> String {
     let s: String = name.trim().chars().map(|c| if c.is_alphanumeric() || " _-".contains(c) { c } else { '_' }).collect();
     let s = s.trim().to_string();
-    if s.is_empty() { "spritebit".into() } else { s }
+    if s.is_empty() {
+        "spritebit".into()
+    } else {
+        s
+    }
 }
 
 impl SpritebitApp {
@@ -76,10 +80,7 @@ impl SpritebitApp {
         if !self.project.name.trim().is_empty() {
             return self.project.name.clone();
         }
-        self.path
-            .as_ref()
-            .and_then(|p| p.file_stem())
-            .map_or_else(|| tr("Unbenanntes Projekt").to_string(), |s| s.to_string_lossy().into_owned())
+        self.path.as_ref().and_then(|p| p.file_stem()).map_or_else(|| tr("Unbenanntes Projekt").to_string(), |s| s.to_string_lossy().into_owned())
     }
 
     /// Beim Start: die Liste laden; ab jetzt wird sie gespeichert.
@@ -146,7 +147,8 @@ impl SpritebitApp {
     /// Ein neues Projekt `name` in `path`: ein leerer Sprite; eigene Paletten
     /// und ihre Materialien kommen mit (wie im Web).
     pub(crate) fn create_project_at(&mut self, name: String, path: &Path) {
-        let p = Project { name: name.trim().to_string(), palettes: self.project.palettes.clone(), materials: self.project.materials.clone(), ..Default::default() };
+        let p =
+            Project { name: name.trim().to_string(), palettes: self.project.palettes.clone(), materials: self.project.materials.clone(), ..Default::default() };
         self.replace_project(p, None);
         self.write_native(path);
         self.hint = Some(trf("Neues Projekt „{name}“ angelegt.", &[("name", &self.project_display_name())]));

@@ -101,9 +101,12 @@ impl SpritebitApp {
         let dim = Color32::from_gray(110);
         let icon_at = |k: f32| egui::Rect::from_center_size(Pos2::new(rect.min.x + 16.0 + k * 22.0, mid), Vec2::splat(20.0));
         let (eye, eye_tip) = if visible { (icons::EYE, tr("Ebene ausblenden")) } else { (icons::EYE_OFF, tr("Ebene einblenden")) };
-        let eye_btn = ui.put(icon_at(0.0), egui::Button::image(icons::image(eye, if visible { c } else { dim }).alt_text(eye_tip)).frame(false)).on_hover_text(eye_tip);
+        let eye_btn =
+            ui.put(icon_at(0.0), egui::Button::image(icons::image(eye, if visible { c } else { dim }).alt_text(eye_tip)).frame(false)).on_hover_text(eye_tip);
         let (lock, lock_tip) = if locked { (icons::LOCK, tr("Ebene entsperren")) } else { (icons::UNLOCK, tr("Ebene sperren")) };
-        let lock_btn = ui.put(icon_at(1.0), egui::Button::image(icons::image(lock, if locked { ACCENT } else { dim }).alt_text(lock_tip)).frame(false)).on_hover_text(lock_tip);
+        let lock_btn = ui
+            .put(icon_at(1.0), egui::Button::image(icons::image(lock, if locked { ACCENT } else { dim }).alt_text(lock_tip)).frame(false))
+            .on_hover_text(lock_tip);
         // Vorschaubild im Seitenverhältnis, auf Karo (= durchsichtig).
         let frame = egui::Rect::from_center_size(Pos2::new(rect.min.x + 16.0 + 2.0 * 22.0 + 6.0, mid), Vec2::splat(THUMB));
         painter.rect_filled(frame, 2.0, Color32::from_gray(52));
@@ -112,7 +115,11 @@ impl SpritebitApp {
         for i in 0..4 {
             for j in 0..4 {
                 if (i + j) % 2 == 0 {
-                    painter.rect_filled(egui::Rect::from_min_size(frame.min + Vec2::new(i as f32 * q, j as f32 * q), Vec2::splat(q)), 0.0, Color32::from_gray(80));
+                    painter.rect_filled(
+                        egui::Rect::from_min_size(frame.min + Vec2::new(i as f32 * q, j as f32 * q), Vec2::splat(q)),
+                        0.0,
+                        Color32::from_gray(80),
+                    );
                 }
             }
         }
@@ -126,14 +133,26 @@ impl SpritebitApp {
             egui::Image::new(icons::MASK).tint(ACCENT).paint_at(ui, r);
             x += 18.0;
         }
-        let name_col = if active { ui.visuals().strong_text_color() } else if visible { c } else { dim };
+        let name_col = if active {
+            ui.visuals().strong_text_color()
+        } else if visible {
+            c
+        } else {
+            dim
+        };
         let font = if active { FontId::proportional(13.5) } else { FontId::proportional(13.0) };
         let right = rect.max.x - 6.0;
         if opacity < 1.0 {
             painter.text(Pos2::new(right, mid), Align2::RIGHT_CENTER, format!("{} %", (opacity * 100.0).round()), FontId::proportional(11.0), dim);
         }
         let name_end = if opacity < 1.0 { right - 34.0 } else { right };
-        painter.with_clip_rect(egui::Rect::from_min_max(Pos2::new(x, rect.min.y), Pos2::new(name_end, rect.max.y))).text(Pos2::new(x, mid), Align2::LEFT_CENTER, &name, font, name_col);
+        painter.with_clip_rect(egui::Rect::from_min_max(Pos2::new(x, rect.min.y), Pos2::new(name_end, rect.max.y))).text(
+            Pos2::new(x, mid),
+            Align2::LEFT_CENTER,
+            &name,
+            font,
+            name_col,
+        );
 
         if eye_btn.clicked() {
             self.edit_sprite(|s| s.layers[l].visible = !s.layers[l].visible);
@@ -175,7 +194,14 @@ impl SpritebitApp {
             });
         }
         let visible = self.project.sprite().layers.iter().filter(|l| l.visible && l.opacity > 0.0).count();
-        if icons::button(ui, icons::MERGE_ALL, tr("Alle sichtbaren Ebenen zusammenführen — in jedem Frame, auch Licht und Schatten; ausgeblendete bleiben"), visible >= 2).clicked() {
+        if icons::button(
+            ui,
+            icons::MERGE_ALL,
+            tr("Alle sichtbaren Ebenen zusammenführen — in jedem Frame, auch Licht und Schatten; ausgeblendete bleiben"),
+            visible >= 2,
+        )
+        .clicked()
+        {
             let pal = self.project.current_palette();
             let name = tr("Zusammengeführt");
             self.edit_sprite(|s| {
@@ -246,9 +272,8 @@ impl SpritebitApp {
         // Aktive Ebene frisch lesen — Verdoppeln/Zusammenlegen eben hat sie verschoben.
         let la = self.project.sprite().layer;
         let mut op = self.project.sprite().layers[la].opacity * 100.0;
-        let r = ui
-            .add(egui::DragValue::new(&mut op).range(0.0..=100.0).speed(1.0).suffix(" %").max_decimals(0))
-            .on_hover_text(tr("Deckkraft der aktiven Ebene"));
+        let r =
+            ui.add(egui::DragValue::new(&mut op).range(0.0..=100.0).speed(1.0).suffix(" %").max_decimals(0)).on_hover_text(tr("Deckkraft der aktiven Ebene"));
         if r.drag_started() || (r.changed() && !r.dragged()) {
             self.edit_sprite(|_| {});
         }

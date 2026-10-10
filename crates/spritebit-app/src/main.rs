@@ -24,23 +24,20 @@ mod selection_ui;
 mod selfupdate;
 mod sprites_ui;
 mod tabs;
-mod update;
 mod template_ui;
 mod tiles_ui;
 mod timeline;
 mod tlmenu_ui;
 mod tools_ui;
+mod update;
 mod view_ui;
 
 use std::path::{Path, PathBuf};
 
+use crate::i18n::{keys, tr, trf};
 use eframe::egui::{self, Color32, Key, Modifiers, Pos2, Sense, Stroke, Vec2};
-use spritebit_core::{
-    export_web, import_web, load_native, render_rgba_step, save_native, selection, History, Project, Px, Rect,
-    Selection, Sprite,
-};
+use spritebit_core::{export_web, import_web, load_native, render_rgba_step, save_native, selection, History, Project, Px, Rect, Selection, Sprite};
 use tools_ui::{Pointer, Tool};
-use crate::i18n::{tr, trf, keys};
 
 fn main() -> eframe::Result {
     i18n::load();
@@ -346,9 +343,7 @@ impl SpritebitApp {
             allow_close: false,
             image: image_ui::ImagePanel::default(),
             tiles: tiles_ui::TileState::default(),
-            rng: spritebit_core::tools::Rng::new(
-                std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64),
-            ),
+            rng: spritebit_core::tools::Rng::new(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64)),
         }
     }
 
@@ -471,10 +466,7 @@ impl SpritebitApp {
                     load_native(&bytes).map(|p| (p, Some(path.clone())))
                 } else {
                     // Aus einer Web-Datei wird beim Speichern eine .sb-Datei.
-                    std::str::from_utf8(&bytes)
-                        .map_err(|_| spritebit_core::IoError::NotAProject("kein Text".into()))
-                        .and_then(import_web)
-                        .map(|p| (p, None))
+                    std::str::from_utf8(&bytes).map_err(|_| spritebit_core::IoError::NotAProject("kein Text".into())).and_then(import_web).map(|p| (p, None))
                 };
                 match result {
                     Ok((p, keep_path)) => {
@@ -501,11 +493,8 @@ impl SpritebitApp {
 
     fn save_as(&mut self) {
         let name = format!("{}.{EXT}", projects_ui::file_stem_for(&self.project_display_name()));
-        if let Some(path) = rfd::FileDialog::new()
-            .set_title(tr("Projekt speichern"))
-            .add_filter(tr("spritebit-Projekt"), &[EXT])
-            .set_file_name(name)
-            .save_file()
+        if let Some(path) =
+            rfd::FileDialog::new().set_title(tr("Projekt speichern")).add_filter(tr("spritebit-Projekt"), &[EXT]).set_file_name(name).save_file()
         {
             let path = if path.extension().is_none() { path.with_extension(EXT) } else { path };
             self.write_native(&path);
@@ -536,15 +525,15 @@ impl SpritebitApp {
     fn save_sprite_as(&mut self) {
         self.commit_float();
         let name = format!("{}.{SPRITE_EXT}", self.sprite().name);
-        if let Some(path) = rfd::FileDialog::new()
-            .set_title(tr("Sprite speichern"))
-            .add_filter(tr("spritebit-Sprite"), &[SPRITE_EXT])
-            .set_file_name(name)
-            .save_file()
+        if let Some(path) =
+            rfd::FileDialog::new().set_title(tr("Sprite speichern")).add_filter(tr("spritebit-Sprite"), &[SPRITE_EXT]).set_file_name(name).save_file()
         {
             let path = if path.extension().is_none() { path.with_extension(SPRITE_EXT) } else { path };
             match std::fs::write(&path, spritebit_core::export_sprite(&self.project, self.project.current)) {
-                Ok(()) => self.hint = Some(trf("Sprite gespeichert: {name}", &[("name", &path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned()))])),
+                Ok(()) => {
+                    self.hint =
+                        Some(trf("Sprite gespeichert: {name}", &[("name", &path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned()))]))
+                }
                 Err(e) => self.error = Some(trf("{path} konnte nicht gespeichert werden: {e}", &[("path", &path.display()), ("e", &e)])),
             }
         }
@@ -573,9 +562,7 @@ impl SpritebitApp {
                 return;
             }
             Ok(bytes) if bytes.starts_with(b"SPRITEBIT\0") => load_native(&bytes),
-            Ok(bytes) => std::str::from_utf8(&bytes)
-                .map_err(|_| spritebit_core::IoError::NotAProject("kein Text".into()))
-                .and_then(import_web),
+            Ok(bytes) => std::str::from_utf8(&bytes).map_err(|_| spritebit_core::IoError::NotAProject("kein Text".into())).and_then(import_web),
         };
         match other {
             Ok(other) => self.merge_project(other),
@@ -606,16 +593,18 @@ impl SpritebitApp {
     fn save_ase_as(&mut self) {
         self.commit_float();
         let name = format!("{}.aseprite", projects_ui::file_stem_for(&self.sprite().name));
-        if let Some(path) = rfd::FileDialog::new()
-            .set_title(tr("Als Aseprite speichern"))
-            .add_filter(tr("Aseprite"), &["aseprite"])
-            .set_file_name(name)
-            .save_file()
+        if let Some(path) =
+            rfd::FileDialog::new().set_title(tr("Als Aseprite speichern")).add_filter(tr("Aseprite"), &["aseprite"]).set_file_name(name).save_file()
         {
             let path = if path.extension().is_none() { path.with_extension("aseprite") } else { path };
             let bytes = spritebit_core::aseprite::write(self.sprite(), &self.project.current_palette());
             match std::fs::write(&path, bytes) {
-                Ok(()) => self.hint = Some(trf("Als Aseprite gespeichert: {name}", &[("name", &path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned()))])),
+                Ok(()) => {
+                    self.hint = Some(trf(
+                        "Als Aseprite gespeichert: {name}",
+                        &[("name", &path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned()))],
+                    ))
+                }
                 Err(e) => self.error = Some(trf("{path} konnte nicht gespeichert werden: {e}", &[("path", &path.display()), ("e", &e)])),
             }
         }
@@ -646,11 +635,8 @@ impl SpritebitApp {
     fn export_web(&mut self) {
         self.commit_float();
         let name = format!("{}.json", self.sprite().name);
-        if let Some(path) = rfd::FileDialog::new()
-            .set_title(tr("Als Web-Projekt exportieren"))
-            .add_filter(tr("Web-Projekt (JSON)"), &["json"])
-            .set_file_name(name)
-            .save_file()
+        if let Some(path) =
+            rfd::FileDialog::new().set_title(tr("Als Web-Projekt exportieren")).add_filter(tr("Web-Projekt (JSON)"), &["json"]).set_file_name(name).save_file()
         {
             if let Err(e) = std::fs::write(&path, export_web(&self.project)) {
                 self.error = Some(trf("{path} konnte nicht geschrieben werden: {e}", &[("path", &path.display()), ("e", &e)]));
@@ -737,7 +723,13 @@ impl SpritebitApp {
                 prev |= left;
                 next |= right;
                 let (l, nl) = (self.sprite().layer, self.sprite().layers.len());
-                let to = if up { (l + 1).min(nl - 1) } else if down { l.saturating_sub(1) } else { l };
+                let to = if up {
+                    (l + 1).min(nl - 1)
+                } else if down {
+                    l.saturating_sub(1)
+                } else {
+                    l
+                };
                 if to != l {
                     self.project.sprite_mut().layer = to;
                     self.stroke_last = None;
@@ -1005,17 +997,8 @@ impl SpritebitApp {
         self.hover = pointer.filter(|p| over_canvas && area.contains(*p)).map(to_cell);
 
         // Werkzeug anwenden (tools_ui.rs).
-        let p = Pointer {
-            cell: pointer.map(to_cell),
-            over: resp.hovered() || resp.dragged(),
-            primary,
-            secondary,
-            pressed,
-            released,
-            panning,
-            alt,
-            pos: pointer,
-        };
+        let p =
+            Pointer { cell: pointer.map(to_cell), over: resp.hovered() || resp.dragged(), primary, secondary, pressed, released, panning, alt, pos: pointer };
         // Umschalt+Alt gehört der Schablone, im Hilfslinien-Modus gehört
         // der Zeiger den Linien.
         // Alt + rechte Maustaste ziehen: Größe verstellen statt radieren.
@@ -1088,17 +1071,9 @@ impl SpritebitApp {
             // Die Textur deckt ganze Blöcke ab — am Rand höchstens bis zur Sprite-Kante.
             let ex = (x0 + tw as u32 * step).min(sw);
             let ey = (y0 + th as u32 * step).min(sh);
-            let screen = egui::Rect::from_min_max(
-                origin + Vec2::new(x0 as f32, y0 as f32) * zoom,
-                origin + Vec2::new(ex as f32, ey as f32) * zoom,
-            );
-            let uv = egui::Rect::from_min_max(
-                Pos2::ZERO,
-                Pos2::new(
-                    (ex - x0) as f32 / (tw as u32 * step) as f32,
-                    (ey - y0) as f32 / (th as u32 * step) as f32,
-                ),
-            );
+            let screen = egui::Rect::from_min_max(origin + Vec2::new(x0 as f32, y0 as f32) * zoom, origin + Vec2::new(ex as f32, ey as f32) * zoom);
+            let uv =
+                egui::Rect::from_min_max(Pos2::ZERO, Pos2::new((ex - x0) as f32 / (tw as u32 * step) as f32, (ey - y0) as f32 / (th as u32 * step) as f32));
             // Schachbrett (ein Feld je Textur-Pixel), dann die Schablone, dann die Pixel.
             let checker = self.checker.get_or_insert_with(|| {
                 let [a, b] = checker_colors.map(|[r, g, b]| Color32::from_rgb(r, g, b));
@@ -1129,17 +1104,11 @@ impl SpritebitApp {
             let line = Stroke::new(1.0, self.grid_color());
             for x in x0..=x1 {
                 let sx = origin.x + x as f32 * zoom;
-                painter.line_segment(
-                    [Pos2::new(sx, origin.y + y0 as f32 * zoom), Pos2::new(sx, origin.y + y1 as f32 * zoom)],
-                    line,
-                );
+                painter.line_segment([Pos2::new(sx, origin.y + y0 as f32 * zoom), Pos2::new(sx, origin.y + y1 as f32 * zoom)], line);
             }
             for y in y0..=y1 {
                 let sy = origin.y + y as f32 * zoom;
-                painter.line_segment(
-                    [Pos2::new(origin.x + x0 as f32 * zoom, sy), Pos2::new(origin.x + x1 as f32 * zoom, sy)],
-                    line,
-                );
+                painter.line_segment([Pos2::new(origin.x + x0 as f32 * zoom, sy), Pos2::new(origin.x + x1 as f32 * zoom, sy)], line);
             }
         }
         // Symmetrie-Achsen
@@ -1187,19 +1156,16 @@ impl SpritebitApp {
         self.sprite_dialogs(ctx);
         self.palette_dialogs(ctx);
         if self.about_open {
-            egui::Window::new(tr("Über spritebit"))
-                .collapsible(false)
-                .resizable(false)
-                .open(&mut self.about_open)
-                .show(ctx, |ui| {
-                    ui.label(tr("spritebit — Pixel-Art-Editor"));
-                    ui.strong(format!("Version {VERSION}"));
-                    ui.label(tr("© 2026 Marco Jan · freie Software unter der MIT-Lizenz"));
-                    ui.hyperlink_to(tr("Neue Versionen auf GitHub"), "https://github.com/spritebit/spritebit-rs/releases");
-                    ui.add_space(6.0);
-                    ui.hyperlink_to(tr("spritebit unterstützen"), DONATE_URL)
-                        .on_hover_text(tr("Kostenlos bleibt spritebit sowieso. Spenden fließen in ein Code-Signatur-Zertifikat, damit Windows bei der Desktop-App nicht mehr warnt."));
-                });
+            egui::Window::new(tr("Über spritebit")).collapsible(false).resizable(false).open(&mut self.about_open).show(ctx, |ui| {
+                ui.label(tr("spritebit — Pixel-Art-Editor"));
+                ui.strong(format!("Version {VERSION}"));
+                ui.label(tr("© 2026 Marco Jan · freie Software unter der MIT-Lizenz"));
+                ui.hyperlink_to(tr("Neue Versionen auf GitHub"), "https://github.com/spritebit/spritebit-rs/releases");
+                ui.add_space(6.0);
+                ui.hyperlink_to(tr("spritebit unterstützen"), DONATE_URL).on_hover_text(tr(
+                    "Kostenlos bleibt spritebit sowieso. Spenden fließen in ein Code-Signatur-Zertifikat, damit Windows bei der Desktop-App nicht mehr warnt.",
+                ));
+            });
         }
         let mut dismiss = false;
         if let Some(msg) = &self.error {
@@ -2720,7 +2686,8 @@ mod tests {
         let mut h = app();
         h.state_mut().out.import = Some(export_ui::ImportModal {
             text: "export const HELD_PALETTE = { 1: '#ff0000', 2: '#00ff00' };
-export const HELD = [[0,1],[2,1]];".into(),
+export const HELD = [[0,1],[2,1]];"
+                .into(),
             use_palette: true,
         });
         h.run();
@@ -2785,7 +2752,12 @@ export const HELD = [[0,1],[2,1]];".into(),
         let p = at(&h, 10.0, 10.0);
         h.hover_at(p);
         h.run();
-        h.event(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: Vec2::new(0.0, -40.0), phase: egui::TouchPhase::Move, modifiers: Modifiers::NONE });
+        h.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: Vec2::new(0.0, -40.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Modifiers::NONE,
+        });
         h.run();
         assert_eq!(h.state().zoom, z, "kein Zoom ohne Strg");
     }
@@ -2800,7 +2772,12 @@ export const HELD = [[0,1],[2,1]];".into(),
         h.hover_at(p);
         h.run();
         let pan = h.state().pan;
-        h.event(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: Vec2::new(0.0, -120.0), phase: egui::TouchPhase::Move, modifiers: Modifiers::NONE });
+        h.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: Vec2::new(0.0, -120.0),
+            phase: egui::TouchPhase::Move,
+            modifiers: Modifiers::NONE,
+        });
         h.run();
         assert_eq!(h.state().pan, pan, "die Fläche dahinter bleibt stehen");
     }
@@ -2814,13 +2791,19 @@ export const HELD = [[0,1],[2,1]];".into(),
         let (a, b) = (at(&h, 5.0, 5.0), at(&h, 9.0, 5.0));
         h.hover_at(a);
         h.run();
-        h.event_modifiers(egui::Event::PointerButton { pos: a, button: egui::PointerButton::Primary, pressed: true, modifiers: Modifiers::ALT }, Modifiers::ALT);
+        h.event_modifiers(
+            egui::Event::PointerButton { pos: a, button: egui::PointerButton::Primary, pressed: true, modifiers: Modifiers::ALT },
+            Modifiers::ALT,
+        );
         h.run();
         for k in 1..=4 {
             h.event_modifiers(egui::Event::PointerMoved(a + (b - a) * (k as f32 / 4.0)), Modifiers::ALT);
             h.run();
         }
-        h.event_modifiers(egui::Event::PointerButton { pos: b, button: egui::PointerButton::Primary, pressed: false, modifiers: Modifiers::ALT }, Modifiers::ALT);
+        h.event_modifiers(
+            egui::Event::PointerButton { pos: b, button: egui::PointerButton::Primary, pressed: false, modifiers: Modifiers::ALT },
+            Modifiers::ALT,
+        );
         h.run();
         h.state_mut().deselect();
         assert_eq!(px(&h, 5, 5), 4, "Original bleibt");
@@ -2907,8 +2890,8 @@ export const HELD = [[0,1],[2,1]];".into(),
 #[cfg(test)]
 mod shot {
     use super::*;
-    use egui_kittest::Harness;
     use egui_kittest::kittest::Queryable;
+    use egui_kittest::Harness;
 
     #[test]
     #[ignore = "nur zum Ansehen, braucht eine Grafikkarte"]
@@ -2966,7 +2949,12 @@ mod shot {
         if std::env::var_os("SPRITEBIT_SHOT_TLSCROLL").is_some() {
             h.hover_at(egui::pos2(400.0, 800.0));
             h.run();
-            h.event(egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: Vec2::new(0.0, -60.0), modifiers: egui::Modifiers::NONE, phase: egui::TouchPhase::Move });
+            h.event(egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: Vec2::new(0.0, -60.0),
+                modifiers: egui::Modifiers::NONE,
+                phase: egui::TouchPhase::Move,
+            });
             h.run();
             h.run();
         }
@@ -3014,9 +3002,38 @@ mod monkey {
         });
         h.step();
         let keys = [
-            Key::B, Key::E, Key::G, Key::H, Key::I, Key::K, Key::L, Key::M, Key::O, Key::P, Key::R, Key::S, Key::U, Key::V, Key::W, Key::X,
-            Key::Num0, Key::Num1, Key::Num3, Key::Num9, Key::Delete, Key::Backspace, Key::Escape, Key::Enter,
-            Key::ArrowLeft, Key::ArrowRight, Key::ArrowUp, Key::ArrowDown, Key::Comma, Key::Period, Key::Space, Key::F11,
+            Key::B,
+            Key::E,
+            Key::G,
+            Key::H,
+            Key::I,
+            Key::K,
+            Key::L,
+            Key::M,
+            Key::O,
+            Key::P,
+            Key::R,
+            Key::S,
+            Key::U,
+            Key::V,
+            Key::W,
+            Key::X,
+            Key::Num0,
+            Key::Num1,
+            Key::Num3,
+            Key::Num9,
+            Key::Delete,
+            Key::Backspace,
+            Key::Escape,
+            Key::Enter,
+            Key::ArrowLeft,
+            Key::ArrowRight,
+            Key::ArrowUp,
+            Key::ArrowDown,
+            Key::Comma,
+            Key::Period,
+            Key::Space,
+            Key::F11,
         ];
         let mut log: Vec<String> = Vec::new();
         for _ in 0..steps {
@@ -3078,4 +3095,3 @@ mod monkey {
         }
     }
 }
-

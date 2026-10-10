@@ -103,7 +103,13 @@ impl SpritebitApp {
         });
         sync(&mut self.tabs, self.project.sprites.len(), self.project.current);
         let cur = self.project.current;
-        if let Some(i) = if fwd { step(&self.tabs, cur, 1) } else if back { step(&self.tabs, cur, -1) } else { None } {
+        if let Some(i) = if fwd {
+            step(&self.tabs, cur, 1)
+        } else if back {
+            step(&self.tabs, cur, -1)
+        } else {
+            None
+        } {
             self.select_sprite(i);
         }
         if shut {
@@ -146,9 +152,19 @@ impl SpritebitApp {
                         ui.horizontal(|ui| {
                             let text = egui::RichText::new(sp.name.as_str());
                             let label = ui
-                                .add(egui::Label::new(if active { text.strong() } else { text }).truncate().selectable(false).sense(egui::Sense::click_and_drag()))
+                                .add(
+                                    egui::Label::new(if active { text.strong() } else { text })
+                                        .truncate()
+                                        .selectable(false)
+                                        .sense(egui::Sense::click_and_drag()),
+                                )
                                 .on_hover_text(format!("{} · {}×{} · {}", sp.name, sp.width, sp.height, sp.palette));
-                            if closable && ui.add(egui::Button::new("×").small().frame(false)).on_hover_text(tr("Reiter schließen (Mittelklick) — der Sprite bleibt im Projekt")).clicked() {
+                            if closable
+                                && ui
+                                    .add(egui::Button::new("×").small().frame(false))
+                                    .on_hover_text(tr("Reiter schließen (Mittelklick) — der Sprite bleibt im Projekt"))
+                                    .clicked()
+                            {
                                 shut = Some(i);
                             }
                             label

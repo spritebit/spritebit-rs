@@ -173,13 +173,21 @@ fn words(name: &str, sep: char) -> String {
 /// Dateiname-tauglicher Slug („Held Grün“ → „held-gruen“).
 pub fn slug(name: &str) -> String {
     let s = words(if name.is_empty() { "sprite" } else { name }, '-');
-    if s.is_empty() { "sprite".into() } else { s }
+    if s.is_empty() {
+        "sprite".into()
+    } else {
+        s
+    }
 }
 
 /// snake_case für „JSON (Spiel)“ („Berg Hintergrund“ → „berg_hintergrund“).
 pub fn game_name(name: &str) -> String {
     let s = words(name, '_');
-    if s.is_empty() { "sprite".into() } else { s }
+    if s.is_empty() {
+        "sprite".into()
+    } else {
+        s
+    }
 }
 
 /// Dateiname zum Format.
@@ -377,7 +385,12 @@ fn js_like(d: &Prepared, with_palette: bool, typed: bool, lang: CodeLang) -> Str
         out += &if n == 1 {
             txt(lang, "// {n} freie Farbe wurde als Index {from}+ gesichert (verlustfrei)", "// {n} free color was saved as index {from}+ (lossless)", &args)
         } else {
-            txt(lang, "// {n} freie Farben wurden als Indizes {from}+ gesichert (verlustfrei)", "// {n} free colors were saved as indices {from}+ (lossless)", &args)
+            txt(
+                lang,
+                "// {n} freie Farben wurden als Indizes {from}+ gesichert (verlustfrei)",
+                "// {n} free colors were saved as indices {from}+ (lossless)",
+                &args,
+            )
         };
         out.push('\n');
     }
@@ -553,7 +566,11 @@ fn css_shadows(d: &Prepared, f: usize, indent: &str) -> String {
             }
         }
     }
-    if s.is_empty() { " none".into() } else { format!("\n{}", s.join(",\n")) }
+    if s.is_empty() {
+        " none".into()
+    } else {
+        format!("\n{}", s.join(",\n"))
+    }
 }
 
 fn css(d: &Prepared, lang: CodeLang) -> String {
@@ -566,7 +583,12 @@ fn css(d: &Prepared, lang: CodeLang) -> String {
         &[("name", d.name.clone()), ("w", d.w.to_string()), ("h", d.h.to_string()), ("cls", cls.clone())],
     );
     out.push('\n');
-    out += &txt(lang, "   Ein einziges 1×1-Element, hochskaliert. --px stellt die Pixelgröße. */", "   A single 1×1 element, scaled up. --px sets the pixel size. */", &[]);
+    out += &txt(
+        lang,
+        "   Ein einziges 1×1-Element, hochskaliert. --px stellt die Pixelgröße. */",
+        "   A single 1×1 element, scaled up. --px sets the pixel size. */",
+        &[],
+    );
     out.push('\n');
     if d.n() > 1 {
         out += &txt(
@@ -614,7 +636,9 @@ fn c_header(d: &Prepared, lang: CodeLang) -> String {
             None => "0x000000".into(),
         })
         .collect();
-    let body = |f: usize, ind: &str| d.rows(f).map(|r| format!("{ind}{},", r.iter().map(|v| format!("{v:>2}")).collect::<Vec<_>>().join(", "))).collect::<Vec<_>>().join("\n");
+    let body = |f: usize, ind: &str| {
+        d.rows(f).map(|r| format!("{ind}{},", r.iter().map(|v| format!("{v:>2}")).collect::<Vec<_>>().join(", "))).collect::<Vec<_>>().join("\n")
+    };
     let cell = if max_used > 255 { "uint16_t" } else { "uint8_t" };
     let px = d.w * d.h;
     let data = if d.n() == 1 {
@@ -699,13 +723,7 @@ fn text(d: &Prepared, lang: CodeLang) -> String {
         (0..d.n()).map(|f| format!("Frame {} · {} ms\n{}", f + 1, d.durations[f], raster(f))).collect::<Vec<_>>().join("\n\n")
     };
     let frames = if d.n() > 1 { format!(" · {} Frames", d.n()) } else { String::new() };
-    format!(
-        "{} — {}×{}{frames}\n\n{body}\n\n{}\n{legend}\n",
-        d.name,
-        d.w,
-        d.h,
-        txt(lang, "Legende ('.' = transparent):", "Key ('.' = transparent):", &[])
-    )
+    format!("{} — {}×{}{frames}\n\n{body}\n\n{}\n{legend}\n", d.name, d.w, d.h, txt(lang, "Legende ('.' = transparent):", "Key ('.' = transparent):", &[]))
 }
 
 /// Text im gewünschten Format. `materials`: Material je Palettennummer

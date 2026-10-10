@@ -23,7 +23,7 @@ use serde_json::{json, Map, Value};
 use crate::image::{Image, Px, FREE_BASE, TILE};
 use crate::palette::{parse_hex, Palette, Rgb};
 use crate::project::Project;
-use crate::sprite::{Direction, Frame, Layer, Sprite, Tag, MAX_SIDE, Guides};
+use crate::sprite::{Direction, Frame, Guides, Layer, Sprite, Tag, MAX_SIDE};
 
 const MAGIC: &[u8; 10] = b"SPRITEBIT\0";
 const NATIVE_VERSION: u32 = 1;
@@ -166,22 +166,24 @@ pub fn parse_guides(v: Option<&Value>, w: u32, h: u32) -> Guides {
         v.and_then(|g| g.get(k)).and_then(Value::as_array).map(|a| a.iter().filter_map(|x| x.as_u64()).map(|x| x as u32).collect()).unwrap_or_default()
     };
     let num = |k: &str| v.and_then(|g| g.get(k)).and_then(Value::as_u64).map(|x| x as u32);
-    Guides { h: nums("h"), v: nums("v"), heads: num("heads").unwrap_or(0), top: num("top").unwrap_or(0), bottom: num("bottom").unwrap_or(h) }
-        .normalized(w, h)
+    Guides { h: nums("h"), v: nums("v"), heads: num("heads").unwrap_or(0), top: num("top").unwrap_or(0), bottom: num("bottom").unwrap_or(h) }.normalized(w, h)
 }
 
 fn materials_json(m: &BTreeMap<String, BTreeMap<u16, String>>) -> Value {
-    Value::Object(m.iter().filter(|(_, v)| !v.is_empty()).map(|(k, v)| (k.clone(), json!(v.iter().map(|(i, m)| (i.to_string(), Value::String(m.clone()))).collect::<serde_json::Map<_, _>>()))).collect())
+    Value::Object(
+        m.iter()
+            .filter(|(_, v)| !v.is_empty())
+            .map(|(k, v)| (k.clone(), json!(v.iter().map(|(i, m)| (i.to_string(), Value::String(m.clone()))).collect::<serde_json::Map<_, _>>())))
+            .collect(),
+    )
 }
 
 fn parse_materials(v: Option<&Value>) -> BTreeMap<String, BTreeMap<u16, String>> {
     let Some(o) = v.and_then(Value::as_object) else { return BTreeMap::new() };
     o.iter()
         .map(|(name, m)| {
-            let inner: BTreeMap<u16, String> = m
-                .as_object()
-                .map(|m| m.iter().filter_map(|(i, v)| Some((i.parse::<u16>().ok()?, v.as_str()?.to_string()))).collect())
-                .unwrap_or_default();
+            let inner: BTreeMap<u16, String> =
+                m.as_object().map(|m| m.iter().filter_map(|(i, v)| Some((i.parse::<u16>().ok()?, v.as_str()?.to_string()))).collect()).unwrap_or_default();
             (name.clone(), inner)
         })
         .filter(|(_, m)| !m.is_empty())
@@ -312,9 +314,8 @@ pub fn load_native(bytes: &[u8]) -> Result<Project, IoError> {
         .map(|list| {
             list.iter()
                 .map(|p| {
-                    let colors = p["colors"].as_array().map_or_else(Vec::new, |c| {
-                        c.iter().map(|h| h.as_str().and_then(parse_hex).unwrap_or([0, 0, 0])).collect()
-                    });
+                    let colors =
+                        p["colors"].as_array().map_or_else(Vec::new, |c| c.iter().map(|h| h.as_str().and_then(parse_hex).unwrap_or([0, 0, 0])).collect());
                     let mut pal = Palette::new(p["name"].as_str().unwrap_or("palette"), colors);
                     pal.names = parse_names(p.get("names"));
                     pal
@@ -326,17 +327,14 @@ pub fn load_native(bytes: &[u8]) -> Result<Project, IoError> {
     let mut sprites = Vec::new();
     for s in head["sprites"].as_array().ok_or_else(|| IoError::Corrupt("keine Sprites".into()))? {
         let (w, h) = (s["width"].as_u64().unwrap_or(0) as u32, s["height"].as_u64().unwrap_or(0) as u32);
-        let mut sp = Sprite::new(s["name"].as_str().unwrap_or("Sprite"), w, h)
-            .map_err(|_| IoError::TooBig { width: w, height: h })?;
+        let mut sp = Sprite::new(s["name"].as_str().unwrap_or("Sprite"), w, h).map_err(|_| IoError::TooBig { width: w, height: h })?;
         sp.palette = s["palette"].as_str().unwrap_or("graustufen").to_string();
         sp.fps = s["fps"].as_u64().map_or(8, |v| v.clamp(1, 60) as u32);
         let layers = s["layers"].as_array().ok_or_else(|| IoError::Corrupt("keine Ebenen".into()))?;
         sp.layers = layers.iter().enumerate().map(|(i, l)| parse_layer(Some(l), i + 1)).collect();
         read_masks(&mut sp, Some(layers));
         read_tilesets(&mut sp, Some(layers), false);
-        sp.free = s["free"].as_array().map_or_else(Vec::new, |f| {
-            f.iter().map(|h| h.as_str().and_then(parse_hex).unwrap_or([0, 0, 0])).collect()
-        });
+        sp.free = s["free"].as_array().map_or_else(Vec::new, |f| f.iter().map(|h| h.as_str().and_then(parse_hex).unwrap_or([0, 0, 0])).collect());
         let n_images = s["images"].as_u64().unwrap_or(0) as usize;
         sp.frames = s["frames"]
             .as_array()
@@ -388,9 +386,7 @@ pub fn load_native(bytes: &[u8]) -> Result<Project, IoError> {
 pub fn import_web(text: &str) -> Result<Project, IoError> {
     let v: Value = serde_json::from_str(text).map_err(|e| IoError::NotAProject(e.to_string()))?;
     if v.get("grids").is_some() || v.get("version").is_none() {
-        return Err(IoError::Unsupported(
-            "alte Fassung der Web-Version — bitte dort einmal öffnen und neu sichern".into(),
-        ));
+        return Err(IoError::Unsupported("alte Fassung der Web-Version — bitte dort einmal öffnen und neu sichern".into()));
     }
     let list = v.get("sprites").and_then(Value::as_object).ok_or_else(|| IoError::NotAProject("keine Sprites".into()))?;
 
@@ -399,9 +395,7 @@ pub fn import_web(text: &str) -> Result<Project, IoError> {
         for (name, pal) in custom {
             let Some(obj) = pal.as_object() else { continue };
             let max = obj.keys().filter_map(|k| k.parse::<usize>().ok()).max().unwrap_or(0);
-            let colors = (1..=max)
-                .map(|i| obj.get(&i.to_string()).and_then(Value::as_str).and_then(parse_hex).unwrap_or([0, 0, 0]))
-                .collect();
+            let colors = (1..=max).map(|i| obj.get(&i.to_string()).and_then(Value::as_str).and_then(parse_hex).unwrap_or([0, 0, 0])).collect();
             let mut pal = Palette::new(name.clone(), colors);
             pal.names = parse_names(v.get("paletteColorNames").and_then(|n| n.get(name)));
             palettes.push(pal);
@@ -528,11 +522,7 @@ pub fn export_web(p: &Project) -> String {
                             return json!({ "link": k });
                         }
                         let img = &sp.images[img_id];
-                        Value::Array(
-                            (0..sp.height)
-                                .map(|y| Value::Array((0..sp.width).map(|x| px_json(img.get(x, y))).collect()))
-                                .collect(),
-                        )
+                        Value::Array((0..sp.height).map(|y| Value::Array((0..sp.width).map(|x| px_json(img.get(x, y))).collect())).collect())
                     })
                     .collect();
                 if f.duration_ms > 0 {

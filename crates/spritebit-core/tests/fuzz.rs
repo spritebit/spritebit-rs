@@ -146,4 +146,3 @@ fn lader_ueberleben_kaputte_eingaben() {
     }
     assert_eq!(bad, 0);
 }
-

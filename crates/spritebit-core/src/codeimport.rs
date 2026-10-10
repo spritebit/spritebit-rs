@@ -155,10 +155,7 @@ fn extract_frames(text: &str) -> Option<Vec<Grid>> {
 fn pad_frames(grids: Vec<Grid>) -> Vec<Grid> {
     let h = grids.iter().map(Vec::len).max().unwrap_or(0);
     let w = grids.iter().map(|g| g.first().map_or(0, Vec::len)).max().unwrap_or(0);
-    grids
-        .into_iter()
-        .map(|g| (0..h).map(|y| (0..w).map(|x| g.get(y).and_then(|r| r.get(x)).copied().unwrap_or(Cell::Index(0))).collect()).collect())
-        .collect()
+    grids.into_iter().map(|g| (0..h).map(|y| (0..w).map(|x| g.get(y).and_then(|r| r.get(x)).copied().unwrap_or(Cell::Index(0))).collect()).collect()).collect()
 }
 
 fn normalize_grid(v: &Value) -> Option<Grid> {
@@ -257,7 +254,11 @@ fn frames_from_colors(color_frames: &[Vec<Vec<Option<Rgb>>>], w: usize, h: usize
                             None => Cell::Index(0),
                             Some(c) => {
                                 let i = index[&c];
-                                if i as usize <= MAX_COLORS { Cell::Index(i) } else { Cell::Color(c) }
+                                if i as usize <= MAX_COLORS {
+                                    Cell::Index(i)
+                                } else {
+                                    Cell::Color(c)
+                                }
                             }
                         })
                         .collect()
@@ -293,9 +294,7 @@ fn parse_svg(text: &str) -> Res<Parsed> {
     } else {
         vec![(rects, 0)]
     };
-    let attr = |tag: &str, name: &str| -> Option<String> {
-        re(&format!(r#"(?i){name}\s*=\s*["']([^"']*)"#)).captures(tag).map(|c| c[1].trim().to_string())
-    };
+    let attr = |tag: &str, name: &str| -> Option<String> { re(&format!(r#"(?i){name}\s*=\s*["']([^"']*)"#)).captures(tag).map(|c| c[1].trim().to_string()) };
     let num = |v: Option<String>, d: f64| v.and_then(|s| s.parse::<f64>().ok()).unwrap_or(d);
     let (mut max_x, mut max_y, mut any) = (0i64, 0i64, false);
     let items: Vec<Vec<SvgRect>> = parts
@@ -358,9 +357,7 @@ fn parse_css(text: &str) -> Res<Parsed> {
             if let Some(am) = re(r"(?i)animation\s*:[^;]*?\b([\d.]+)(ms|s)\b").captures(text) {
                 let total = am[1].parse::<f64>().unwrap_or(0.0) * if am[2].eq_ignore_ascii_case("s") { 1000.0 } else { 1.0 };
                 let p: Vec<f64> = steps.iter().map(|s| s.0).collect();
-                durations = Some(
-                    (0..p.len()).map(|i| ((((if i + 1 < p.len() { p[i + 1] } else { 100.0 }) - p[i]) / 100.0 * total).round()) as u32).collect(),
-                );
+                durations = Some((0..p.len()).map(|i| ((((if i + 1 < p.len() { p[i + 1] } else { 100.0 }) - p[i]) / 100.0 * total).round()) as u32).collect());
             }
         }
     }
@@ -557,7 +554,8 @@ fn parse_text(text: &str) -> Res<Parsed> {
 fn read_game(text: &str) -> Option<Value> {
     let v: Value = serde_json::from_str(text).ok()?;
     let o = v.as_object()?;
-    (o.get("data").is_some_and(Value::is_array) && o.get("palette").is_some_and(Value::is_array) && o.contains_key("width") && o.contains_key("height")).then_some(v)
+    (o.get("data").is_some_and(Value::is_array) && o.get("palette").is_some_and(Value::is_array) && o.contains_key("width") && o.contains_key("height"))
+        .then_some(v)
 }
 
 fn game_err(text: &'static str, args: &[(&'static str, String)]) -> ImportError {
@@ -664,12 +662,7 @@ fn parse_game(text: &str) -> Res<Parsed> {
             durations = Some(d.iter().take(n).map(|v| v.as_u64().unwrap_or(0) as u32).collect());
         }
     }
-    Ok(Parsed {
-        frames,
-        durations,
-        palette: (!palette.is_empty()).then_some(palette),
-        materials: (!materials.is_empty()).then_some(materials),
-    })
+    Ok(Parsed { frames, durations, palette: (!palette.is_empty()).then_some(palette), materials: (!materials.is_empty()).then_some(materials) })
 }
 
 // ── Erkennen und einlesen ───────────────────────────────────────────

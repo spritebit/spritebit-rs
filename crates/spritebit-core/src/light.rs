@@ -169,14 +169,7 @@ fn free_px(free: &mut Vec<Rgb>, c: Rgb) -> Px {
 /// Kanten zur Lampe hin aufhellen, abgewandte abdunkeln. `free` sind die
 /// freien Farben des Sprites — neue werden angehängt. `inside` begrenzt auf
 /// eine Auswahl. Gibt (heller, dunkler) zurück.
-pub fn light(
-    img: &mut Image,
-    pal: &Palette,
-    free: &mut Vec<Rgb>,
-    dir: LightDir,
-    opts: LightOpts,
-    inside: impl Fn(i64, i64) -> bool,
-) -> (usize, usize) {
+pub fn light(img: &mut Image, pal: &Palette, free: &mut Vec<Rgb>, dir: LightDir, opts: LightOpts, inside: impl Fn(i64, i64) -> bool) -> (usize, usize) {
     let (dx, dy) = (dir.0.signum() as i64, dir.1.signum() as i64);
     if dx == 0 && dy == 0 {
         return (0, 0);
@@ -543,10 +536,7 @@ mod tests {
 
     // Grün in drei Stufen (1–3), Grau, Weiß, Schwarz.
     fn pal() -> Palette {
-        Palette::new(
-            "t",
-            vec![[0x2e, 0x7d, 0x32], [0x4c, 0xaf, 0x50], [0xa5, 0xd6, 0xa7], [0x80, 0x80, 0x80], [0xff, 0xff, 0xff], [0, 0, 0]],
-        )
+        Palette::new("t", vec![[0x2e, 0x7d, 0x32], [0x4c, 0xaf, 0x50], [0xa5, 0xd6, 0xa7], [0x80, 0x80, 0x80], [0xff, 0xff, 0xff], [0, 0, 0]])
     }
 
     /// `w`×`h`-Block aus `v` mit 1 Pixel Rand.

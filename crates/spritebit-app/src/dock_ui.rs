@@ -295,8 +295,22 @@ impl DockLayout {
         let left = d.left.clone();
         d.right.retain(|p| !left.contains(p));
         let mut seen = Vec::new();
-        d.left.retain(|p| if seen.contains(p) { false } else { seen.push(*p); true });
-        d.right.retain(|p| if seen.contains(p) { false } else { seen.push(*p); true });
+        d.left.retain(|p| {
+            if seen.contains(p) {
+                false
+            } else {
+                seen.push(*p);
+                true
+            }
+        });
+        d.right.retain(|p| {
+            if seen.contains(p) {
+                false
+            } else {
+                seen.push(*p);
+                true
+            }
+        });
         let base = DockLayout::default();
         for p in PanelId::ALL {
             if !seen.contains(&p) {
@@ -446,7 +460,16 @@ impl SpritebitApp {
         for id in self.dock.pinned(side) {
             let focus = self.dock.focus == Some(id) || (id == PanelId::Output && focus_output);
             let force = focus.then_some(true);
-            let (row, grip) = self.panel_with(ui, id.title(), id.icon(), id.key(), id.default_open(), force, move |s, ui| s.panel_header(id, ui), move |s, ui| s.panel_body(id, ui));
+            let (row, grip) = self.panel_with(
+                ui,
+                id.title(),
+                id.icon(),
+                id.key(),
+                id.default_open(),
+                force,
+                move |s, ui| s.panel_header(id, ui),
+                move |s, ui| s.panel_body(id, ui),
+            );
             if focus {
                 row.scroll_to_me(Some(egui::Align::TOP));
                 self.dock.focus = None;
@@ -475,8 +498,17 @@ impl SpritebitApp {
                     let pinned = self.dock.is_pinned(id);
                     let open = self.dock.flyout.is_some_and(|(f, _)| f == id);
                     let c = if open { ui.visuals().strong_text_color() } else { ui.visuals().text_color() };
-                    let tip = if pinned { trf("{name} — angepinnt, Klick springt hin", &[("name", &id.title())]) } else { trf("{name} — Klick klappt auf", &[("name", &id.title())]) };
-                    let r = ui.add(egui::Button::selectable(open, icons::image(id.icon(), c).fit_to_exact_size(egui::vec2(RAIL_ICON, RAIL_ICON)).alt_text(&tip)).sense(egui::Sense::click_and_drag())).on_hover_text(&tip);
+                    let tip = if pinned {
+                        trf("{name} — angepinnt, Klick springt hin", &[("name", &id.title())])
+                    } else {
+                        trf("{name} — Klick klappt auf", &[("name", &id.title())])
+                    };
+                    let r = ui
+                        .add(
+                            egui::Button::selectable(open, icons::image(id.icon(), c).fit_to_exact_size(egui::vec2(RAIL_ICON, RAIL_ICON)).alt_text(&tip))
+                                .sense(egui::Sense::click_and_drag()),
+                        )
+                        .on_hover_text(&tip);
                     if pinned {
                         ui.painter().circle_filled(r.rect.right_bottom() - egui::vec2(4.0, 4.0), 3.0, ACCENT);
                     }

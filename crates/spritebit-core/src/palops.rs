@@ -142,11 +142,7 @@ pub fn remove_color(pal: &mut Palette, idx: usize, sprites: &mut [&mut Sprite]) 
         });
     }
     pal.colors.remove(idx - 1);
-    pal.names = std::mem::take(&mut pal.names)
-        .into_iter()
-        .filter(|&(i, _)| i != idx_px)
-        .map(|(i, n)| (if i > idx_px { i - 1 } else { i }, n))
-        .collect();
+    pal.names = std::mem::take(&mut pal.names).into_iter().filter(|&(i, _)| i != idx_px).map(|(i, n)| (if i > idx_px { i - 1 } else { i }, n)).collect();
     Some(freed)
 }
 

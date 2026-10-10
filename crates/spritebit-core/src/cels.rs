@@ -119,9 +119,7 @@ pub fn clear(sp: &mut Sprite, r: CelRange) {
 pub fn copy(sp: &Sprite, r: CelRange) -> CelClip {
     let mut images = Vec::new();
     let mut cp = copier(sp);
-    let ids = (r.l0..=r.l1)
-        .map(|l| (r.f0..=r.f1).map(|f| cp(sp.frames[f].cels[l], &mut images)).collect())
-        .collect();
+    let ids = (r.l0..=r.l1).map(|l| (r.f0..=r.f1).map(|f| cp(sp.frames[f].cels[l], &mut images)).collect()).collect();
     CelClip { w: r.f1 - r.f0 + 1, h: r.l1 - r.l0 + 1, images, ids }
 }
 

@@ -640,10 +640,7 @@ mod tests {
     #[test]
     fn groessen_grenzen() {
         assert!(Sprite::new("a", 8192, 8192).is_ok());
-        assert_eq!(
-            Sprite::new("a", 8193, 10).unwrap_err(),
-            SpriteError::BadSize { width: 8193, height: 10 }
-        );
+        assert_eq!(Sprite::new("a", 8193, 10).unwrap_err(), SpriteError::BadSize { width: 8193, height: 10 });
         assert!(Sprite::new("a", 0, 10).is_err());
     }
 

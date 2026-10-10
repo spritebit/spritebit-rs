@@ -214,7 +214,11 @@ pub fn rotate_sprite90(sp: &mut Sprite) {
 
 #[derive(Debug, PartialEq)]
 pub enum TransformResult {
-    Done { w: u32, h: u32, lost: usize },
+    Done {
+        w: u32,
+        h: u32,
+        lost: usize,
+    },
     /// Nichts zu tun (leer, schon so, gleiche Größe).
     Nothing,
     TooBig,

@@ -51,17 +51,28 @@ fn dir() -> Option<PathBuf> {
 
 impl SpritebitApp {
     pub(crate) fn checker_colors(&self) -> [[u8; 3]; 2] {
-        if self.view.light { CHECKER_LIGHT } else { CHECKER_DARK }
+        if self.view.light {
+            CHECKER_LIGHT
+        } else {
+            CHECKER_DARK
+        }
     }
 
     pub(crate) fn grid_color(&self) -> Color32 {
-        if self.view.light { Color32::from_black_alpha(30) } else { Color32::from_white_alpha(18) }
+        if self.view.light {
+            Color32::from_black_alpha(30)
+        } else {
+            Color32::from_white_alpha(18)
+        }
     }
 
     // ── Einstellungen ───────────────────────────────────────────────
     pub(crate) fn load_view(&mut self) {
         self.view.persist = true;
-        let Some(v) = dir().and_then(|d| std::fs::read_to_string(d.join("view.json")).ok()).and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok()) else { return };
+        let Some(v) = dir().and_then(|d| std::fs::read_to_string(d.join("view.json")).ok()).and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        else {
+            return;
+        };
         self.view.light = v["bg"].as_str() == Some("light");
         self.pixel_perfect = v["pixelPerfect"].as_bool().unwrap_or(false);
         self.fill_visible = v["fillVisible"].as_bool().unwrap_or(false);
@@ -95,7 +106,11 @@ impl SpritebitApp {
             self.toggle_fullscreen(ctx);
         }
         let nothing_else = self.selection.is_none() && self.image.live.is_none();
-        if self.view.fullscreen && nothing_else && !ctx.egui_wants_keyboard_input() && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+        if self.view.fullscreen
+            && nothing_else
+            && !ctx.egui_wants_keyboard_input()
+            && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape))
+        {
             self.toggle_fullscreen(ctx);
         }
     }
@@ -159,11 +174,7 @@ impl SpritebitApp {
     /// Zoom-Regler für die Statusleiste: ändert den Zoom um die Mitte der Fläche.
     pub(crate) fn zoom_slider(&mut self, ui: &mut egui::Ui) {
         let mut z = self.zoom;
-        let r = ui.add(
-            egui::Slider::new(&mut z, crate::ZOOM_MIN..=crate::ZOOM_MAX)
-                .logarithmic(true)
-                .show_value(false),
-        );
+        let r = ui.add(egui::Slider::new(&mut z, crate::ZOOM_MIN..=crate::ZOOM_MAX).logarithmic(true).show_value(false));
         if r.changed() {
             let area = self.canvas_rect;
             self.zoom_at(z / self.zoom, area.center(), area);

@@ -264,7 +264,10 @@ pub fn read(bytes: &[u8], name: &str) -> Result<AseImport, AseError> {
                     let mut i = 0usize;
                     for _ in 0..packets {
                         i += c.u8()? as usize;
-                        let n = match c.u8()? { 0 => 256, k => k as usize };
+                        let n = match c.u8()? {
+                            0 => 256,
+                            k => k as usize,
+                        };
                         for _ in 0..n {
                             let rgb = c.take(3)?;
                             let s = |v: u8| if kind == CH_OLD_PAL64 { ((v as u32 * 255) / 63) as u8 } else { v };
@@ -333,7 +336,12 @@ pub fn read(bytes: &[u8], name: &str) -> Result<AseImport, AseError> {
         .iter()
         .map(|&a| {
             let l = &layers[a];
-            Layer { visible: l.visible, locked: !l.editable, opacity: l.opacity as f32 / 255.0, ..Layer::new(if l.name.is_empty() { "Ebene" } else { &l.name }) }
+            Layer {
+                visible: l.visible,
+                locked: !l.editable,
+                opacity: l.opacity as f32 / 255.0,
+                ..Layer::new(if l.name.is_empty() { "Ebene" } else { &l.name })
+            }
         })
         .collect();
     sp.images.clear();

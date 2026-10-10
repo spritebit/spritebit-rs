@@ -141,7 +141,8 @@ pub(crate) fn hex(c: Rgb) -> String {
 fn hex_field(ui: &mut egui::Ui, id: &str, rgb: Option<Rgb>) -> Option<Rgb> {
     let id = ui.id().with(id);
     let mut text = ui.data_mut(|d| d.get_temp::<String>(id)).unwrap_or_else(|| rgb.map(hex).unwrap_or_default());
-    let mut edit = egui::TextEdit::singleline(&mut text).id(id).desired_width(64.0).char_limit(7).font(egui::TextStyle::Monospace).hint_text("#rrggbb").show(ui);
+    let mut edit =
+        egui::TextEdit::singleline(&mut text).id(id).desired_width(64.0).char_limit(7).font(egui::TextStyle::Monospace).hint_text("#rrggbb").show(ui);
     // Beim Hineinklicken alles markieren — gleich drüberschreiben
     if edit.response.gained_focus() {
         edit.state.cursor.set_char_range(Some(egui::text::CCursorRange::select_all(&edit.galley)));
@@ -187,11 +188,7 @@ impl SpritebitApp {
     pub(crate) fn clamp_color(&mut self) {
         let sp = self.project.sprite();
         let pal = self.project.current_palette();
-        let ok = if self.color >= FREE_BASE {
-            ((self.color - FREE_BASE) as usize) < sp.free.len()
-        } else {
-            (self.color as usize) <= pal.len()
-        };
+        let ok = if self.color >= FREE_BASE { ((self.color - FREE_BASE) as usize) < sp.free.len() } else { (self.color as usize) <= pal.len() };
         if !ok {
             self.color = 1;
         }
@@ -203,12 +200,8 @@ impl SpritebitApp {
         if x < 0 || y < 0 || x >= sp.width as i64 || y >= sp.height as i64 {
             return;
         }
-        let v = (0..sp.layers.len())
-            .rev()
-            .filter(|&l| sp.layers[l].visible)
-            .map(|l| sp.cel(sp.frame, l).get(x as u32, y as u32))
-            .find(|&v| v != 0)
-            .unwrap_or(0);
+        let v =
+            (0..sp.layers.len()).rev().filter(|&l| sp.layers[l].visible).map(|l| sp.cel(sp.frame, l).get(x as u32, y as u32)).find(|&v| v != 0).unwrap_or(0);
         self.color = v;
     }
 
@@ -476,7 +469,8 @@ impl SpritebitApp {
                     if over {
                         // Einfügemarke links vom Feld unter dem Zeiger
                         let r = resp.rect;
-                        ui.painter().line_segment([r.left_top() - Vec2::new(3.0, 0.0), r.left_bottom() - Vec2::new(3.0, 0.0)], Stroke::new(2.0, Color32::WHITE));
+                        ui.painter()
+                            .line_segment([r.left_top() - Vec2::new(3.0, 0.0), r.left_bottom() - Vec2::new(3.0, 0.0)], Stroke::new(2.0, Color32::WHITE));
                         drop_on = Some(i);
                     }
                 }
@@ -627,27 +621,23 @@ impl SpritebitApp {
         let builtin = !self.project.is_custom(&self.project.sprite().palette);
         let mut picked: Option<Rgb> = None;
         let mut typed: Option<Rgb> = None;
-        let shown = egui::Popup::from_response(&anchor)
-            .id(id)
-            .open_memory(None)
-            .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
-            .show(|ui| {
-                ui.label(trf("Farbe {n}", &[("n", &n)]));
-                if builtin {
-                    ui.weak(tr("Eingebaute Palette — Änderungen gehen in eine Kopie."));
+        let shown = egui::Popup::from_response(&anchor).id(id).open_memory(None).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
+            ui.label(trf("Farbe {n}", &[("n", &n)]));
+            if builtin {
+                ui.weak(tr("Eingebaute Palette — Änderungen gehen in eine Kopie."));
+            }
+            let mut c = Color32::from_rgb(cur[0], cur[1], cur[2]);
+            ui.spacing_mut().slider_width = 220.0;
+            if egui::color_picker::color_picker_color32(ui, &mut c, egui::color_picker::Alpha::Opaque) {
+                picked = Some([c.r(), c.g(), c.b()]);
+            }
+            ui.horizontal(|ui| {
+                typed = hex_field(ui, "swatch-hex", Some(cur));
+                if ui.button(tr("Fertig")).clicked() {
+                    ui.close();
                 }
-                let mut c = Color32::from_rgb(cur[0], cur[1], cur[2]);
-                ui.spacing_mut().slider_width = 220.0;
-                if egui::color_picker::color_picker_color32(ui, &mut c, egui::color_picker::Alpha::Opaque) {
-                    picked = Some([c.r(), c.g(), c.b()]);
-                }
-                ui.horizontal(|ui| {
-                    typed = hex_field(ui, "swatch-hex", Some(cur));
-                    if ui.button(tr("Fertig")).clicked() {
-                        ui.close();
-                    }
-                });
             });
+        });
         if let Some(rgb) = typed {
             self.set_palette_color(n, rgb);
         } else if let Some(rgb) = picked.filter(|&c| c != cur) {
@@ -728,7 +718,8 @@ impl SpritebitApp {
         });
         ui.horizontal_wrapped(|ui| {
             let other = shown != current;
-            if ui.add_enabled(other, egui::Button::new(tr("Für Sprite nutzen"))).on_hover_text(tr("Zuweisen — die Zeichnung bleibt, wie sie ist")).clicked() {
+            if ui.add_enabled(other, egui::Button::new(tr("Für Sprite nutzen"))).on_hover_text(tr("Zuweisen — die Zeichnung bleibt, wie sie ist")).clicked()
+            {
                 self.assign_palette(&shown, true);
             }
             if ui
@@ -763,10 +754,7 @@ impl SpritebitApp {
                 self.pal.modal = Some(PalModal::new(Some(name.clone()), name.clone(), &pal));
                 self.changed();
             }
-            if ui
-                .button(tr("Bild » Palette …"))
-                .on_hover_text(tr("Aus den Farben des Bildes eine Palette machen — wie viele Farben, wählst du aus"))
-                .clicked()
+            if ui.button(tr("Bild » Palette …")).on_hover_text(tr("Aus den Farben des Bildes eine Palette machen — wie viele Farben, wählst du aus")).clicked()
             {
                 self.open_reduce();
             }
@@ -819,8 +807,7 @@ impl SpritebitApp {
     fn palette_modal(&mut self, ctx: &egui::Context) {
         let Some(m) = &mut self.pal.modal else { return };
         let (mut ok, mut cancel) = (false, false);
-        let sources: Vec<String> =
-            builtin::BUILTIN.iter().map(|(n, _)| n.to_string()).chain(self.project.palettes.iter().map(|p| p.name.clone())).collect();
+        let sources: Vec<String> = builtin::BUILTIN.iter().map(|(n, _)| n.to_string()).chain(self.project.palettes.iter().map(|p| p.name.clone())).collect();
         let mut load: Option<String> = None;
         egui::Modal::new(egui::Id::new("pal-modal")).show(ctx, |ui| {
             ui.heading(match &m.edit {
@@ -850,13 +837,8 @@ impl SpritebitApp {
                     ui.horizontal(|ui| {
                         ui.monospace(format!("{:>3}", i + 1));
                         egui::color_picker::color_edit_button_srgb(ui, c);
-                        ui.add(
-                            egui::TextEdit::singleline(name)
-                                .hint_text(trf("Farbe {n}", &[("n", &(i + 1))]))
-                                .char_limit(40)
-                                .desired_width(140.0),
-                        )
-                        .on_hover_text(tr("Name der Farbe — leer lassen für „Farbe 3“"));
+                        ui.add(egui::TextEdit::singleline(name).hint_text(trf("Farbe {n}", &[("n", &(i + 1))])).char_limit(40).desired_width(140.0))
+                            .on_hover_text(tr("Name der Farbe — leer lassen für „Farbe 3“"));
                         ui.monospace(hex(*c));
                     });
                 }
@@ -892,13 +874,8 @@ impl SpritebitApp {
         let name = clean_name(&m.name);
         let editing = m.edit.clone();
         let colors = m.colors.clone();
-        let names: std::collections::BTreeMap<Px, String> = m
-            .names
-            .iter()
-            .enumerate()
-            .filter(|(_, n)| !n.trim().is_empty())
-            .map(|(i, n)| (i as Px + 1, n.trim().to_string()))
-            .collect();
+        let names: std::collections::BTreeMap<Px, String> =
+            m.names.iter().enumerate().filter(|(_, n)| !n.trim().is_empty()).map(|(i, n)| (i as Px + 1, n.trim().to_string())).collect();
         if name.is_empty() {
             self.hint = Some(tr("Bitte einen Namen eingeben.").into());
             return;

@@ -74,7 +74,11 @@ pub(crate) fn note_points(md: &str, lang: Lang) -> Vec<String> {
         Lang::At => "Österreichisch",
     };
     let points = section(name);
-    if points.is_empty() { section("Deutsch") } else { points }
+    if points.is_empty() {
+        section("Deutsch")
+    } else {
+        points
+    }
 }
 
 /// Notizen der Version `version` von ihrer Release (blockierend — eigener Thread).
@@ -129,7 +133,6 @@ pub(crate) fn show_own_notes(seen: Option<&str>, current: &str, notes: &str) -> 
     seen.is_none_or(|s| is_newer(current, s)) && !note_points(notes, Lang::De).is_empty()
 }
 
-
 /// Die Abfrage selbst (blockierend — läuft im eigenen Thread).
 ///
 /// Zuerst die normale Release-Seite: sie leitet auf `…/tag/vX.Y.Z` weiter,
@@ -137,11 +140,7 @@ pub(crate) fn show_own_notes(seen: Option<&str>, current: &str, notes: &str) -> 
 /// Anmeldung 60 Abfragen je Stunde und Internetanschluss — ist es
 /// aufgebraucht, käme sonst nie ein Hinweis). Die API nur als Rückfall.
 fn fetch_latest() -> Option<String> {
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(8)))
-        .max_redirects(0)
-        .build()
-        .into();
+    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(8))).max_redirects(0).build().into();
     let ua = format!("spritebit/{VERSION}");
     let from_page = agent
         .get(LATEST_PAGE)
@@ -152,12 +151,7 @@ fn fetch_latest() -> Option<String> {
     if from_page.is_some() {
         return from_page;
     }
-    let mut resp = agent
-        .get(LATEST_API)
-        .header("User-Agent", &ua)
-        .header("Accept", "application/vnd.github+json")
-        .call()
-        .ok()?;
+    let mut resp = agent.get(LATEST_API).header("User-Agent", &ua).header("Accept", "application/vnd.github+json").call().ok()?;
     let body = resp.body_mut().read_to_string().ok()?;
     version_from_release(&body)
 }
@@ -337,9 +331,7 @@ impl SpritebitApp {
     /// Hauptknopf im Band: hell gefüllt, damit man ihn sofort sieht.
     fn banner_button(ui: &mut egui::Ui, text: &str, tip: &str) -> bool {
         let label = egui::RichText::new(text).strong().size(15.0).color(Color32::from_rgb(16, 32, 64));
-        ui.add(egui::Button::new(label).fill(Color32::from_rgb(170, 205, 255)).corner_radius(6.0).min_size(egui::vec2(0.0, 28.0)))
-            .on_hover_text(tip)
-            .clicked()
+        ui.add(egui::Button::new(label).fill(Color32::from_rgb(170, 205, 255)).corner_radius(6.0).min_size(egui::vec2(0.0, 28.0))).on_hover_text(tip).clicked()
     }
 
     /// Nebenknopf im Band (Später, Schließen): dezent.
@@ -372,8 +364,9 @@ impl SpritebitApp {
                 ui.horizontal(|ui| {
                     Self::banner_title(ui, "✔", &trf("spritebit {new} ist installiert.", &[("new", &version)]));
                     ui.add_space(8.0);
-                    restart = Self::banner_button(ui, tr("Jetzt neu starten"), tr("Die App startet neu und macht genau hier weiter — auch Ungespeichertes bleibt."));
-                    later = Self::banner_link(ui, tr("Später")) ;
+                    restart =
+                        Self::banner_button(ui, tr("Jetzt neu starten"), tr("Die App startet neu und macht genau hier weiter — auch Ungespeichertes bleibt."));
+                    later = Self::banner_link(ui, tr("Später"));
                 });
                 if restart {
                     self.restart_after_update(&version, &exe);
@@ -408,13 +401,15 @@ impl SpritebitApp {
             ui.label(egui::RichText::new(trf("(du hast {old})", &[("old", &VERSION)])).color(soft));
             ui.add_space(8.0);
             if can_self_update() {
-                install = Self::banner_button(ui, tr("Jetzt aktualisieren"), tr("Lädt die neue Version, prüft sie und tauscht die App aus — ohne ZIP und ohne Entpacken."));
+                install = Self::banner_button(
+                    ui,
+                    tr("Jetzt aktualisieren"),
+                    tr("Lädt die neue Version, prüft sie und tauscht die App aus — ohne ZIP und ohne Entpacken."),
+                );
             } else {
                 ui.hyperlink_to(egui::RichText::new(tr("Herunterladen")).strong().color(Color32::WHITE), LATEST_PAGE);
             }
-            notes = ui
-                .add(egui::Button::new(egui::RichText::new(tr("Was ist neu?")).color(Color32::WHITE).underline()).frame(false))
-                .clicked();
+            notes = ui.add(egui::Button::new(egui::RichText::new(tr("Was ist neu?")).color(Color32::WHITE).underline()).frame(false)).clicked();
             ui.add_space(8.0);
             later = Self::banner_link(ui, tr("Später"));
         });
@@ -454,39 +449,33 @@ impl SpritebitApp {
         };
         let can_install = view == NotesView::Next && matches!(self.update.install, Install::Idle) && can_self_update();
         let (mut open, mut close, mut install) = (true, false, false);
-        egui::Window::new(title)
-            .id(egui::Id::new("whats-new"))
-            .collapsible(false)
-            .resizable(false)
-            .default_width(420.0)
-            .open(&mut open)
-            .show(ctx, |ui| {
-                ui.set_max_width(420.0);
-                if loading {
-                    ui.horizontal(|ui| {
-                        ui.spinner();
-                        ui.label(tr("Notizen werden geladen …"));
-                    });
-                } else if points.is_empty() {
-                    ui.label(tr("Zu dieser Version gibt es keine Notizen."));
-                }
-                for p in &points {
-                    ui.horizontal_top(|ui| {
-                        ui.label("•");
-                        ui.add(egui::Label::new(p).wrap());
-                    });
-                    ui.add_space(2.0);
-                }
-                ui.add_space(8.0);
+        egui::Window::new(title).id(egui::Id::new("whats-new")).collapsible(false).resizable(false).default_width(420.0).open(&mut open).show(ctx, |ui| {
+            ui.set_max_width(420.0);
+            if loading {
                 ui.horizontal(|ui| {
-                    if can_install {
-                        install = ui.button(egui::RichText::new(tr("Jetzt aktualisieren")).strong()).clicked();
-                    }
-                    close = ui.button(tr("OK")).clicked();
-                    ui.add_space(8.0);
-                    ui.hyperlink_to(tr("Alle Versionen auf GitHub"), RELEASES_PAGE);
+                    ui.spinner();
+                    ui.label(tr("Notizen werden geladen …"));
                 });
+            } else if points.is_empty() {
+                ui.label(tr("Zu dieser Version gibt es keine Notizen."));
+            }
+            for p in &points {
+                ui.horizontal_top(|ui| {
+                    ui.label("•");
+                    ui.add(egui::Label::new(p).wrap());
+                });
+                ui.add_space(2.0);
+            }
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if can_install {
+                    install = ui.button(egui::RichText::new(tr("Jetzt aktualisieren")).strong()).clicked();
+                }
+                close = ui.button(tr("OK")).clicked();
+                ui.add_space(8.0);
+                ui.hyperlink_to(tr("Alle Versionen auf GitHub"), RELEASES_PAGE);
             });
+        });
         if !open || close || install {
             self.update.notes_view = None;
         }
@@ -621,5 +610,4 @@ mod tests {
         assert!(app.error.is_some(), "ohne Netz eine Meldung");
         assert!(!app.update.manual);
     }
-
 }

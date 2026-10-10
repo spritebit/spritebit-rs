@@ -76,11 +76,7 @@ pub fn render_rgba_step(sp: &Sprite, pal: &Palette, frame: usize, rect: Rect, st
                 let Some(top) = color_of(px, pal, &sp.free) else { continue };
                 let i = (y * ow + x) as usize;
                 let o = i * 4;
-                let rgb = if layer.opacity >= 1.0 || !filled[i] {
-                    top
-                } else {
-                    mix([out[o], out[o + 1], out[o + 2]], top, layer.opacity)
-                };
+                let rgb = if layer.opacity >= 1.0 || !filled[i] { top } else { mix([out[o], out[o + 1], out[o + 2]], top, layer.opacity) };
                 out[o..o + 3].copy_from_slice(&rgb);
                 out[o + 3] = 255;
                 filled[i] = true;

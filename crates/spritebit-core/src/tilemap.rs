@@ -265,8 +265,7 @@ impl Tileset {
         }
 
         // Mitziehen: jede Stelle, die vorher Kachel k zeigte, zeigt die neue Fassung.
-        let changed: Vec<(usize, Vec<Px>)> =
-            order.iter().filter(|k| !edits[k].bad).map(|&k| (k, edits[&k].tile.clone())).collect();
+        let changed: Vec<(usize, Vec<Px>)> = order.iter().filter(|k| !edits[k].bad).map(|&k| (k, edits[&k].tile.clone())).collect();
         if !changed.is_empty() {
             let old: HashMap<Vec<Px>, &Vec<Px>> = changed.iter().map(|(k, t)| (self.tiles[k - 1].clone(), t)).collect();
             let pull = |ts: &Tileset, src: &Image, dst: &mut Image| {
@@ -313,11 +312,8 @@ impl Tileset {
     /// Für den Speicherstand — Pixel als Zahl (Palette) bzw. Hex (freie Farbe),
     /// wie die Web-Version.
     pub fn to_json(&self, px: impl Fn(Px) -> Value) -> Value {
-        let tiles: Vec<Value> = self
-            .tiles
-            .iter()
-            .map(|t| Value::Array(t.chunks(self.tw as usize).map(|r| Value::Array(r.iter().map(|&v| px(v)).collect())).collect()))
-            .collect();
+        let tiles: Vec<Value> =
+            self.tiles.iter().map(|t| Value::Array(t.chunks(self.tw as usize).map(|r| Value::Array(r.iter().map(|&v| px(v)).collect())).collect())).collect();
         json!({ "tw": self.tw, "th": self.th, "tiles": tiles })
     }
 
@@ -381,14 +377,11 @@ pub fn sync_sprite(sp: &mut Sprite, before: &Sprite, paint: bool, mode: NewTiles
             && before.width == sp.width
             && before.height == sp.height
             && before.layers[li].tileset.as_ref() == Some(&ts)
-            && sp.frames.iter().enumerate().all(|(k, f)| {
-                f.cels[li] == act || sp.images[f.cels[li]].same_pixels(&before.images[before.frames[k].cels[li]])
-            });
+            && sp.frames.iter().enumerate().all(|(k, f)| f.cels[li] == act || sp.images[f.cels[li]].same_pixels(&before.images[before.frames[k].cels[li]]));
         if editable {
             let b = before.images[before.frames[sp.frame].cels[li]].clone();
             let mut after = std::mem::replace(&mut sp.images[act], Image::new(1, 1));
-            let mut others: Vec<Image> =
-                ids.iter().filter(|&&i| i != act).map(|&i| std::mem::replace(&mut sp.images[i], Image::new(1, 1))).collect();
+            let mut others: Vec<Image> = ids.iter().filter(|&&i| i != act).map(|&i| std::mem::replace(&mut sp.images[i], Image::new(1, 1))).collect();
             let mut refs: Vec<&mut Image> = others.iter_mut().collect();
             let r = ts.sync_paint(&b, &mut after, &mut refs, mode);
             sp.images[act] = after;
@@ -614,10 +607,7 @@ mod tests {
         let (ts, g) = level();
         let mut sp = Sprite::new("t", 6, 4).unwrap();
         sp.images = vec![g.clone(), g];
-        sp.frames = vec![
-            crate::sprite::Frame { cels: vec![0], duration_ms: 0 },
-            crate::sprite::Frame { cels: vec![1], duration_ms: 0 },
-        ];
+        sp.frames = vec![crate::sprite::Frame { cels: vec![0], duration_ms: 0 }, crate::sprite::Frame { cels: vec![1], duration_ms: 0 }];
         sp.layers[0].tileset = Some(ts);
         // Strich in Frame 0 → Frame 1 zieht mit.
         let before = sp.clone();

@@ -154,8 +154,20 @@ impl Handle {
     /// Lage am Rechteck (x, y, w, h) — in Zellen, auf den Zellkanten.
     pub fn pos(self, r: (i64, i64, u32, u32)) -> (f32, f32) {
         let (x, y, w, h) = (r.0 as f32, r.1 as f32, r.2 as f32, r.3 as f32);
-        let px = if self.west() { x } else if self.east() { x + w } else { x + w / 2.0 };
-        let py = if self.north() { y } else if self.south() { y + h } else { y + h / 2.0 };
+        let px = if self.west() {
+            x
+        } else if self.east() {
+            x + w
+        } else {
+            x + w / 2.0
+        };
+        let py = if self.north() {
+            y
+        } else if self.south() {
+            y + h
+        } else {
+            y + h / 2.0
+        };
         (px, py)
     }
 
@@ -422,7 +434,6 @@ mod tests {
         });
         assert_eq!(c.data, vec![3, FREE_BASE + 1]);
     }
-
 
     #[test]
     fn anfasser_wie_im_web() {

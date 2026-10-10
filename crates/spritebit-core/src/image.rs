@@ -150,11 +150,7 @@ impl Image {
     /// Wie viele Kacheln sich zwei Bilder teilen (gleicher Speicher, nicht
     /// nur gleicher Inhalt) — für Tests und Speicher-Statistik.
     pub fn shared_tiles(&self, other: &Image) -> usize {
-        self.tiles
-            .iter()
-            .zip(&other.tiles)
-            .filter(|(a, b)| matches!((a, b), (Some(a), Some(b)) if Arc::ptr_eq(a, b)))
-            .count()
+        self.tiles.iter().zip(&other.tiles).filter(|(a, b)| matches!((a, b), (Some(a), Some(b)) if Arc::ptr_eq(a, b))).count()
     }
 
     /// Gleiche Pixel? (Größe und Inhalt; leere Kachel = transparente Kachel)

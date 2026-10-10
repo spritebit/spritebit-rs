@@ -192,7 +192,8 @@ impl SpritebitApp {
                 });
                 ui.end_row();
             });
-            ui.checkbox(&mut o.loop_tag, tr("Im Tag im Kreis")).on_hover_text(tr("Am Ende des Tags scheint sein Anfang durch — für Animationen, die im Kreis laufen"));
+            ui.checkbox(&mut o.loop_tag, tr("Im Tag im Kreis"))
+                .on_hover_text(tr("Am Ende des Tags scheint sein Anfang durch — für Animationen, die im Kreis laufen"));
             ui.checkbox(&mut o.layer_only, tr("Nur die aktive Ebene"));
             reset = ui.button(tr("Zurücksetzen")).clicked();
         });

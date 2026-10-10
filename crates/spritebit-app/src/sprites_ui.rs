@@ -23,12 +23,7 @@ const PRESETS: [u32; 8] = [16, 24, 32, 64, 128, 256, 1024, 4096];
 impl SpritebitApp {
     pub(crate) fn open_new_sprite(&mut self) {
         let sp = self.sprite();
-        self.sprite_dialog = Some(SpriteDialog::New {
-            name: self.project.fresh_name(),
-            palette: sp.palette.clone(),
-            w: sp.width,
-            h: sp.height,
-        });
+        self.sprite_dialog = Some(SpriteDialog::New { name: self.project.fresh_name(), palette: sp.palette.clone(), w: sp.width, h: sp.height });
     }
 
     pub(crate) fn create_sprite(&mut self, name: String, palette: String, w: u32, h: u32) {
@@ -122,8 +117,7 @@ impl SpritebitApp {
         let Some(dialog) = &mut self.sprite_dialog else { return };
         let mut ok = false;
         let mut cancel = false;
-        let palettes: Vec<String> =
-            builtin::BUILTIN.iter().map(|(n, _)| n.to_string()).chain(self.project.palettes.iter().map(|p| p.name.clone())).collect();
+        let palettes: Vec<String> = builtin::BUILTIN.iter().map(|(n, _)| n.to_string()).chain(self.project.palettes.iter().map(|p| p.name.clone())).collect();
         let buttons = |ui: &mut egui::Ui, ok_label: &str, ok: &mut bool, cancel: &mut bool| {
             ui.separator();
             ui.horizontal(|ui| {

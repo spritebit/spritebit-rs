@@ -9,8 +9,8 @@ use eframe::egui::{self, Color32, Key, Modifiers, Pos2, Vec2};
 use spritebit_core::tools::{self, Span};
 use spritebit_core::Px;
 
-use crate::{icons, SpritebitApp};
 use crate::i18n::{keys, tr, trf};
+use crate::{icons, SpritebitApp};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Tool {
@@ -269,9 +269,17 @@ impl SpritebitApp {
         };
         // Bitty bietet an, es gleich zu beheben (einmal pro Sitzung, bitty_ui.rs).
         if locked {
-            self.bitty_hint("layerLocked", trf("Die Ebene „{name}“ ist gesperrt — deshalb passiert beim Malen nichts.", &[("name", &name)]), Some(crate::bitty_ui::Fix::Unlock(l)));
+            self.bitty_hint(
+                "layerLocked",
+                trf("Die Ebene „{name}“ ist gesperrt — deshalb passiert beim Malen nichts.", &[("name", &name)]),
+                Some(crate::bitty_ui::Fix::Unlock(l)),
+            );
         } else if hidden {
-            self.bitty_hint("layerHidden", trf("Die Ebene „{name}“ ist ausgeblendet — du würdest blind malen.", &[("name", &name)]), Some(crate::bitty_ui::Fix::Show(l)));
+            self.bitty_hint(
+                "layerHidden",
+                trf("Die Ebene „{name}“ ist ausgeblendet — du würdest blind malen.", &[("name", &name)]),
+                Some(crate::bitty_ui::Fix::Show(l)),
+            );
         }
         self.hint.is_none()
     }
@@ -333,10 +341,8 @@ impl SpritebitApp {
             painter.circle_stroke(c, r, light);
         } else {
             let s = tools::stamp(x, y, size);
-            let rect = egui::Rect::from_min_max(
-                origin + Vec2::new(s.x0 as f32, s.y0 as f32) * zoom,
-                origin + Vec2::new((s.x1 + 1) as f32, (s.y1 + 1) as f32) * zoom,
-            );
+            let rect =
+                egui::Rect::from_min_max(origin + Vec2::new(s.x0 as f32, s.y0 as f32) * zoom, origin + Vec2::new((s.x1 + 1) as f32, (s.y1 + 1) as f32) * zoom);
             painter.rect_stroke(rect, 0.0, dark, egui::StrokeKind::Middle);
             painter.rect_stroke(rect, 0.0, light, egui::StrokeKind::Middle);
         }
@@ -463,12 +469,7 @@ impl SpritebitApp {
                 let key: Option<Vec<u32>> = (self.fill_visible && !self.sprite().editing_mask()).then(|| {
                     let pal = self.project.current_palette();
                     let sp = self.sprite();
-                    spritebit_core::export::frame_rgba(sp, &pal, sp.frame)
-                        .as_chunks::<4>()
-                        .0
-                        .iter()
-                        .map(|c| u32::from_le_bytes(*c))
-                        .collect()
+                    spritebit_core::export::frame_rgba(sp, &pal, sp.frame).as_chunks::<4>().0.iter().map(|c| u32::from_le_bytes(*c)).collect()
                 });
                 let img = self.project.sprite_mut().active();
                 let n: usize = points
@@ -526,10 +527,7 @@ impl SpritebitApp {
             return;
         }
         let size = if self.tool == Tool::Pencil { 1 } else { self.size };
-        let spans: Vec<Span> = tools::line(a.0, a.1, b.0, b.1)
-            .into_iter()
-            .flat_map(|(x, y)| tools::stamp(x, y, size).spans())
-            .collect();
+        let spans: Vec<Span> = tools::line(a.0, a.1, b.0, b.1).into_iter().flat_map(|(x, y)| tools::stamp(x, y, size).spans()).collect();
         // Stärke = Dichte bei Pinsel und Radierer: jedes Pixel nur mit dieser
         // Wahrscheinlichkeit (wie im Web). Der Stift malt immer voll.
         let density = self.strength as f64 / 100.0;
@@ -585,10 +583,7 @@ impl SpritebitApp {
         };
         let clip = painter.clip_rect();
         for (y, x0, x1) in self.shape_spans(a, b) {
-            let r = egui::Rect::from_min_max(
-                origin + Vec2::new(x0 as f32, y as f32) * zoom,
-                origin + Vec2::new((x1 + 1) as f32, (y + 1) as f32) * zoom,
-            );
+            let r = egui::Rect::from_min_max(origin + Vec2::new(x0 as f32, y as f32) * zoom, origin + Vec2::new((x1 + 1) as f32, (y + 1) as f32) * zoom);
             if r.intersects(clip) {
                 painter.rect_filled(r, 0.0, color);
             }

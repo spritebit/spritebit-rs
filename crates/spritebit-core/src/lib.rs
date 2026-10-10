@@ -48,8 +48,8 @@ pub mod selection;
 pub mod sprite;
 pub mod template;
 pub mod tilemap;
-pub mod transform;
 pub mod tools;
+pub mod transform;
 
 pub use composite::{render_rgba, render_rgba_step, Rect};
 pub use history::History;

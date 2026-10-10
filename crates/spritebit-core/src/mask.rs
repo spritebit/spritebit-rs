@@ -145,7 +145,15 @@ mod tests {
         assert_eq!(m.to_json(), json!({ "on": true, "runs": [2, 2, 2] }));
         let back = Mask::from_json(&m.to_json(), 3, 2).unwrap();
         assert!(back.hides(2, 0) && back.hides(0, 1) && !back.hides(1, 1));
-        let off = Mask { on: false, hide: { let mut i = Image::new(2, 1); i.set(0, 0, 1); i.set(1, 0, 1); i } };
+        let off = Mask {
+            on: false,
+            hide: {
+                let mut i = Image::new(2, 1);
+                i.set(0, 0, 1);
+                i.set(1, 0, 1);
+                i
+            },
+        };
         assert_eq!(off.to_json(), json!({ "on": false, "runs": [0, 2] }), "beginnt immer mit sichtbar");
     }
 

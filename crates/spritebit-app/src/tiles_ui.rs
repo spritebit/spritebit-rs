@@ -42,7 +42,16 @@ pub(crate) struct TileState {
 
 impl Default for TileState {
     fn default() -> Self {
-        TileState { mode: TileMode::Pixel, new_tiles: NewTiles::Auto, tile: 1, tw: DEFAULT_TILE, th: DEFAULT_TILE, drag: None, thumbs: Vec::new(), thumbs_key: 0 }
+        TileState {
+            mode: TileMode::Pixel,
+            new_tiles: NewTiles::Auto,
+            tile: 1,
+            tw: DEFAULT_TILE,
+            th: DEFAULT_TILE,
+            drag: None,
+            thumbs: Vec::new(),
+            thumbs_key: 0,
+        }
     }
 }
 
@@ -288,12 +297,16 @@ impl SpritebitApp {
                 self.tiles.mode = TileMode::Pixel;
                 let sp = self.sprite();
                 self.hint = Some(if !sp.width.is_multiple_of(tw) || !sp.height.is_multiple_of(th) {
-                    trf("Tilemap angelegt. Der Sprite ist kein Vielfaches von {tw} × {th} — der dunkle Rand gehört zu keiner Kachel.", &[("tw", &tw), ("th", &th)])
+                    trf(
+                        "Tilemap angelegt. Der Sprite ist kein Vielfaches von {tw} × {th} — der dunkle Rand gehört zu keiner Kachel.",
+                        &[("tw", &tw), ("th", &th)],
+                    )
                 } else {
                     tr("Tilemap angelegt — einfach losmalen, jede bemalte Zelle wird eine Kachel.").into()
                 });
             }
-            if ui.button(tr("Aktive Ebene umwandeln")).on_hover_text(tr("Die aktive Ebene in Kacheln zerlegen — gleiche Stellen werden eine Kachel")).clicked() {
+            if ui.button(tr("Aktive Ebene umwandeln")).on_hover_text(tr("Die aktive Ebene in Kacheln zerlegen — gleiche Stellen werden eine Kachel")).clicked()
+            {
                 let mut n = 0;
                 self.tiles_structural(|sp| {
                     let l = sp.layer;
@@ -323,12 +336,10 @@ impl SpritebitApp {
                 ui.label(tr("Neue Kacheln"));
                 let auto = tr("Auto — beim Malen anlegen");
                 let manual = tr("Manuell — nur vorhandene ändern");
-                egui::ComboBox::from_id_salt("tile-auto")
-                    .selected_text(if self.tiles.new_tiles == NewTiles::Auto { auto } else { manual })
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.tiles.new_tiles, NewTiles::Auto, auto);
-                        ui.selectable_value(&mut self.tiles.new_tiles, NewTiles::Manual, manual);
-                    });
+                egui::ComboBox::from_id_salt("tile-auto").selected_text(if self.tiles.new_tiles == NewTiles::Auto { auto } else { manual }).show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.tiles.new_tiles, NewTiles::Auto, auto);
+                    ui.selectable_value(&mut self.tiles.new_tiles, NewTiles::Manual, manual);
+                });
             });
         }
         let hint = match (self.tiles.mode, self.tiles.new_tiles) {
@@ -338,7 +349,10 @@ impl SpritebitApp {
         };
         ui.small(hint);
         let (cols, rows) = ts.map_size(self.sprite().width, self.sprite().height);
-        ui.small(trf("{tw} × {th} px · {n} Kacheln · Raster {cols} × {rows}", &[("tw", &ts.tw), ("th", &ts.th), ("n", &ts.tiles.len()), ("cols", &cols), ("rows", &rows)]));
+        ui.small(trf(
+            "{tw} × {th} px · {n} Kacheln · Raster {cols} × {rows}",
+            &[("tw", &ts.tw), ("th", &ts.th), ("n", &ts.tiles.len()), ("cols", &cols), ("rows", &rows)],
+        ));
 
         if ts.tiles.is_empty() {
             ui.small(tr("Noch keine Kacheln — im Modus „Pixel malen“ (Auto) in eine leere Zelle malen."));
@@ -412,10 +426,7 @@ impl SpritebitApp {
             .iter()
             .enumerate()
             .map(|(i, t)| {
-                let rgba: Vec<u8> = t
-                    .iter()
-                    .flat_map(|&v: &Px| rgb_of(v, &pal, &free).map_or([0, 0, 0, 0], |c| [c[0], c[1], c[2], 255]))
-                    .collect();
+                let rgba: Vec<u8> = t.iter().flat_map(|&v: &Px| rgb_of(v, &pal, &free).map_or([0, 0, 0, 0], |c| [c[0], c[1], c[2], 255])).collect();
                 let img = egui::ColorImage::from_rgba_unmultiplied([ts.tw as usize, ts.th as usize], &rgba);
                 ctx.load_texture(format!("tile-{i}"), img, egui::TextureOptions::NEAREST)
             })

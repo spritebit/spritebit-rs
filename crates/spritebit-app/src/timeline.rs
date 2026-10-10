@@ -181,7 +181,9 @@ impl SpritebitApp {
             if icons::button(ui, icons::ERASER, tr("Zellen leeren"), true).clicked() {
                 self.edit_sprite(|s| cels::clear(s, r));
             }
-            if icons::button(ui, icons::LINK, tr("Verknüpfen — die Frames teilen sich je Ebene ein Bild (ohne Bereich: mit dem Frame davor)"), can_link).clicked() {
+            if icons::button(ui, icons::LINK, tr("Verknüpfen — die Frames teilen sich je Ebene ein Bild (ohne Bereich: mit dem Frame davor)"), can_link)
+                .clicked()
+            {
                 let r = if r.f1 > r.f0 { r } else { CelRange { f0: r.f0 - 1, ..r } };
                 self.edit_sprite(|s| {
                     cels::link(s, r);
@@ -268,7 +270,13 @@ impl SpritebitApp {
                     Direction::Reverse => "« ",
                     Direction::PingPong => "↔ ",
                 };
-                painter.with_clip_rect(r).text(r.left_center() + Vec2::new(6.0, 0.0), Align2::LEFT_CENTER, format!("{mark}{}", t.name), FontId::proportional(11.0), Color32::WHITE);
+                painter.with_clip_rect(r).text(
+                    r.left_center() + Vec2::new(6.0, 0.0),
+                    Align2::LEFT_CENTER,
+                    format!("{mark}{}", t.name),
+                    FontId::proportional(11.0),
+                    Color32::WHITE,
+                );
             }
 
             // Kopfzeile: Frame-Nummern (1-basiert, wie in der Web-Version).
@@ -304,16 +312,20 @@ impl SpritebitApp {
             if l == sp.layer {
                 painter.rect_filled(egui::Rect::from_min_size(row.min, Vec2::new(3.0, row.height())), 1.0, ACCENT);
             }
-            let icon_rect = |k: usize| {
-                egui::Rect::from_center_size(Pos2::new(o.x + 10.0 + k as f32 * ICON_W, y + ROW_H / 2.0 - 1.0), Vec2::splat(14.0))
-            };
+            let icon_rect = |k: usize| egui::Rect::from_center_size(Pos2::new(o.x + 10.0 + k as f32 * ICON_W, y + ROW_H / 2.0 - 1.0), Vec2::splat(14.0));
             let eye = if layer.visible { icons::EYE } else { icons::EYE_OFF };
             egui::Image::new(eye).tint(DIM).paint_at(ui, icon_rect(0));
             let (lock, lock_c) = if layer.locked { (icons::LOCK, ACCENT) } else { (icons::UNLOCK, Color32::from_gray(90)) };
             egui::Image::new(lock).tint(lock_c).paint_at(ui, icon_rect(1));
             let (cont, cont_c) = if layer.continuous { (icons::CONT_ON, ACCENT) } else { (icons::CONT_OFF, Color32::from_gray(90)) };
             egui::Image::new(cont).tint(cont_c).paint_at(ui, icon_rect(2));
-            let name_col = if l == sp.layer { Color32::WHITE } else if layer.visible { Color32::from_gray(200) } else { Color32::from_gray(110) };
+            let name_col = if l == sp.layer {
+                Color32::WHITE
+            } else if layer.visible {
+                Color32::from_gray(200)
+            } else {
+                Color32::from_gray(110)
+            };
             let name_font = if l == sp.layer { FontId::proportional(12.5) } else { font.clone() };
             let name_pos = Pos2::new(o.x + 3.0 * ICON_W + 6.0, y + ROW_H / 2.0 - 1.0);
             painter.text(name_pos, Align2::LEFT_CENTER, &layer.name, name_font.clone(), name_col);
@@ -342,10 +354,7 @@ impl SpritebitApp {
                 let id = sp.frames[f].cels[l];
                 // Verknüpft mit dem Nachbarn: Strich zwischen den Punkten.
                 if f + 1 < n && sp.frames[f + 1].cels[l] == id {
-                    painter.line_segment(
-                        [c.center(), Pos2::new(col_x(f + 1) + cell_w / 2.0, c.center().y)],
-                        Stroke::new(2.0, DIM),
-                    );
+                    painter.line_segment([c.center(), Pos2::new(col_x(f + 1) + cell_w / 2.0, c.center().y)], Stroke::new(2.0, DIM));
                 }
                 let filled = !sp.cel_is_empty(f, l);
                 let dot = if active { ACCENT } else { DIM };

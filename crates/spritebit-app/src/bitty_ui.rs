@@ -419,13 +419,7 @@ fn entries() -> Vec<Entry> {
             // Das erste Wort ist meist das Stichwort („Stift — …“, „Tags …“) und zählt wie ein Name.
             let head = l.split([' ', '.']).next().unwrap_or(l);
             let label: String = if l.chars().count() > 60 { l.chars().take(57).collect::<String>() + " …" } else { l.to_string() };
-            out.push(Entry {
-                label,
-                sub: title.to_string(),
-                names: format!("{head} {}", all(title)),
-                text: format!("{} {}", all(l), all(title)),
-                target: l,
-            });
+            out.push(Entry { label, sub: title.to_string(), names: format!("{head} {}", all(title)), text: format!("{} {}", all(l), all(title)), target: l });
         }
     }
     for (k, what) in crate::view_ui::help_keys() {
@@ -577,9 +571,7 @@ impl crate::SpritebitApp {
                     return;
                 }
                 let r = ui.add(
-                    egui::TextEdit::singleline(&mut self.bitty.query)
-                        .hint_text(tr("Wonach suchst du? (z. B. Lasso, Ebenen)"))
-                        .desired_width(f32::INFINITY),
+                    egui::TextEdit::singleline(&mut self.bitty.query).hint_text(tr("Wonach suchst du? (z. B. Lasso, Ebenen)")).desired_width(f32::INFINITY),
                 );
                 if self.bitty.focus_query {
                     r.request_focus();
@@ -713,12 +705,7 @@ mod tests {
 
     #[test]
     fn suche_verzeiht_und_findet_andere_sprache() {
-        let all = vec![
-            e("Lasso", "", "umfährt eine freie Form"),
-            e("Ebenen", "Layers", ""),
-            e("Füllen", "", "Flood-Fill"),
-            e("Export", "", "PNG GIF"),
-        ];
+        let all = vec![e("Lasso", "", "umfährt eine freie Form"), e("Ebenen", "Layers", ""), e("Füllen", "", "Flood-Fill"), e("Export", "", "PNG GIF")];
         let first = |q: &str| search(q, &all, 8).first().map(|h| h.label.clone());
         assert_eq!(first("lassso").as_deref(), Some("Lasso"));
         assert_eq!(first("exprot").as_deref(), Some("Export"));

@@ -133,7 +133,10 @@ pub(crate) enum Install {
     Idle,
     Running(Receiver<Result<(), String>>),
     /// Fertig; die neue Version liegt an `exe`.
-    Done { version: String, exe: PathBuf },
+    Done {
+        version: String,
+        exe: PathBuf,
+    },
     Failed(String),
 }
 

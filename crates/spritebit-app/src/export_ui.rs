@@ -65,11 +65,19 @@ fn format_label(f: Format) -> &'static str {
 /// Dateiname aus dem Sprite-Namen wie im Web: nur a–z, 0–9, _ und -.
 fn safe(name: &str) -> String {
     let s: String = name.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' }).collect();
-    if s.is_empty() { "sprite".into() } else { s }
+    if s.is_empty() {
+        "sprite".into()
+    } else {
+        s
+    }
 }
 
 fn code_lang() -> CodeLang {
-    if i18n::lang() == i18n::Lang::En { CodeLang::En } else { CodeLang::De }
+    if i18n::lang() == i18n::Lang::En {
+        CodeLang::En
+    } else {
+        CodeLang::De
+    }
 }
 
 impl SpritebitApp {
@@ -80,7 +88,9 @@ impl SpritebitApp {
     }
 
     fn legend_text(&self) -> Option<export::LegendText> {
-        self.out.legend.then(|| export::LegendText { title: tr("Palette — {n} Farben").into(), sorted: tr("Palette — {n} Farben (nach Farbton sortiert)").into() })
+        self.out
+            .legend
+            .then(|| export::LegendText { title: tr("Palette — {n} Farben").into(), sorted: tr("Palette — {n} Farben (nach Farbton sortiert)").into() })
     }
 
     /// Frames für PNG/PDF/GIF: die in der Timeline markierten, sonst der aktive.
@@ -133,7 +143,8 @@ impl SpritebitApp {
         let pal = self.project.current_palette();
         let (scale, legend) = (self.out.scale, self.legend_text());
         let make = |f: usize| -> Result<Vec<u8>, String> {
-            let r = if ext == "pdf" { export::pdf(&sp, &pal, f, scale, legend.as_ref()) } else { export::png_with_legend(&sp, &pal, f, scale, legend.as_ref()) };
+            let r =
+                if ext == "pdf" { export::pdf(&sp, &pal, f, scale, legend.as_ref()) } else { export::png_with_legend(&sp, &pal, f, scale, legend.as_ref()) };
             r.map_err(|e| i18n::export_error(&e))
         };
         let base = safe(&sp.name);
@@ -215,7 +226,8 @@ impl SpritebitApp {
         let cells = sp.width as u64 * sp.height as u64 * sp.frames.len() as u64;
         let key = (self.project.current, self.version, fmt, self.out.with_palette, code_lang());
         let text = if cells > LIVE_CODE_MAX {
-            tr("// Der Sprite ist groß ({n} Pixel über alle Frames) — der Code wird erst beim Kopieren oder Speichern erzeugt.").replace("{n}", &cells.to_string())
+            tr("// Der Sprite ist groß ({n} Pixel über alle Frames) — der Code wird erst beim Kopieren oder Speichern erzeugt.")
+                .replace("{n}", &cells.to_string())
         } else {
             if self.out.cache.as_ref().is_none_or(|c| c.0 != key) {
                 self.out.cache = Some((key, self.build_code()));
@@ -300,7 +312,8 @@ impl SpritebitApp {
         if !self.sprite().tags.is_empty() {
             ui.checkbox(&mut self.out.gif_tags, tr("GIF: eine Datei je Tag"));
         }
-        ui.checkbox(&mut self.out.legend, tr("Farb-Legende ins Bild")).on_hover_text(tr("Bettet eine Farb-Legende ins Bild ein, damit die Farbwerte nicht verloren gehen"));
+        ui.checkbox(&mut self.out.legend, tr("Farb-Legende ins Bild"))
+            .on_hover_text(tr("Bettet eine Farb-Legende ins Bild ein, damit die Farbwerte nicht verloren gehen"));
     }
 
     fn materials_box(&mut self, ui: &mut egui::Ui) {
