@@ -5,7 +5,7 @@
 
 use eframe::egui;
 use spritebit_core::transform::{self as tf, TransformResult};
-use spritebit_core::{builtin, History, Project, Sprite, MAX_SIDE};
+use spritebit_core::{builtin, History, Sprite, MAX_SIDE};
 
 use crate::i18n::{tr, trf};
 use crate::SpritebitApp;
@@ -15,7 +15,6 @@ pub(crate) enum SpriteDialog {
     Rename { i: usize, name: String },
     Resize { i: usize, w: u32, h: u32, centered: bool },
     Delete { i: usize },
-    Reset,
 }
 
 /// Größen zum schnellen Wählen.
@@ -203,13 +202,6 @@ impl SpritebitApp {
                     buttons(ui, tr("Löschen"), &mut ok, &mut cancel);
                 });
             }
-            SpriteDialog::Reset => {
-                egui::Modal::new(egui::Id::new("reset-all")).show(ctx, |ui| {
-                    ui.heading(tr("Alles zurücksetzen?"));
-                    ui.label(tr("Alle Sprites und eigenen Paletten dieses Projekts werden verworfen."));
-                    buttons(ui, tr("Zurücksetzen"), &mut ok, &mut cancel);
-                });
-            }
         }
         if cancel {
             self.sprite_dialog = None;
@@ -246,16 +238,8 @@ impl SpritebitApp {
                     }
                 }
             }
-            Some(SpriteDialog::Delete { i }) => {
-                if i < self.project.sprites.len() {
-                    self.delete_sprite(i);
-                }
-            }
-            Some(SpriteDialog::Reset) => {
-                self.replace_project(Project::default(), None);
-                self.dirty = true;
-            }
-            None => {}
+            Some(SpriteDialog::Delete { i }) if i < self.project.sprites.len() => self.delete_sprite(i),
+            _ => {}
         }
     }
 }

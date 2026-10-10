@@ -19,6 +19,7 @@ mod image_ui;
 mod layers_ui;
 mod palette_ui;
 mod preview_ui;
+mod projects_ui;
 mod selection_ui;
 mod selfupdate;
 mod sprites_ui;
@@ -64,10 +65,15 @@ fn main() -> eframe::Result {
             app.load_tl_opts();
             app.load_view();
             app.load_guide_layouts();
+            app.load_recent();
             // Die abgelöste Datei vom letzten Update wegräumen (selfupdate.rs).
             selfupdate::cleanup_old();
             // Nach einem Absturz (oder einem Update): die Sitzung zurückholen.
             app.start_session();
+            // Frischer Start (keine Sitzung zurückgeholt): das Startfenster.
+            if app.path.is_none() && !app.dirty {
+                app.projects.start_open = true;
+            }
             // Einmal bei GitHub nach einer neueren Version fragen (abschaltbar).
             app.start_update_check(&cc.egui_ctx);
             Ok(Box::new(app))
@@ -82,7 +88,7 @@ pub(crate) const ZOOM_MAX: f32 = 64.0;
 const GRID_FROM: f32 = 8.0;
 /// Dateiendung des eigenen Projektformats. Früher „.spritebit“ — solche
 /// Dateien öffnen sich weiter (OLD_EXT), gespeichert wird als .sb.
-const EXT: &str = "sb";
+pub(crate) const EXT: &str = "sb";
 const OLD_EXT: &str = "spritebit";
 /// Ein einzelner Sprite: JSON wie in der Web-Version, dort genauso lesbar.
 const SPRITE_EXT: &str = "bitty";
@@ -198,6 +204,8 @@ struct SpritebitApp {
     tl_persist: bool,
     tl_menu_open: bool,
     tl_cache: tlmenu_ui::TlCache,
+    /// Projektname, zuletzt geöffnet, Startfenster (projects_ui.rs).
+    projects: projects_ui::ProjectsUi,
     /// Wo welches Panel steht (dock_ui.rs).
     dock: dock_ui::DockLayout,
     /// Vorschaubilder im Ebenen-Panel (layers_ui.rs).
@@ -234,10 +242,14 @@ struct SpritebitApp {
 }
 
 /// Was nach der Rückfrage „Ungespeicherte Änderungen" passieren soll.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Pending {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum Pending {
     Close,
     Open,
+    /// Neues Projekt mit diesem Namen (projects_ui.rs).
+    NewProject(String),
+    /// Ein Projekt aus „Zuletzt geöffnet“.
+    OpenPath(PathBuf),
 }
 
 impl SpritebitApp {
@@ -302,6 +314,7 @@ impl SpritebitApp {
             tl_persist: false,
             tl_menu_open: false,
             tl_cache: tlmenu_ui::TlCache::default(),
+            projects: projects_ui::ProjectsUi::default(),
             dock: dock_ui::DockLayout::load(),
             layer_thumbs: layers_ui::LayerThumbs::default(),
             view: view_ui::ViewState::default(),
@@ -411,6 +424,12 @@ impl SpritebitApp {
         else {
             return;
         };
+        self.open_path(path);
+    }
+
+    /// Eine Datei öffnen: Projekt (.sb, .spritebit), Web-Projekt (.json)
+    /// oder einzelner Sprite (.bitty, kommt dazu).
+    pub(crate) fn open_path(&mut self, path: PathBuf) {
         // Ein einzelner Sprite ersetzt das Projekt nicht, er kommt dazu — wie im Web.
         if path.extension().is_some_and(|e| e.eq_ignore_ascii_case(SPRITE_EXT)) {
             match std::fs::read_to_string(&path).map_err(|e| e.to_string()) {
@@ -423,7 +442,10 @@ impl SpritebitApp {
             return;
         }
         match std::fs::read(&path) {
-            Err(e) => self.error = Some(trf("{path} konnte nicht gelesen werden: {e}", &[("path", &path.display()), ("e", &e)])),
+            Err(e) => {
+                self.error = Some(trf("{path} konnte nicht gelesen werden: {e}", &[("path", &path.display()), ("e", &e)]));
+                self.forget_recent(&path);
+            }
             Ok(bytes) => {
                 // Eigenes Format erkennt man am Anfang; alles andere wird als
                 // Projektdatei der Web-Version versucht.
@@ -442,6 +464,8 @@ impl SpritebitApp {
                         if self.path.is_none() {
                             // Web-Projekt: ungespeichert, damit „Speichern" nach dem Ziel fragt.
                             self.dirty = true;
+                        } else {
+                            self.remember_recent();
                         }
                     }
                     Err(e) => self.error = Some(i18n::io_error(&e)),
@@ -458,7 +482,7 @@ impl SpritebitApp {
     }
 
     fn save_as(&mut self) {
-        let name = format!("{}.{EXT}", self.sprite().name);
+        let name = format!("{}.{EXT}", projects_ui::file_stem_for(&self.project_display_name()));
         if let Some(path) = rfd::FileDialog::new()
             .set_title(tr("Projekt speichern"))
             .add_filter(tr("spritebit-Projekt"), &[EXT])
@@ -470,12 +494,20 @@ impl SpritebitApp {
         }
     }
 
-    fn write_native(&mut self, path: &Path) {
+    pub(crate) fn write_native(&mut self, path: &Path) {
         self.commit_float();
+        // Ohne eigenen Namen bekommt das Projekt den Dateinamen — er steht
+        // dann auch in der Datei (und in der Web-Version).
+        if self.project.name.trim().is_empty() {
+            if let Some(stem) = path.file_stem() {
+                self.project.name = stem.to_string_lossy().into_owned();
+            }
+        }
         match std::fs::write(path, save_native(&self.project)) {
             Ok(()) => {
                 self.path = Some(path.to_path_buf());
                 self.dirty = false;
+                self.remember_recent();
             }
             Err(e) => self.error = Some(trf("{path} konnte nicht gespeichert werden: {e}", &[("path", &path.display()), ("e", &e)])),
         }
@@ -567,12 +599,7 @@ impl SpritebitApp {
 
     /// Titelleiste: Dateiname und ein Sternchen bei ungespeicherten Änderungen.
     fn sync_title(&mut self, ctx: &egui::Context) {
-        let file = self
-            .path
-            .as_ref()
-            .and_then(|p| p.file_name())
-            .map_or_else(|| tr("Unbenannt").to_string(), |n| n.to_string_lossy().into_owned());
-        let title = format!("{}{} — spritebit {VERSION}", file, if self.dirty { " *" } else { "" });
+        let title = format!("{}{} — spritebit {VERSION}", self.project_display_name(), if self.dirty { " *" } else { "" });
         if title != self.title {
             ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
             self.title = title;
@@ -604,6 +631,9 @@ impl SpritebitApp {
         // Die längeren Kürzel zuerst: Strg+Umschalt+S darf nicht als Strg+S gelten.
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::E)) {
             self.open_export();
+        }
+        if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::N)) {
+            self.open_new_project();
         }
         let (save_as, save, open, redo2, undo, redo) = ctx.input_mut(|i| {
             (
@@ -680,13 +710,13 @@ impl SpritebitApp {
     fn menu_bar(&mut self, ui: &mut egui::Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button(tr("Datei"), |ui| {
+                // Neues Projekt, Öffnen, Zuletzt geöffnet, Umbenennen (projects_ui.rs)
+                self.projects_menu(ui);
+                ui.separator();
                 if ui.button(tr("Neuer Sprite …")).clicked() {
                     self.open_new_sprite();
                 }
                 ui.separator();
-                if ui.add(egui::Button::new(tr("Öffnen …")).shortcut_text(keys("Strg+O"))).clicked() {
-                    self.open();
-                }
                 if ui.add(egui::Button::new(tr("Speichern")).shortcut_text(keys("Strg+S"))).clicked() {
                     self.save();
                 }
@@ -707,10 +737,6 @@ impl SpritebitApp {
                 }
                 if ui.button(tr("Als Web-Projekt exportieren …")).clicked() {
                     self.export_web();
-                }
-                ui.separator();
-                if ui.button(tr("Alles zurücksetzen …")).clicked() {
-                    self.sprite_dialog = Some(sprites_ui::SpriteDialog::Reset);
                 }
                 ui.separator();
                 if ui.add(egui::Button::new(tr("Beenden")).shortcut_text(keys("Alt+F4"))).clicked() {
@@ -1110,13 +1136,14 @@ impl SpritebitApp {
     }
 
     fn unsaved_dialog(&mut self, ctx: &egui::Context) {
-        let Some(pending) = self.unsaved_ask else { return };
+        let Some(pending) = self.unsaved_ask.clone() else { return };
         let (mut save, mut discard, mut cancel) = (false, false, false);
         egui::Modal::new(egui::Id::new("unsaved")).show(ctx, |ui| {
             ui.heading(tr("Ungespeicherte Änderungen"));
             ui.label(match pending {
                 Pending::Close => tr("Vor dem Beenden speichern?"),
-                Pending::Open => tr("Vor dem Öffnen eines anderen Projekts speichern?"),
+                Pending::Open | Pending::OpenPath(_) => tr("Vor dem Öffnen eines anderen Projekts speichern?"),
+                Pending::NewProject(_) => tr("Vor dem Anlegen eines neuen Projekts speichern?"),
             });
             ui.add_space(8.0);
             ui.horizontal(|ui| {
@@ -1145,6 +1172,8 @@ impl SpritebitApp {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
                 Pending::Open => self.open_now(),
+                Pending::NewProject(name) => self.create_project_now(name),
+                Pending::OpenPath(path) => self.open_path(path),
             }
         }
     }
@@ -1218,6 +1247,7 @@ impl eframe::App for SpritebitApp {
         let down = ctx.input(|i| i.pointer.any_down());
         self.tile_sync(down);
         self.dialogs(&ctx);
+        self.projects_windows(&ctx);
         self.dock_flyout(&ctx);
         self.dock_drag_preview(&ctx);
         self.notes_window(&ctx);
@@ -1440,6 +1470,36 @@ mod tests {
         assert_eq!(d.all_on(Side::Left), [PanelId::Sprites, PanelId::Light, PanelId::Colors], "vor „Farben“ eingereiht");
         assert!(!d.all_on(Side::Right).contains(&PanelId::Light));
         assert!(d.is_pinned(PanelId::Light), "bleibt angepinnt");
+    }
+
+    #[test]
+    fn neues_projekt_mit_namen_und_speicherort() {
+        let mut h = app();
+        h.state_mut().project.palettes.push(spritebit_core::Palette::new("meine", vec![[1, 2, 3]]));
+        h.state_mut().project.sprites.push(spritebit_core::Sprite::new("alt", 8, 8).unwrap());
+        let dir = std::env::temp_dir().join(format!("spritebit-neues-projekt-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("Mein Spiel.sb");
+        h.state_mut().create_project_at("Mein Spiel".into(), &path);
+        h.run();
+        let a = h.state();
+        assert_eq!(a.project.name, "Mein Spiel");
+        assert_eq!(a.project.sprites.len(), 1, "ein leerer Sprite");
+        assert!(a.project.palettes.iter().any(|p| p.name == "meine"), "eigene Palette kommt mit");
+        assert!(!a.dirty);
+        assert_eq!(a.path.as_deref(), Some(path.as_path()));
+        assert_eq!(a.projects.recent.first().map(|r| r.1.clone()), Some(path.clone()), "zuletzt geöffnet");
+        assert!(a.title.starts_with("Mein Spiel"), "Titelleiste: {}", a.title);
+        let back = load_native(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(back.name, "Mein Spiel", "der Name steht in der Datei");
+        // Umbenennen über den Dialog
+        h.state_mut().projects.rename = Some("Level 2".into());
+        h.run();
+        h.get_by_label("OK").click();
+        h.run();
+        assert_eq!(h.state().project.name, "Level 2");
+        assert!(h.state().dirty, "umbenannt = ungespeichert");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -2472,6 +2532,13 @@ mod shot {
             app
         });
         h.run();
+        // SPRITEBIT_SHOT_START=1: das Startfenster mit zwei zuletzt geöffneten.
+        if std::env::var_os("SPRITEBIT_SHOT_START").is_some() {
+            let p = &mut h.state_mut().projects;
+            p.recent = vec![("Mein Spiel".into(), "C:/Spiele/Mein Spiel.sb".into()), ("Level 2".into(), "C:/Spiele/level2.sb".into())];
+            p.start_open = true;
+            h.run();
+        }
         // SPRITEBIT_SHOT_DOCK=1: Panels gelöst und verschoben, eins aufgeklappt.
         if std::env::var_os("SPRITEBIT_SHOT_DOCK").is_some() {
             use dock_ui::PanelId;

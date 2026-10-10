@@ -179,7 +179,6 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Alle Dateien", "All files", "Olle Dateien"),
     ("Als Web-Projekt exportieren", "Export as web project", "Ois Web-Projekt exportiern"),
     ("Web-Projekt (JSON)", "Web project (JSON)", ""),
-    ("Unbenannt", "Untitled", "Ohne Nom"),
     ("{path} konnte nicht gelesen werden: {e}", "Could not read {path}: {e}", "{path} hot si ned lesn lossn: {e}"),
     ("{path} konnte nicht gespeichert werden: {e}", "Could not save {path}: {e}", "{path} hot si ned speichern lossn: {e}"),
     ("{path} konnte nicht geschrieben werden: {e}", "Could not write {path}: {e}", "{path} hot si ned schreibn lossn: {e}"),
@@ -424,6 +423,23 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Lädt die neue Version, prüft sie und tauscht die App aus — ohne ZIP und ohne Entpacken.", "Downloads the new version, checks it and swaps the app — no ZIP, no unpacking.", ""),
     ("Was ist neu?", "What's new?", ""),
     ("Was diese Version mitbringt", "What this version brings", ""),
+    // ── Projekte (projects_ui.rs) ──
+    ("Neues Projekt …", "New project …", "A neichs Projekt …"),
+    ("Neues Projekt", "New project", "A neichs Projekt"),
+    ("Zuletzt geöffnet", "Recently opened", "Zletzt offn"),
+    ("Projekt umbenennen …", "Rename project …", ""),
+    ("Projekt umbenennen", "Rename project", ""),
+    ("Unbenanntes Projekt", "Untitled project", "Projekt ohne Nam"),
+    ("Name des Projekts", "Name of the project", ""),
+    ("z. B. Mein Spiel", "e.g. My game", ""),
+    ("Es beginnt mit einem leeren Sprite; deine eigenen Paletten kommen mit. Als Nächstes wählst du, wo es gespeichert wird.", "It starts with an empty sprite; your own palettes come along. Next you choose where it is saved.", ""),
+    ("Anlegen …", "Create …", ""),
+    ("Wo soll das neue Projekt liegen?", "Where should the new project go?", ""),
+    ("Neues Projekt „{name}“ angelegt.", "New project “{name}” created.", ""),
+    ("Vor dem Anlegen eines neuen Projekts speichern?", "Save before creating a new project?", ""),
+    ("Noch nichts — leg ein neues Projekt an oder öffne eins.", "Nothing yet — create a new project or open one.", ""),
+    ("Leer weitermachen", "Continue empty", ""),
+    ("Mit einem leeren, noch ungespeicherten Projekt anfangen", "Start with an empty project that is not saved yet", ""),
     // ── Panels anordnen (dock_ui.rs) ──
     ("Nach rechts", "To the right", "Noch rechts"),
     ("Nach links", "To the left", "Noch links"),
@@ -568,9 +584,6 @@ const TEXTS: &[(&str, &str, &str)] = &[
         "Ka Plotz fia an Schottn — Sprite laar oder am Rand?",
     ),
     // ── Sprites, Ebenen, Frames ──
-    ("Alle Sprites und eigenen Paletten dieses Projekts werden verworfen.", "All sprites and custom palettes of this project will be discarded.", "Olle Sprites und eignen Palettn vo dem Projekt kemman weg."),
-    ("Alles zurücksetzen …", "Reset everything …", "Ois zrucksetzn …"),
-    ("Alles zurücksetzen?", "Reset everything?", "Ois zrucksetzn?"),
     ("Zurücksetzen", "Reset", "Zrucksetzn"),
     ("Anker", "Anchor", ""),
     ("Das lässt sich nicht rückgängig machen.", "This cannot be undone.", "Des geht nimma zruck."),
@@ -1035,6 +1048,7 @@ mod tests {
             include_str!("bitty_ui.rs"),
             include_str!("layers_ui.rs"),
             include_str!("dock_ui.rs"),
+            include_str!("projects_ui.rs"),
         ];
         let mut missing = Vec::new();
         for src in sources {
