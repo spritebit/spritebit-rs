@@ -426,6 +426,9 @@ const TEXTS: &[(&str, &str, &str)] = &[
     // ── Projekte (projects_ui.rs) ──
     ("Neues Projekt …", "New project …", "A neichs Projekt …"),
     ("Neues Projekt", "New project", "A neichs Projekt"),
+    ("Strg + D", "Ctrl + D", ""),
+    ("Strg + N", "Ctrl + N", ""),
+    ("Strg + Alt + N", "Ctrl + Alt + N", ""),
     ("Zuletzt geöffnet", "Recently opened", "Zletzt offn"),
     ("Projekt umbenennen …", "Rename project …", ""),
     ("Projekt umbenennen", "Rename project", ""),

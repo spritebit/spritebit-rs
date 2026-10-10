@@ -369,6 +369,10 @@ impl SpritebitApp {
             return;
         }
         let cmd = Modifiers::COMMAND;
+        // Strg+D: Auswahl aufheben (wie in Grafikprogrammen).
+        if ctx.input_mut(|i| i.consume_key(cmd, Key::D)) {
+            self.deselect();
+        }
         let (all, copy, cut, paste_raw, paste) = ctx.input_mut(|i| {
             // Im Fenster kommen Strg+C/X/V als Copy/Cut/Paste an, nicht als
             // Tasten (egui-winit). Die Tasten bleiben für Tests und andere Wege.

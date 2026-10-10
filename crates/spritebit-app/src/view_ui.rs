@@ -512,6 +512,9 @@ pub(crate) fn help_keys() -> Vec<(&'static str, &'static str)> {
         (tr("Strg + W"), tr("Reiter schließen")),
         ("F1", tr("Hilfe")),
         ("F11", tr("Vollbild")),
+        (tr("Strg + D"), tr("Auswahl aufheben")),
+        (tr("Strg + N"), tr("Neues Projekt")),
+        (tr("Strg + Alt + N"), tr("Neuer Sprite")),
         ("Esc", tr("Auswahl aufheben, Drehung verwerfen oder Vollbild beenden")),
     ]
 }

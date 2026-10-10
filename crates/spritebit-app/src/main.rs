@@ -632,6 +632,11 @@ impl SpritebitApp {
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::E)) {
             self.open_export();
         }
+        // Strg+Alt+N zuerst: egui ignoriert ein zusätzliches Alt, sonst
+        // gälte es als Strg+N (neues Projekt).
+        if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND | Modifiers::ALT, Key::N)) {
+            self.open_new_sprite();
+        }
         if ctx.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::N)) {
             self.open_new_project();
         }
@@ -713,7 +718,7 @@ impl SpritebitApp {
                 // Neues Projekt, Öffnen, Zuletzt geöffnet, Umbenennen (projects_ui.rs)
                 self.projects_menu(ui);
                 ui.separator();
-                if ui.button(tr("Neuer Sprite …")).clicked() {
+                if ui.add(egui::Button::new(tr("Neuer Sprite …")).shortcut_text(keys("Strg+Alt+N"))).clicked() {
                     self.open_new_sprite();
                 }
                 ui.separator();
@@ -767,7 +772,7 @@ impl SpritebitApp {
                 if ui.add(egui::Button::new(tr("Alles auswählen")).shortcut_text(keys("Strg+A"))).clicked() {
                     self.select_all();
                 }
-                if ui.add_enabled(has, egui::Button::new(tr("Auswahl aufheben")).shortcut_text(keys("Esc"))).clicked() {
+                if ui.add_enabled(has, egui::Button::new(tr("Auswahl aufheben")).shortcut_text(keys("Strg+D"))).clicked() {
                     self.deselect();
                 }
                 if ui.add_enabled(has, egui::Button::new(tr("Auswahl leeren")).shortcut_text(keys("Entf"))).clicked() {
@@ -1591,6 +1596,31 @@ mod tests {
         h.event(egui::Event::Cut);
         h.run();
         assert_eq!(px(&h, 2, 2), 0, "Strg+X schneidet aus");
+    }
+
+    #[test]
+    fn strg_alt_n_neuer_sprite_strg_n_neues_projekt() {
+        let mut h = app();
+        h.key_press_modifiers(Modifiers::COMMAND | Modifiers::ALT, Key::N);
+        h.run();
+        assert!(h.state().sprite_dialog.is_some(), "Strg+Alt+N: Neuer Sprite");
+        assert!(h.state().projects.new_name.is_none(), "nicht: neues Projekt");
+        h.state_mut().sprite_dialog = None;
+        h.key_press_modifiers(Modifiers::COMMAND, Key::N);
+        h.run();
+        assert!(h.state().projects.new_name.is_some(), "Strg+N: neues Projekt");
+        assert!(h.state().sprite_dialog.is_none());
+    }
+
+    #[test]
+    fn strg_d_hebt_die_auswahl_auf() {
+        let mut h = app();
+        h.key_press_modifiers(Modifiers::COMMAND, Key::A);
+        h.run();
+        assert!(h.state().selection.is_some());
+        h.key_press_modifiers(Modifiers::COMMAND, Key::D);
+        h.run();
+        assert!(h.state().selection.is_none());
     }
 
     #[test]
