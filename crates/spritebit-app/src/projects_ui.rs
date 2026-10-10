@@ -176,11 +176,21 @@ impl SpritebitApp {
 
     /// Einträge oben im Menü „Datei“.
     pub(crate) fn projects_menu(&mut self, ui: &mut egui::Ui) {
-        if ui.add(egui::Button::new(tr("Neues Projekt …")).shortcut_text(keys("Strg+N"))).clicked() {
-            self.open_new_project();
-            ui.close();
-        }
-        if ui.add(egui::Button::new(tr("Öffnen …")).shortcut_text(keys("Strg+O"))).clicked() {
+        ui.menu_button(tr("Neu"), |ui| {
+            if ui.add(egui::Button::new(tr("Projekt …")).shortcut_text(keys("Strg+N"))).clicked() {
+                self.open_new_project();
+                ui.close();
+            }
+            if ui.add(egui::Button::new(tr("Sprite …")).shortcut_text(keys("Strg+Alt+N"))).clicked() {
+                self.open_new_sprite();
+                ui.close();
+            }
+        });
+        if ui
+            .add(egui::Button::new(tr("Öffnen …")).shortcut_text(keys("Strg+O")))
+            .on_hover_text(tr("Projekt-, Sprite- oder Aseprite-Datei: ein Projekt öffnet sich als eigenes Projekt, ein Sprite kommt ins offene dazu"))
+            .clicked()
+        {
             self.open();
         }
         let recent = self.projects.recent.clone();
@@ -195,6 +205,14 @@ impl SpritebitApp {
                 }
             });
         });
+        if ui
+            .button(tr("Sprites aus Projekt holen …"))
+            .on_hover_text(tr("Die Sprites einer Projektdatei ins offene Projekt übernehmen — statt das Projekt für sich zu öffnen"))
+            .clicked()
+        {
+            self.add_sprites();
+            ui.close();
+        }
         if ui.button(tr("Projekt umbenennen …")).clicked() {
             self.projects.rename = Some(self.project_display_name());
             ui.close();

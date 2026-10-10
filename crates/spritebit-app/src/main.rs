@@ -252,10 +252,9 @@ struct SpritebitApp {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Pending {
     Close,
-    Open,
     /// Neues Projekt mit diesem Namen (projects_ui.rs).
     NewProject(String),
-    /// Ein Projekt aus „Zuletzt geöffnet“.
+    /// Ein Projekt öffnen (Datei → Öffnen, „Zuletzt geöffnet“).
     OpenPath(PathBuf),
 }
 
@@ -414,25 +413,24 @@ impl SpritebitApp {
     }
 
     /// Öffnen — bei ungespeicherten Änderungen erst nachfragen.
+    /// Öffnen: erst die Datei wählen. Ein Sprite (.bitty, Aseprite) kommt ins
+    /// offene Projekt dazu; nur ein Projekt fragt nach Ungespeichertem.
     fn open(&mut self) {
-        if self.dirty {
-            self.unsaved_ask = Some(Pending::Open);
-        } else {
-            self.open_now();
-        }
-    }
-
-    fn open_now(&mut self) {
         let Some(path) = rfd::FileDialog::new()
-            .set_title(tr("Projekt öffnen"))
-            .add_filter(tr("spritebit-Projekt"), &[EXT, OLD_EXT, SPRITE_EXT, "json", "aseprite", "ase"])
+            .set_title(tr("Öffnen"))
+            .add_filter(tr("spritebit-Projekt, Sprite oder Aseprite"), &[EXT, OLD_EXT, SPRITE_EXT, "json", "aseprite", "ase"])
             .add_filter(tr("Aseprite"), &ASE_EXTS)
             .add_filter(tr("Alle Dateien"), &["*"])
             .pick_file()
         else {
             return;
         };
-        self.open_path(path);
+        let adds = is_ase(&path) || path.extension().is_some_and(|e| e.eq_ignore_ascii_case(SPRITE_EXT));
+        if self.dirty && !adds {
+            self.unsaved_ask = Some(Pending::OpenPath(path));
+        } else {
+            self.open_path(path);
+        }
     }
 
     /// Eine Datei öffnen: Projekt (.sb, .spritebit), Web-Projekt (.json)
@@ -550,7 +548,7 @@ impl SpritebitApp {
     /// (Project::merge).
     fn add_sprites(&mut self) {
         let Some(path) = rfd::FileDialog::new()
-            .set_title(tr("Sprite hinzufügen"))
+            .set_title(tr("Sprites aus Projekt holen"))
             .add_filter(tr("spritebit-Sprite oder -Projekt"), &[SPRITE_EXT, EXT, OLD_EXT, "json", "aseprite", "ase"])
             .add_filter(tr("Aseprite"), &ASE_EXTS)
             .add_filter(tr("Alle Dateien"), &["*"])
@@ -771,30 +769,26 @@ impl SpritebitApp {
     fn menu_bar(&mut self, ui: &mut egui::Ui) {
         egui::MenuBar::new().ui(ui, |ui| {
             ui.menu_button(tr("Datei"), |ui| {
-                // Neues Projekt, Öffnen, Zuletzt geöffnet, Umbenennen (projects_ui.rs)
+                // Neu, Öffnen, Zuletzt geöffnet, Umbenennen (projects_ui.rs)
                 self.projects_menu(ui);
                 ui.separator();
-                if ui.add(egui::Button::new(tr("Neuer Sprite …")).shortcut_text(keys("Strg+Alt+N"))).clicked() {
-                    self.open_new_sprite();
-                }
-                ui.separator();
-                if ui.add(egui::Button::new(tr("Speichern")).shortcut_text(keys("Strg+S"))).clicked() {
+                if ui.add(egui::Button::new(tr("Projekt speichern")).shortcut_text(keys("Strg+S"))).clicked() {
                     self.save();
                 }
-                if ui.add(egui::Button::new(tr("Speichern unter …")).shortcut_text(keys("Strg+Umschalt+S"))).clicked() {
+                if ui.add(egui::Button::new(tr("Projekt speichern unter …")).shortcut_text(keys("Strg+Umschalt+S"))).clicked() {
                     self.save_as();
                 }
-                ui.separator();
-                // Einzelne Sprites statt des ganzen Projekts (.bitty)
-                if ui.button(tr("Sprite speichern unter …")).clicked() {
-                    self.save_sprite_as();
-                }
-                if ui.button(tr("Sprite hinzufügen …")).clicked() {
-                    self.add_sprites();
-                }
-                if ui.button(tr("Als Aseprite speichern …")).on_hover_text(tr("Den aktuellen Sprite als .aseprite-Datei — Ebenen, Frames, Tags, Palette und Tilemaps bleiben; Masken werden eingerechnet")).clicked() {
-                    self.save_ase_as();
-                }
+                // Nur der aktuelle Sprite statt des ganzen Projekts
+                ui.menu_button(tr("Sprite speichern"), |ui| {
+                    if ui.button(tr("als spritebit-Datei (.bitty) …")).on_hover_text(tr("Nur den aktuellen Sprite — zum Weitergeben oder für ein anderes Projekt")).clicked() {
+                        self.save_sprite_as();
+                        ui.close();
+                    }
+                    if ui.button(tr("als Aseprite-Datei (.aseprite) …")).on_hover_text(tr("Den aktuellen Sprite als .aseprite-Datei — Ebenen, Frames, Tags, Palette und Tilemaps bleiben; Masken werden eingerechnet")).clicked() {
+                        self.save_ase_as();
+                        ui.close();
+                    }
+                });
                 ui.separator();
                 if ui.add(egui::Button::new(tr("Exportieren …")).shortcut_text(keys("Strg+E"))).clicked() {
                     self.open_export();
@@ -1210,7 +1204,7 @@ impl SpritebitApp {
             ui.heading(tr("Ungespeicherte Änderungen"));
             ui.label(match pending {
                 Pending::Close => tr("Vor dem Beenden speichern?"),
-                Pending::Open | Pending::OpenPath(_) => tr("Vor dem Öffnen eines anderen Projekts speichern?"),
+                Pending::OpenPath(_) => tr("Vor dem Öffnen eines anderen Projekts speichern?"),
                 Pending::NewProject(_) => tr("Vor dem Anlegen eines neuen Projekts speichern?"),
             });
             ui.add_space(8.0);
@@ -1239,7 +1233,6 @@ impl SpritebitApp {
                     self.allow_close = true;
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
-                Pending::Open => self.open_now(),
                 Pending::NewProject(name) => self.create_project_now(name),
                 Pending::OpenPath(path) => self.open_path(path),
             }

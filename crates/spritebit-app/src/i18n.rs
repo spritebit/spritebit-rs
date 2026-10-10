@@ -149,10 +149,29 @@ pub fn keys(de: &'static str) -> String {
 const TEXTS: &[(&str, &str, &str)] = &[
     // ── Menü ──
     ("Datei", "File", ""),
-    ("Neuer Sprite …", "New sprite …", "Neicha Sprite …"),
     ("Öffnen …", "Open …", "Aufmochn …"),
+    ("Neu", "New", "Nei"),
+    ("Projekt …", "Project …", ""),
+    ("Sprite …", "Sprite …", ""),
+    ("Öffnen", "Open", "Aufmochn"),
+    (
+        "Projekt-, Sprite- oder Aseprite-Datei: ein Projekt öffnet sich als eigenes Projekt, ein Sprite kommt ins offene dazu",
+        "Project, sprite or Aseprite file: a project opens as a project of its own, a sprite joins the open one",
+        "Projekt-, Sprite- oder Aseprite-Datei: a Projekt geht ois eigns auf, a Sprite kummt ins offene dazua",
+    ),
+    ("spritebit-Projekt, Sprite oder Aseprite", "spritebit project, sprite or Aseprite", ""),
+    ("Sprites aus Projekt holen …", "Take sprites from project …", "Sprites aus an Projekt hoin …"),
+    ("Sprites aus Projekt holen", "Take sprites from project", "Sprites aus an Projekt hoin"),
+    (
+        "Die Sprites einer Projektdatei ins offene Projekt übernehmen — statt das Projekt für sich zu öffnen",
+        "Bring the sprites of a project file into the open project — instead of opening that project on its own",
+        "De Sprites aus ana Projektdatei ins offene Projekt übernehma — statt dass’ ois eigns aufgeht",
+    ),
+    ("Projekt speichern unter …", "Save project as …", "Projekt speichern unta …"),
+    ("als spritebit-Datei (.bitty) …", "as spritebit file (.bitty) …", ""),
+    ("als Aseprite-Datei (.aseprite) …", "as Aseprite file (.aseprite) …", ""),
+    ("Nur den aktuellen Sprite — zum Weitergeben oder für ein anderes Projekt", "Just the current sprite — to pass on or use in another project", "Nur den aktuelln Sprite — zum Weitagebn oder für a anders Projekt"),
     ("Speichern", "Save", ""),
-    ("Speichern unter …", "Save as …", "Speichern ois …"),
     ("Exportieren …", "Export …", "Exportiern …"),
     ("Als Web-Projekt exportieren …", "Export as web project …", "Ois Web-Projekt exportiern …"),
     ("Beenden", "Quit", "Aufhörn"),
@@ -173,7 +192,6 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Hilfe", "Help", ""),
     ("Über spritebit", "About spritebit", ""),
     // ── Dateien ──
-    ("Projekt öffnen", "Open project", "A Projekt aufmochn"),
     ("Projekt speichern", "Save project", ""),
     ("spritebit-Projekt", "spritebit project", ""),
     ("Alle Dateien", "All files", "Olle Dateien"),
@@ -462,7 +480,6 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Anpinnen", "Pin", ""),
     // ── Aseprite (main.rs, spritebit_core::aseprite) ──
     ("Aseprite", "Aseprite", ""),
-    ("Als Aseprite speichern …", "Save as Aseprite …", ""),
     ("Als Aseprite speichern", "Save as Aseprite", ""),
     ("Den aktuellen Sprite als .aseprite-Datei — Ebenen, Frames, Tags, Palette und Tilemaps bleiben; Masken werden eingerechnet", "The current sprite as an .aseprite file — layers, frames, tags, palette and tilemaps stay; masks are baked in", ""),
     ("Als Aseprite gespeichert: {name}", "Saved as Aseprite: {name}", ""),
@@ -981,10 +998,7 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Clean Stroke", "Clean Stroke", ""),
     ("Wie in bekannten Pixel-Art-Programmen: entfernt beim Zeichnen die doppelten Eckpixel an Treppenstufen — saubere 1-Pixel-Linien (Stift, Radierer mit Größe 1)", "As in well-known pixel art tools: removes the doubled corner pixels at stair steps while drawing — clean 1-pixel lines (pencil, eraser at size 1)", "Wia in bekanntn Pixel-Art-Programmen: haut beim Zeichnen de doppltn Eckpixel an de Stiagnstufn weg — saubere 1-Pixel-Linien (Stift, Radiergummi mit Greß 1)"),
     // ── Einzelne Sprites (.bitty) ──
-    ("Sprite speichern unter …", "Save sprite as …", "Sprite speichern unta …"),
-    ("Sprite hinzufügen …", "Add sprite …", "Sprite dazuagebn …"),
     ("Sprite speichern", "Save sprite", ""),
-    ("Sprite hinzufügen", "Add sprite", "Sprite dazuagebn"),
     ("spritebit-Sprite", "spritebit sprite", ""),
     ("spritebit-Sprite oder -Projekt", "spritebit sprite or project", ""),
     ("Sprite gespeichert: {name}", "Sprite saved: {name}", "Sprite gspeichat: {name}"),
