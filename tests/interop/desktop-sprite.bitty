@@ -1,0 +1,226 @@
+{
+  "version": 2,
+  "name": "",
+  "sprites": {
+    "held": {
+      "name": "held",
+      "palette": "interop",
+      "fps": 12,
+      "frame": 0,
+      "layer": 0,
+      "layers": [
+        {
+          "name": "Hinten",
+          "visible": true,
+          "locked": false,
+          "opacity": 1.0,
+          "continuous": true
+        },
+        {
+          "name": "Vorn",
+          "visible": true,
+          "locked": true,
+          "opacity": 0.5,
+          "continuous": false
+        }
+      ],
+      "tags": [
+        {
+          "name": "lauf",
+          "from": 0,
+          "to": 2,
+          "color": "#e5534b",
+          "dir": "pingpong"
+        }
+      ],
+      "guides": {
+        "h": [],
+        "v": [],
+        "heads": 0,
+        "top": 0,
+        "bottom": 4
+      },
+      "frames": [
+        {
+          "cels": [
+            [
+              [
+                5,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              [
+                3,
+                3,
+                3,
+                3,
+                3,
+                3
+              ]
+            ],
+            [
+              [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              [
+                0,
+                1,
+                0,
+                0,
+                0,
+                0
+              ],
+              [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            ]
+          ]
+        },
+        {
+          "cels": [
+            {
+              "link": 0
+            },
+            [
+              [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              [
+                0,
+                0,
+                1,
+                0,
+                0,
+                0
+              ],
+              [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            ]
+          ],
+          "dur": 200
+        },
+        {
+          "cels": [
+            {
+              "link": 0
+            },
+            [
+              [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              [
+                0,
+                0,
+                0,
+                1,
+                0,
+                0
+              ],
+              [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              [
+                0,
+                0,
+                0,
+                0,
+                0,
+                "#abcdef"
+              ]
+            ]
+          ]
+        }
+      ]
+    }
+  },
+  "customPalettes": {
+    "interop": {
+      "1": "#1b2a1e",
+      "2": "#2f5a33",
+      "3": "#5d9642",
+      "4": "#9cc75a",
+      "5": "#e8f5b0"
+    }
+  },
+  "paletteMaterials": {
+    "interop": {
+      "3": "stone"
+    }
+  },
+  "paletteColorNames": {
+    "interop": {
+      "1": "Kontur",
+      "3": "Grund"
+    }
+  },
+  "ui": {
+    "curSprite": "held"
+  },
+  "kind": "sprite"
+}
