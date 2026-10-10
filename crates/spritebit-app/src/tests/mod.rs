@@ -157,6 +157,35 @@ fn geloestes_panel_geht_bei_klick_daneben_zu() {
 }
 
 #[test]
+fn vorschaubilder_anfangs_passend_zur_breite() {
+    let mut h = app();
+    h.state_mut().tl.thumb_size = 0.0;
+    h.run();
+    let tip = "Ziehen: Vorschaubilder größer oder kleiner · Doppelklick: wieder passend zur Breite";
+    // Ziehen beginnt bei der angezeigten Größe (zwischen 22 und 40), nicht bei 0.
+    let line = h.get_by_label(tip).rect().center();
+    let btn = egui::PointerButton::Primary;
+    h.hover_at(line);
+    h.step();
+    h.event(egui::Event::PointerButton { pos: line, button: btn, pressed: true, modifiers: Modifiers::NONE });
+    h.step();
+    for k in 1..=4 {
+        h.event(egui::Event::PointerMoved(line + Vec2::new(0.0, 5.0 * k as f32)));
+        h.step();
+    }
+    h.event(egui::Event::PointerButton { pos: line + Vec2::new(0.0, 20.0), button: btn, pressed: false, modifiers: Modifiers::NONE });
+    h.run();
+    let s = h.state().tl.thumb_size;
+    assert!((22.0 + 10.0..=40.0 + 25.0).contains(&s), "ab der passenden Größe weitergezogen: {s}");
+    // Zurück auf „passend zur Breite“ (Doppelklick auf die Linie, timeline.rs)
+    // — egui_kittest erkennt zwei simulierte Klicks nicht als Doppelklick,
+    // darum hier direkt.
+    h.state_mut().tl.thumb_size = crate::tlmenu_ui::THUMB_DEFAULT;
+    h.run();
+    assert_eq!(h.state().tl.thumb_size, 0.0, "0 = passend zur Breite");
+}
+
+#[test]
 fn trennlinie_unter_den_vorschaubildern_zieht_die_groesse() {
     let mut h = app();
     for k in 2..9 {
@@ -166,7 +195,7 @@ fn trennlinie_unter_den_vorschaubildern_zieht_die_groesse() {
     h.run();
     let before = h.state().tl.thumb_size;
     // Die Linie unter der Kopfzeile
-    let num = h.get_by_label("Ziehen: Vorschaubilder größer oder kleiner · Doppelklick: Standardgröße").rect().center();
+    let num = h.get_by_label("Ziehen: Vorschaubilder größer oder kleiner · Doppelklick: wieder passend zur Breite").rect().center();
     let btn = egui::PointerButton::Primary;
     h.hover_at(num);
     h.step();

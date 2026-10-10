@@ -30,6 +30,7 @@ pub(crate) struct TlOpts {
     /// Vorschaubilder in der Kopfzeile.
     pub thumbs: bool,
     /// Kantenlänge der Vorschaubilder — die Trennlinie darunter ziehen.
+    /// 0 = passend zur Breite (wie im Web, js/frames.js fitThumbs).
     pub thumb_size: f32,
     pub zone: Zone,
     pub onion: OnionOpts,
@@ -66,7 +67,10 @@ impl TlOpts {
         TlOpts {
             first_frame: if v["firstFrame"].as_u64() == Some(0) { 0 } else { 1 },
             thumbs: v["thumbs"].as_bool().unwrap_or(true),
-            thumb_size: f(&v["thumbSize"], THUMB_DEFAULT).clamp(THUMB_MIN, THUMB_MAX),
+            thumb_size: match f(&v["thumbSize"], THUMB_DEFAULT) {
+                s if s <= 0.0 => 0.0,
+                s => s.clamp(THUMB_MIN, THUMB_MAX),
+            },
             zone: match v["zone"].as_str() {
                 Some("top") => Zone::Top,
                 Some("left") => Zone::Left,
@@ -99,7 +103,12 @@ pub(crate) struct TlCache {
 
 /// Größe der Vorschaubilder in der Kopfzeile (TlOpts::thumb_size): die
 /// Trennlinie unter ihnen ziehen (timeline.rs), zwischen diesen Grenzen.
-pub(crate) const THUMB_DEFAULT: f32 = 32.0;
+/// Anfangs (0) passend zur Breite, zwischen THUMB_FIT_MIN und THUMB_FIT_MAX.
+pub(crate) const THUMB_DEFAULT: f32 = 0.0;
+pub(crate) const THUMB_FIT_MIN: f32 = 22.0;
+pub(crate) const THUMB_FIT_MAX: f32 = 40.0;
+/// So viele Frames teilen sich höchstens die Breite — mehr scrollen.
+pub(crate) const THUMB_FIT_FRAMES: usize = 20;
 pub(crate) const THUMB_MIN: f32 = 20.0;
 pub(crate) const THUMB_MAX: f32 = 128.0;
 

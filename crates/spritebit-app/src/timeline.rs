@@ -70,10 +70,19 @@ impl SpritebitApp {
         self.cel_range.and_then(|r| r.clamp(sp)).unwrap_or(CelRange::single(sp.frame, sp.layer))
     }
 
+    /// Vorschaubilder passend zur Breite: die Frames teilen sich, was neben der
+    /// Ebenen-Spalte übrig bleibt — wie im Web (js/frames.js fitThumbs). Ab
+    /// THUMB_FIT_FRAMES Frames bleibt die Größe und das Raster scrollt.
+    fn fit_thumb(&self, width: f32) -> f32 {
+        let k = self.project.sprite().frames.len().clamp(1, tlmenu_ui::THUMB_FIT_FRAMES) as f32;
+        let cell = ((width - LAYER_W - 8.0) / k).floor();
+        (cell - 8.0).clamp(tlmenu_ui::THUMB_FIT_MIN, tlmenu_ui::THUMB_FIT_MAX)
+    }
+
     pub(crate) fn timeline(&mut self, ui: &mut egui::Ui) {
         self.timeline_buttons(ui);
         ui.add_space(4.0);
-        let thumb = self.tl.thumb_size.round();
+        let thumb = if self.tl.thumb_size > 0.0 { self.tl.thumb_size.round() } else { self.fit_thumb(ui.available_width()) };
         egui::ScrollArea::both().auto_shrink([false, false]).show(ui, |ui| self.timeline_grid(ui, thumb));
         self.timeline_windows(ui.ctx());
     }
@@ -376,8 +385,9 @@ impl SpritebitApp {
             let hot = grip.hovered() || grip.dragged();
             painter.hline(o.x..=o.x + size.x, y, Stroke::new(if hot { 2.0 } else { 1.0 }, if hot { ACCENT } else { Color32::from_gray(60) }));
             if grip.dragged() {
-                let s = &mut self.tl.thumb_size;
-                *s = (*s + grip.drag_delta().y).clamp(tlmenu_ui::THUMB_MIN, tlmenu_ui::THUMB_MAX);
+                // Aus „passend zur Breite“ heraus beginnt das Ziehen bei der angezeigten Größe.
+                let base = if self.tl.thumb_size > 0.0 { self.tl.thumb_size } else { thumb };
+                self.tl.thumb_size = (base + grip.drag_delta().y).clamp(tlmenu_ui::THUMB_MIN, tlmenu_ui::THUMB_MAX);
             }
             if grip.double_clicked() {
                 self.tl.thumb_size = tlmenu_ui::THUMB_DEFAULT;
@@ -385,7 +395,7 @@ impl SpritebitApp {
             if grip.drag_stopped() || grip.double_clicked() {
                 self.save_tl_opts();
             }
-            let tip = tr("Ziehen: Vorschaubilder größer oder kleiner · Doppelklick: Standardgröße");
+            let tip = tr("Ziehen: Vorschaubilder größer oder kleiner · Doppelklick: wieder passend zur Breite");
             grip.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, tip));
             grip.on_hover_text(tip);
         }

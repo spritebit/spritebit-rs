@@ -293,9 +293,9 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ),
     // ── Timeline ──
     (
-        "Ziehen: Vorschaubilder größer oder kleiner · Doppelklick: Standardgröße",
-        "Drag: thumbnails larger or smaller · Double-click: default size",
-        "Ziagn: Vorschaubuidln größa oder klana · Doppelklick: Standardgröße",
+        "Ziehen: Vorschaubilder größer oder kleiner · Doppelklick: wieder passend zur Breite",
+        "Drag: thumbnails larger or smaller · Double-click: fit to width again",
+        "Ziagn: Vorschaubuidln größa oder klana · Doppelklick: wieda passend zur Breitn",
     ),
     ("Erster Frame (Pos1)", "First frame (Home)", "Da erste Frame (Pos1)"),
     ("Voriger Frame (Komma oder Pfeil links)", "Previous frame (comma or left arrow)", "Da Frame davor (Komma oder Pfeil links)"),
