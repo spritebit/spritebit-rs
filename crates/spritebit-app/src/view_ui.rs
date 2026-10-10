@@ -94,7 +94,7 @@ impl SpritebitApp {
         if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::F11)) {
             self.toggle_fullscreen(ctx);
         }
-        let nothing_else = self.selection.is_none() && !self.guides.edit && self.image.live.is_none();
+        let nothing_else = self.selection.is_none() && self.image.live.is_none();
         if self.view.fullscreen && nothing_else && !ctx.egui_wants_keyboard_input() && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
             self.toggle_fullscreen(ctx);
         }
@@ -447,7 +447,7 @@ pub(crate) fn help_sections() -> Vec<(&'static str, Vec<&'static str>)> {
         ]),
         (tr("Hilfslinien"), vec![
             tr("Freie Linien und Figuren-Proportionen (2–8 Kopfhöhen) — nur zum Zeichnen, nie im Export. G blendet sie ein und aus."),
-            tr("Im Modus „Verschieben“ (oder mit der Hand) Linien ziehen; aus dem Bild gezogen ist eine Linie gelöscht."),
+            tr("Linien mit der Hand (H) ziehen — eine Kopfhöhe zieht die ganze Figur; aus dem Bild gezogen ist eine Linie gelöscht. „Sperren“ hält sie fest."),
             tr("Gleichmäßig: eine Anzahl eintippen (z. B. 4 waagerecht, 8 senkrecht) — die Linien verteilen sich sofort gleichmäßig."),
             tr("Eigene Layouts: Linien und Einteilung unter einem Namen speichern und auf jeden Sprite anwenden — bei anderer Größe anteilig umgerechnet."),
         ]),

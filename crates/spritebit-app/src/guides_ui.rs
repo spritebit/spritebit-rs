@@ -6,12 +6,14 @@
 //! * Figur: `heads` Kopfhöhen zwischen Ober- und Unterkante, mit Marken
 //!   (Kinn, Brust, Hüfte, Knie …) und der Körperachse in der Mitte.
 //!
-//! Im Modus „Verschieben“ gehört die Fläche den Linien, gemalt wird nicht.
-//! Eine freie Linie, die man aus dem Bild zieht, ist gelöscht; ein Klick
-//! neben die Linien oder Esc beendet den Modus. G blendet alle ein und aus.
+//! Gezogen wird mit dem Hand-Werkzeug: auf einer Linie zieht es die Linie,
+//! daneben die Ansicht. Eine Kopfhöhe der Figur zieht die ganze Figur, Ober-
+//! und Unterkante ändern ihre Größe. Eine freie Linie, die man aus dem Bild
+//! zieht, ist gelöscht. „Sperren“ hält alle Linien fest. G blendet sie ein
+//! und aus.
 
 use eframe::egui::{self, Align2, Color32, FontId, Key, Pos2, Stroke};
-use spritebit_core::{transform, FIGURE_HEADS};
+use spritebit_core::FIGURE_HEADS;
 
 use crate::i18n::{tr, trf};
 use crate::SpritebitApp;
@@ -26,12 +28,16 @@ pub(crate) enum GuideHit {
     V(usize),
     Top,
     Bottom,
+    /// Die ganze Figur, an einer Kopfhöhe gegriffen: Abstand des Griffs
+    /// zur Oberkante (Sprite-Pixel).
+    Figure(i64),
 }
 
 #[derive(Default)]
 pub(crate) struct GuideState {
     pub show: bool,
-    pub edit: bool,
+    /// Gesperrt: keine Linie lässt sich ziehen.
+    pub locked: bool,
     pub drag: Option<GuideHit>,
     /// Eigene Layouts — für alle Sprites, im Einstellungsordner gespeichert.
     pub layouts: Vec<GuideLayout>,
@@ -118,26 +124,7 @@ impl SpritebitApp {
         &mut self.project.sprite_mut().guides
     }
 
-    pub(crate) fn set_guide_edit(&mut self, on: bool) {
-        self.guides.edit = on;
-        self.guides.drag = None;
-        if on {
-            self.guides.show = true;
-            self.hint = Some(tr("Hilfslinien verschieben: Linie anfassen und ziehen, aus dem Bild ziehen löscht. Klick daneben oder Esc beendet.").into());
-        } else {
-            self.hint = None;
-        }
-    }
-
-    /// Nichts mehr zu verschieben → zurück zum Malen.
-    fn leave_if_empty(&mut self) {
-        let g = &self.sprite().guides;
-        if self.guides.edit && g.h.is_empty() && g.v.is_empty() && g.heads == 0 {
-            self.set_guide_edit(false);
-        }
-    }
-
-    /// Neue Linie in der Mitte; danach gleich verschiebbar.
+    /// Neue Linie in der Mitte.
     fn add_line(&mut self, horizontal: bool) {
         let (w, h) = (self.sprite().width, self.sprite().height);
         let max = if horizontal { h } else { w };
@@ -151,7 +138,7 @@ impl SpritebitApp {
         list.sort_unstable();
         list.dedup();
         self.dirty = true;
-        self.set_guide_edit(true);
+        self.guides.show = true;
     }
 
     /// `n` Linien einer Richtung gleichmäßig verteilen (die bisherigen ersetzt).
@@ -169,30 +156,6 @@ impl SpritebitApp {
             self.guides.show = true;
         }
         self.dirty = true;
-        self.leave_if_empty();
-    }
-
-    /// Ober- und Unterkante auf den gezeichneten Inhalt aller Ebenen.
-    fn fit_figure(&mut self) {
-        let sp = self.sprite();
-        let f = sp.frame;
-        let mut b: Option<(u32, u32)> = None;
-        for l in 0..sp.layers.len() {
-            if !sp.layers[l].visible {
-                continue;
-            }
-            if let Some((_, y, _, h)) = transform::bounds(sp.cel(f, l)) {
-                b = Some(b.map_or((y, y + h), |(t, bo)| (t.min(y), bo.max(y + h))));
-            }
-        }
-        let height = sp.height;
-        let g = self.guides_mut();
-        (g.top, g.bottom) = b.unwrap_or((0, height));
-        if g.heads == 0 {
-            g.heads = 6;
-        }
-        self.guides.show = true;
-        self.dirty = true;
     }
 
     pub(crate) fn guides_panel(&mut self, ui: &mut egui::Ui) {
@@ -201,18 +164,23 @@ impl SpritebitApp {
             let label = if self.guides.show { tr("Ausblenden") } else { tr("Einblenden") };
             if ui.selectable_label(self.guides.show, label).on_hover_text(tr("Alle Hilfslinien ein- und ausblenden (G)")).clicked() {
                 self.guides.show = !self.guides.show;
-                if !self.guides.show {
-                    self.set_guide_edit(false);
-                }
+                self.guides.drag = None;
             }
+            // Wie Aus-/Einblenden: die Aufschrift sagt, was ein Klick tut.
+            let lock = if self.guides.locked { tr("Entsperren") } else { tr("Sperren") };
             if ui
-                .selectable_label(self.guides.edit, tr("Verschieben"))
-                .on_hover_text(tr("Linien auf der Fläche ziehen — solange wird nicht gemalt (Klick daneben oder Esc beendet)"))
+                .selectable_label(self.guides.locked, lock)
+                .on_hover_text(tr("Gesperrt lassen sich die Linien nicht verschieben — auch nicht mit der Hand"))
                 .clicked()
             {
-                let on = !self.guides.edit;
-                self.set_guide_edit(on);
+                self.guides.locked = !self.guides.locked;
+                self.guides.drag = None;
             }
+        });
+        ui.weak(if self.guides.locked {
+            tr("Gesperrt — die Linien bleiben, wo sie sind.")
+        } else {
+            tr("Linien mit der Hand (H) ziehen; aus dem Bild gezogen ist eine Linie gelöscht.")
         });
         ui.label(tr("Freie Linien"));
         ui.horizontal(|ui| {
@@ -241,7 +209,6 @@ impl SpritebitApp {
             g.h.clear();
             g.v.clear();
             self.dirty = true;
-            self.leave_if_empty();
         }
         ui.label(tr("Figur — Kopfhöhen"));
         let mut heads = self.sprite().guides.heads;
@@ -257,10 +224,6 @@ impl SpritebitApp {
                 self.guides.show = true;
             }
             self.dirty = true;
-            self.leave_if_empty();
-        }
-        if ui.button(tr("An Figur anpassen")).on_hover_text(tr("Ober- und Unterkante der Einteilung auf das Gezeichnete setzen")).clicked() {
-            self.fit_figure();
         }
         self.guide_layouts_ui(ui);
         ui.weak(tr("Nur zum Zeichnen — die Linien erscheinen in keinem Export."));
@@ -364,20 +327,14 @@ impl SpritebitApp {
         });
     }
 
-    /// G: ein/aus. Esc: Verschieben beenden.
+    /// G: ein/aus.
     pub(crate) fn guide_keys(&mut self, ctx: &egui::Context) {
         if ctx.egui_wants_keyboard_input() {
             return;
         }
-        let (g, esc) = ctx.input(|i| (i.key_pressed(Key::G) && i.modifiers.is_none(), i.key_pressed(Key::Escape)));
-        if g {
+        if ctx.input(|i| i.key_pressed(Key::G) && i.modifiers.is_none()) {
             self.guides.show = !self.guides.show;
-            if !self.guides.show {
-                self.set_guide_edit(false);
-            }
-        }
-        if esc && self.guides.edit {
-            self.set_guide_edit(false);
+            self.guides.drag = None;
         }
     }
 
@@ -401,42 +358,35 @@ impl SpritebitApp {
         if g.heads > 0 {
             take((py - g.top as f32).abs() * zoom, GuideHit::Top);
             take((py - g.bottom as f32).abs() * zoom, GuideHit::Bottom);
+            // Kopfhöhen und Marken dazwischen: greifen die ganze Figur.
+            let unit = (g.bottom - g.top) as f32 / g.heads as f32;
+            let grab = py.round() as i64 - g.top as i64;
+            let inner = (1..g.heads).map(|k| k as f32).chain(marks(g.heads).iter().map(|m| m.0).filter(|k| k.fract() != 0.0));
+            for k in inner {
+                take((py - (g.top as f32 + k * unit)).abs() * zoom, GuideHit::Figure(grab));
+            }
         }
         best.map(|b| b.1)
     }
 
-    /// Zeiger im Verschieben-Modus. Gibt `true` zurück, wenn der Modus den
-    /// Zeiger genommen hat (dann wird nicht gemalt).
+    /// Hand-Werkzeug auf einer Linie: die Linie ziehen (wie im Web). Gibt
+    /// `true` zurück, wenn eine Linie den Zeiger genommen hat — daneben
+    /// verschiebt die Hand die Ansicht.
     pub(crate) fn guide_pointer(&mut self, pointer: Option<Pos2>, pressed: bool, released: bool, over: bool, origin: Pos2, zoom: f32) -> bool {
-        // Hand-Werkzeug: eine Linie unter dem Zeiger lässt sich auch ohne den
-        // Verschieben-Modus greifen (wie im Web). Daneben verschiebt die Hand.
-        if !self.guides.edit {
-            if self.tool != crate::tools_ui::Tool::Pan || !self.guides.show {
+        if self.guides.drag.is_none() {
+            if self.tool != crate::tools_ui::Tool::Pan || !self.guides.show || self.guides.locked || !(pressed && over) {
                 return false;
             }
-            if pressed && over {
-                if let Some(p) = pointer {
-                    self.guides.drag = self.guide_hit(p, origin, zoom);
-                }
-            }
+            let Some(p) = pointer else { return false };
+            // Gespeicherte Werte erst auf die Fläche begrenzen, dann treffen.
+            let n = self.sprite().guides.normalized(self.sprite().width, self.sprite().height);
+            self.project.sprite_mut().guides = n;
+            self.guides.drag = self.guide_hit(p, origin, zoom);
             if self.guides.drag.is_none() {
                 return false;
             }
         }
         let (w, h) = (self.sprite().width as i64, self.sprite().height as i64);
-        if pressed && over {
-            if let Some(p) = pointer {
-                // Gespeicherte Werte erst auf die Fläche begrenzen, dann treffen.
-                let n = self.sprite().guides.normalized(w as u32, h as u32);
-                self.project.sprite_mut().guides = n;
-                self.guides.drag = self.guide_hit(p, origin, zoom);
-                if self.guides.drag.is_none() {
-                    self.set_guide_edit(false);
-                    self.blocked = true;
-                    return true;
-                }
-            }
-        }
         if let (Some(hit), Some(p)) = (self.guides.drag, pointer) {
             let x = ((p.x - origin.x) / zoom).round() as i64;
             let y = ((p.y - origin.y) / zoom).round() as i64;
@@ -448,6 +398,12 @@ impl SpritebitApp {
                 GuideHit::V(i) => g.v[i] = x.clamp(-1, w + 1) as u32,
                 GuideHit::Top => g.top = y.clamp(0, g.bottom as i64 - 1) as u32,
                 GuideHit::Bottom => g.bottom = y.clamp(g.top as i64 + 1, h) as u32,
+                GuideHit::Figure(grab) => {
+                    let size = (g.bottom - g.top) as i64;
+                    let top = (y - grab).clamp(0, (h - size).max(0));
+                    g.top = top as u32;
+                    g.bottom = (top + size) as u32;
+                }
             }
             self.dirty = true;
         }
@@ -473,7 +429,6 @@ impl SpritebitApp {
                 if removed {
                     self.hint = Some(tr("Hilfslinie entfernt.").into());
                 }
-                self.leave_if_empty();
             }
         }
         true
@@ -486,7 +441,7 @@ impl SpritebitApp {
         let sp = self.sprite();
         let g = sp.guides.normalized(sp.width, sp.height);
         let (w, h) = (sp.width as f32 * zoom, sp.height as f32 * zoom);
-        let wide = if self.guides.edit { 2.0 } else { 1.0 };
+        let wide = if self.guides.drag.is_some() { 2.0 } else { 1.0 };
         let (x0, x1) = (origin.x, origin.x + w);
         if g.heads > 0 {
             let unit = (g.bottom - g.top) as f32 / g.heads as f32;

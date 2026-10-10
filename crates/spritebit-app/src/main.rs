@@ -2149,15 +2149,54 @@ mod tests {
         h.get_by_label("+ Waagerecht").click();
         h.run();
         assert_eq!(h.state().sprite().guides.h, vec![32]);
-        assert!(h.state().guides.edit);
-        // Linie bei y = 32 auf y = 10 ziehen — gemalt wird dabei nicht.
+        // Mit der Hand die Linie bei y = 32 auf y = 10 ziehen.
+        h.state_mut().tool = tools_ui::Tool::Pan;
+        let pan = h.state().pan;
         drag(&mut h, (5.0, 31.6), (5.0, 9.6));
         assert_eq!(h.state().sprite().guides.h, vec![10]);
-        assert_eq!(px(&h, 5, 20), 0, "im Modus wird nicht gemalt");
+        assert_eq!(h.state().pan, pan, "auf der Linie zieht die Hand die Linie, nicht die Ansicht");
         // Aus dem Bild ziehen löscht sie.
         drag(&mut h, (5.0, 9.6), (5.0, -6.0));
         assert!(h.state().sprite().guides.h.is_empty());
-        assert!(!h.state().guides.edit, "nichts mehr zu verschieben");
+    }
+
+    #[test]
+    fn gesperrte_hilfslinien_bleiben_stehen() {
+        let mut h = app();
+        h.state_mut().guides.show = true;
+        h.state_mut().project.sprite_mut().guides.h = vec![32];
+        h.get_by_label("Hilfslinien").click();
+        h.run();
+        h.get_by_label("Sperren").click();
+        h.run();
+        assert!(h.state().guides.locked);
+        h.state_mut().tool = tools_ui::Tool::Pan;
+        drag(&mut h, (5.0, 31.6), (5.0, 9.6));
+        assert_eq!(h.state().sprite().guides.h, vec![32], "gesperrt");
+        h.get_by_label("Entsperren").click();
+        h.run();
+        drag(&mut h, (5.0, 31.6), (5.0, 9.6));
+        assert_eq!(h.state().sprite().guides.h, vec![10], "wieder frei");
+    }
+
+    #[test]
+    fn kopfhoehe_zieht_die_ganze_figur() {
+        let mut h = app();
+        h.state_mut().guides.show = true;
+        {
+            let g = &mut h.state_mut().project.sprite_mut().guides;
+            (g.heads, g.top, g.bottom) = (4, 8, 48);
+        }
+        h.run();
+        h.state_mut().tool = tools_ui::Tool::Pan;
+        // Zweite Kopfhöhe liegt bei 8 + 2 × 10 = 28; 6 Pixel nach unten.
+        drag(&mut h, (5.0, 27.8), (5.0, 33.8));
+        let g = &h.state().sprite().guides;
+        assert_eq!((g.top, g.bottom), (14, 54), "verschoben, Größe bleibt");
+        // Nicht über den Rand hinaus.
+        drag(&mut h, (5.0, 33.8), (5.0, 63.8));
+        let g = &h.state().sprite().guides;
+        assert_eq!((g.top, g.bottom), (24, 64));
     }
 
     #[test]
