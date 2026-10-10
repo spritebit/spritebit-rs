@@ -332,7 +332,9 @@ impl DockLayout {
 }
 
 /// Breite der Icon-Leiste.
-const RAIL_W: f32 = 34.0;
+const RAIL_W: f32 = 42.0;
+/// Icons in der Leiste — größer als in Knöpfen, sie sind das Einzige dort.
+const RAIL_ICON: f32 = 22.0;
 /// Farbe für „angepinnt“ und die Ablage-Linie beim Ziehen.
 const ACCENT: Color32 = Color32::from_rgb(110, 168, 254);
 
@@ -474,9 +476,9 @@ impl SpritebitApp {
                     let open = self.dock.flyout.is_some_and(|(f, _)| f == id);
                     let c = if open { ui.visuals().strong_text_color() } else { ui.visuals().text_color() };
                     let tip = if pinned { trf("{name} — angepinnt, Klick springt hin", &[("name", &id.title())]) } else { trf("{name} — Klick klappt auf", &[("name", &id.title())]) };
-                    let r = ui.add(egui::Button::selectable(open, icons::image(id.icon(), c).alt_text(&tip)).sense(egui::Sense::click_and_drag())).on_hover_text(&tip);
+                    let r = ui.add(egui::Button::selectable(open, icons::image(id.icon(), c).fit_to_exact_size(egui::vec2(RAIL_ICON, RAIL_ICON)).alt_text(&tip)).sense(egui::Sense::click_and_drag())).on_hover_text(&tip);
                     if pinned {
-                        ui.painter().circle_filled(r.rect.right_bottom() - egui::vec2(4.0, 4.0), 2.5, ACCENT);
+                        ui.painter().circle_filled(r.rect.right_bottom() - egui::vec2(4.0, 4.0), 3.0, ACCENT);
                     }
                     r.dnd_set_drag_payload(id);
                     if r.clicked() {
