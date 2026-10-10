@@ -216,6 +216,7 @@ pub fn save_native(p: &Project) -> Vec<u8> {
         })
         .collect();
     let header = json!({
+        "name": p.name,
         "current": p.current,
         "palettes": p.palettes.iter().map(|pal| json!({ "name": pal.name, "colors": palette_json(pal) })).collect::<Vec<_>>(),
         "materials": materials_json(&p.materials),
@@ -357,7 +358,8 @@ pub fn load_native(bytes: &[u8]) -> Result<Project, IoError> {
         return Err(IoError::Corrupt("keine Sprites".into()));
     }
     let current = (head["current"].as_u64().unwrap_or(0) as usize).min(sprites.len() - 1);
-    Ok(Project { sprites, palettes, current, materials: parse_materials(head.get("materials")) })
+    let name = head["name"].as_str().unwrap_or("").to_string();
+    Ok(Project { name, sprites, palettes, current, materials: parse_materials(head.get("materials")) })
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -463,7 +465,8 @@ pub fn import_web(text: &str) -> Result<Project, IoError> {
     }
     let cur = v.pointer("/ui/curSprite").and_then(Value::as_str);
     let current = cur.and_then(|c| ids.iter().position(|id| id == c)).unwrap_or(0);
-    Ok(Project { sprites, palettes, current, materials: parse_materials(v.get("paletteMaterials")) })
+    let name = v.get("name").and_then(Value::as_str).unwrap_or("").to_string();
+    Ok(Project { name, sprites, palettes, current, materials: parse_materials(v.get("paletteMaterials")) })
 }
 
 /// Id aus einem Namen, wie die Web-Version sie bildet — und eindeutig.
@@ -537,6 +540,7 @@ pub fn export_web(p: &Project) -> String {
     }
     let doc = json!({
         "version": 2,
+        "name": p.name,
         "sprites": sprites,
         "customPalettes": custom,
         "paletteMaterials": materials_json(&p.materials),
@@ -580,10 +584,11 @@ mod tests {
         let b = Sprite::new("Zweiter", 4, 4).unwrap();
         let mut materials = BTreeMap::new();
         materials.insert("meine".to_string(), BTreeMap::from([(2u16, "sand".to_string())]));
-        Project { sprites: vec![a, b], palettes: vec![Palette::new("meine", vec![[9, 9, 9], [8, 8, 8], [7, 7, 7]])], current: 1, materials }
+        Project { name: "Mein Spiel".into(), sprites: vec![a, b], palettes: vec![Palette::new("meine", vec![[9, 9, 9], [8, 8, 8], [7, 7, 7]])], current: 1, materials }
     }
 
     fn assert_same(a: &Project, b: &Project) {
+        assert_eq!(a.name, b.name, "Projektname");
         assert_eq!(a.current, b.current);
         assert_eq!(a.palettes, b.palettes);
         assert_eq!(a.materials, b.materials);
@@ -631,7 +636,7 @@ mod tests {
             sp.add_frame(i, true);
         }
         sp.active().set(4000, 4000, 1);
-        let p = Project { sprites: vec![sp], palettes: vec![], current: 0, materials: BTreeMap::new() };
+        let p = Project { name: String::new(), sprites: vec![sp], palettes: vec![], current: 0, materials: BTreeMap::new() };
         let bytes = save_native(&p);
         assert!(bytes.len() < 20_000, "{} Bytes", bytes.len());
         let back = load_native(&bytes).unwrap();

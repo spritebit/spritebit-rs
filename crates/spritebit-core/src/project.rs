@@ -1,4 +1,4 @@
-//! Ein Projekt: mehrere Sprites und die eigenen Paletten.
+//! Ein Projekt: ein Name, mehrere Sprites und die eigenen Paletten.
 
 use std::collections::BTreeMap;
 
@@ -8,6 +8,10 @@ use crate::sprite::Sprite;
 
 #[derive(Clone, Debug)]
 pub struct Project {
+    /// Name des Projekts (steht in der Datei, in der Titelleiste und in der
+    /// Projektliste der Web-Version). Leer = noch keiner; die App nimmt dann
+    /// den Dateinamen.
+    pub name: String,
     pub sprites: Vec<Sprite>,
     /// Eigene Paletten. Eingebaute stehen in [`crate::builtin`].
     pub palettes: Vec<Palette>,
@@ -21,6 +25,7 @@ pub struct Project {
 impl Default for Project {
     fn default() -> Self {
         Project {
+            name: String::new(),
             sprites: vec![Sprite::new("Sprite 1", 64, 64).expect("gültige Größe")],
             palettes: Vec::new(),
             current: 0,
@@ -75,7 +80,7 @@ impl Project {
         let sp = self.sprites[i].clone();
         let palettes = self.palettes.iter().filter(|p| p.name == sp.palette).cloned().collect();
         let materials = self.materials.iter().filter(|(k, _)| **k == sp.palette).map(|(k, v)| (k.clone(), v.clone())).collect();
-        Project { sprites: vec![sp], palettes, current: 0, materials }
+        Project { name: String::new(), sprites: vec![sp], palettes, current: 0, materials }
     }
 
     /// Die Sprites eines anderen Projekts dazunehmen, ohne hier etwas zu
