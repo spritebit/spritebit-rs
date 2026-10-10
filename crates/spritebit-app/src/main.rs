@@ -70,9 +70,13 @@ fn main() -> eframe::Result {
             selfupdate::cleanup_old();
             // Nach einem Absturz (oder einem Update): die Sitzung zurückholen.
             app.start_session();
-            // Frischer Start (keine Sitzung zurückgeholt): das Startfenster.
+            // Frischer Start (keine Sitzung zurückgeholt): das zuletzt geöffnete
+            // Projekt — das Startfenster nur, wenn es keins gibt oder es fehlt.
             if app.path.is_none() && !app.dirty {
-                app.projects.start_open = true;
+                app.open_last();
+                if app.path.is_none() {
+                    app.projects.start_open = true;
+                }
             }
             // Einmal bei GitHub nach einer neueren Version fragen (abschaltbar).
             app.start_update_check(&cc.egui_ctx);
@@ -1366,6 +1370,33 @@ mod tests {
     fn px(h: &Harness<'_, SpritebitApp>, x: u32, y: u32) -> u16 {
         let s = h.state().project.sprite();
         s.cel(s.frame, s.layer).get(x, y)
+    }
+
+    #[test]
+    fn reiter_lassen_sich_ziehen() {
+        let mut h = app();
+        {
+            let a = h.state_mut();
+            a.project.sprites[0].name = "Aaa".into();
+            for n in ["Bbb", "Ccc"] {
+                a.project.sprites.push(spritebit_core::Sprite::new(n, 16, 16).unwrap());
+            }
+            a.tabs = vec![0, 1, 2];
+        }
+        h.run();
+        let r = |h: &Harness<'_, SpritebitApp>, n: &str| h.get_by_label(n).rect();
+        let (from, to) = (r(&h, "Aaa").center(), r(&h, "Ccc").right_center() + Vec2::new(4.0, 0.0));
+        h.hover_at(from);
+        h.run();
+        h.drag_at(from);
+        h.run();
+        for k in 1..=8 {
+            h.hover_at(from + (to - from) * (k as f32 / 8.0));
+            h.run();
+        }
+        h.drop_at(to);
+        h.run();
+        assert_eq!(h.state().tabs, vec![1, 2, 0], "Aaa ganz nach hinten");
     }
 
     #[test]

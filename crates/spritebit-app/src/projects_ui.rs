@@ -219,6 +219,17 @@ impl SpritebitApp {
         }
     }
 
+    /// Beim Start: das zuletzt geöffnete Projekt, wenn die Datei noch da ist.
+    /// Eine verschwundene fällt still aus der Liste — dann kommt das Startfenster.
+    pub(crate) fn open_last(&mut self) {
+        let Some((_, path)) = self.projects.recent.first().cloned() else { return };
+        if path.is_file() {
+            self.open_path(path);
+        } else {
+            self.forget_recent(&path);
+        }
+    }
+
     /// Ein Projekt aus „Zuletzt geöffnet“ — bei Ungespeichertem erst nachfragen.
     pub(crate) fn open_recent(&mut self, path: PathBuf) {
         self.projects.start_open = false;
