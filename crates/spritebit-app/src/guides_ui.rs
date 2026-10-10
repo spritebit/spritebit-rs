@@ -197,7 +197,9 @@ impl SpritebitApp {
 
     pub(crate) fn guides_panel(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            if ui.selectable_label(self.guides.show, tr("Anzeigen")).on_hover_text(tr("Alle Hilfslinien ein- und ausblenden (G)")).clicked() {
+            // Sagt, was ein Klick tut — „Anzeigen“ las sich, als wären sie gerade aus.
+            let label = if self.guides.show { tr("Ausblenden") } else { tr("Einblenden") };
+            if ui.selectable_label(self.guides.show, label).on_hover_text(tr("Alle Hilfslinien ein- und ausblenden (G)")).clicked() {
                 self.guides.show = !self.guides.show;
                 if !self.guides.show {
                     self.set_guide_edit(false);

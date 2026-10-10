@@ -623,7 +623,7 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("{w} × {h} px · {scale}×", "{w} × {h} px · {scale}×", ""),
     // ── Hilfslinien ──
     ("Hilfslinien", "Guides", ""),
-    ("Anzeigen", "Show", "Herzagn"),
+    ("Ausblenden", "Hide", "Wegtuan"),
     ("Alle Hilfslinien ein- und ausblenden (G)", "Show / hide all guides (G)", "Olle Hilfslinien herzagn oder wegtuan (G)"),
     ("Verschieben", "Move", "Vaschiabn"),
     ("Linien auf der Fläche ziehen — solange wird nicht gemalt (Klick daneben oder Esc beendet)", "Drag lines on the drawing area — no painting meanwhile (a click next to the lines or Esc ends it)", "Linien auf da Zeichenflächn ziagn — dawei wird ned gmoit (Klick danebn oder Esc hört auf)"),
@@ -943,7 +943,7 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Danke", "Thanks", "Danke da"),
     ("Nicht mehr zeigen", "Don’t show again", "Nimma zeign"),
     ("Entsperren", "Unlock", "Aufsperrn"),
-    ("Einblenden", "Show it", ""),
+    ("Einblenden", "Show", "Herzagn"),
     ("Die Ebene „{name}“ ist gesperrt — deshalb passiert beim Malen nichts.", "The layer “{name}” is locked — that’s why painting does nothing.", "D’Ebene „{name}“ is zuagsperrt — drum passiert beim Moin nix."),
     ("Die Ebene „{name}“ ist ausgeblendet — du würdest blind malen.", "The layer “{name}” is hidden — you’d be painting blind.", "D’Ebene „{name}“ is ausblendt — du tatst blind moin."),
     ("Dein erster Export — jetzt ist es draußen in der Welt! Ich bin ein bisschen stolz.", "Your first export — now it’s out in the world! I’m a little proud.", "Dei easchta Export — jetzt is draußn in da Wöd! I bin a bissl stolz."),
