@@ -497,7 +497,7 @@ pub(crate) fn help_keys() -> Vec<(&'static str, &'static str)> {
         (tr("Mausrad"), tr("Hoch / runter scrollen (Umschalt: links / rechts)")),
         (tr("Strg + Mausrad"), tr("Zoomen auf den Mauszeiger")),
         (tr("Leertaste + Ziehen"), tr("Bild verschieben (auch mit mittlerer Maustaste)")),
-        (tr("Pfeiltasten"), tr("Auswahl pixelweise verschieben")),
+        (tr("Pfeiltasten"), tr("Mit Auswahl: sie pixelweise verschieben · ohne: links / rechts Frame, hoch / runter Ebene")),
         (tr("Anfasser ziehen"), tr("Auswahl skalieren (Umschalt: Seitenverhältnis halten)")),
         (tr("Strg + A / C / X / V"), tr("Alles · Kopieren · Ausschneiden · Einfügen")),
         (tr("Strg + Umschalt + V"), tr("Einfügen mit den Nummern statt den Farben (andere Palette)")),

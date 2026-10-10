@@ -714,7 +714,7 @@ impl SpritebitApp {
         // Timeline-Tasten nur, wenn gerade kein Eingabefeld den Fokus hat.
         if !ctx.egui_wants_keyboard_input() {
             let none = Modifiers::NONE;
-            let (play, prev, next, first, last) = ctx.input_mut(|i| {
+            let (play, mut prev, mut next, first, last) = ctx.input_mut(|i| {
                 (
                     i.consume_key(none, Key::Enter),
                     i.consume_key(none, Key::Comma),
@@ -723,6 +723,26 @@ impl SpritebitApp {
                     i.consume_key(none, Key::End),
                 )
             });
+            // Pfeiltasten ohne Auswahl: links / rechts Frame, hoch / runter
+            // Ebene. Mit Auswahl verschieben sie diese (selection_keys).
+            if self.selection.is_none() {
+                let (left, right, up, down) = ctx.input_mut(|i| {
+                    (
+                        i.consume_key(none, Key::ArrowLeft),
+                        i.consume_key(none, Key::ArrowRight),
+                        i.consume_key(none, Key::ArrowUp),
+                        i.consume_key(none, Key::ArrowDown),
+                    )
+                });
+                prev |= left;
+                next |= right;
+                let (l, nl) = (self.sprite().layer, self.sprite().layers.len());
+                let to = if up { (l + 1).min(nl - 1) } else if down { l.saturating_sub(1) } else { l };
+                if to != l {
+                    self.project.sprite_mut().layer = to;
+                    self.stroke_last = None;
+                }
+            }
             if prev || next || first || last {
                 self.deselect();
             }
@@ -1916,6 +1936,43 @@ mod tests {
         h.get_by_label("Mein Spiel").click();
         h.run();
         assert_eq!(h.state().projects.rename.as_deref(), Some("Mein Spiel"), "Klick benennt um");
+    }
+
+    #[test]
+    fn pfeiltasten_blaettern_frames_und_ebenen() {
+        let mut h = app();
+        {
+            let s = h.state_mut().project.sprite_mut();
+            s.add_frame(0, false);
+            s.add_frame(1, false);
+            s.add_layer(1, "Oben");
+            s.frame = 0;
+            s.layer = 1;
+        }
+        h.run();
+        let at = |h: &Harness<'_, SpritebitApp>| (h.state().sprite().frame, h.state().sprite().layer);
+        h.key_press(Key::ArrowRight);
+        h.run();
+        assert_eq!(at(&h), (1, 1), "rechts: nächster Frame");
+        h.key_press(Key::ArrowLeft);
+        h.key_press(Key::ArrowLeft);
+        h.run();
+        assert_eq!(at(&h), (2, 1), "links am Anfang: ans Ende, wie Komma");
+        h.key_press(Key::ArrowDown);
+        h.run();
+        assert_eq!(at(&h), (2, 0), "runter: Ebene darunter");
+        h.key_press(Key::ArrowDown);
+        h.run();
+        assert_eq!(at(&h), (2, 0), "unterste bleibt");
+        h.key_press(Key::ArrowUp);
+        h.run();
+        assert_eq!(at(&h), (2, 1), "hoch: Ebene darüber");
+        // Mit Auswahl verschieben die Pfeile sie — Frame und Ebene bleiben.
+        h.key_press_modifiers(Modifiers::COMMAND, Key::A);
+        h.run();
+        h.key_press(Key::ArrowRight);
+        h.run();
+        assert_eq!(at(&h), (2, 1));
     }
 
     #[test]

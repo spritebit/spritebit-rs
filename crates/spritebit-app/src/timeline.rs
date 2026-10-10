@@ -85,14 +85,14 @@ impl SpritebitApp {
             if icons::button(ui, icons::FIRST, tr("Erster Frame (Pos1)"), true).clicked() {
                 self.go_frame(0);
             }
-            if icons::button(ui, icons::PREV, tr("Voriger Frame (,)"), true).clicked() {
+            if icons::button(ui, icons::PREV, tr("Voriger Frame (Komma oder Pfeil links)"), true).clicked() {
                 self.go_frame((cur + n - 1) % n);
             }
             let play = if self.playing { icons::PAUSE } else { icons::PLAY };
             if icons::button(ui, play, tr("Abspielen / Anhalten (Enter)"), n > 1).clicked() {
                 self.toggle_play(ui.ctx());
             }
-            if icons::button(ui, icons::NEXT, tr("Nächster Frame (.)"), true).clicked() {
+            if icons::button(ui, icons::NEXT, tr("Nächster Frame (Punkt oder Pfeil rechts)"), true).clicked() {
                 self.go_frame((cur + 1) % n);
             }
             if icons::button(ui, icons::LAST, tr("Letzter Frame (Ende)"), true).clicked() {
