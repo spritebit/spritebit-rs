@@ -264,6 +264,16 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Palette bearbeiten", "Edit palette", "Palettn bearbeitn"),
     ("Farbe kopieren", "Copy color", "Farb kopiern"),
     (
+        "Eingebaute Paletten bleiben unverändert — die Änderung steht in der Kopie „{name}“.",
+        "Built-in palettes stay as they are — the change went into the copy “{name}”.",
+        "Eibaute Palettn bleibn, wia s’ san — de Änderung steht in da Kopie „{name}“.",
+    ),
+    (
+        "Diese Palette nutzen Sprites — zum Entfernen erst zuweisen.",
+        "Sprites use this palette — assign it first to remove colors.",
+        "De Palettn nutzn Sprites — zum Entfernen zerst zuweisn.",
+    ),
+    (
         "Farbe {n} entfernt — {k} Pixel bleiben als freie Farbe.",
         "Color {n} removed — {k} pixels stay as a free color.",
         "Farb {n} entfernt — {k} Pixel bleibn ois freie Farb.",

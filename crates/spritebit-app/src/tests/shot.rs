@@ -70,6 +70,12 @@ fn bild_der_oberflaeche() {
         h.run();
         h.run();
     }
+    // SPRITEBIT_SHOT_PALPANEL=1: zum Paletten-Panel scrollen (Raster der angezeigten Palette).
+    if std::env::var_os("SPRITEBIT_SHOT_PALPANEL").is_some() {
+        h.state_mut().dock.focus = Some(crate::dock_ui::PanelId::Palette);
+        h.run();
+        h.run();
+    }
     // SPRITEBIT_SHOT_PAL=1: Farbwähler am Farbfeld 3 offen.
     if std::env::var_os("SPRITEBIT_SHOT_PAL").is_some() {
         let ctx = h.ctx.clone();

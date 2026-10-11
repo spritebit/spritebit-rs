@@ -68,7 +68,7 @@ pub(crate) struct ReduceModal {
 
 /// Was im Rechtsklick-Menü eines Farbfelds gewählt wurde.
 #[derive(Clone, Copy)]
-enum SwatchAction {
+pub(crate) enum SwatchAction {
     /// Das „+“-Feld: neue Farbe anhängen und gleich ändern.
     Add,
     Duplicate(Px),
@@ -82,6 +82,12 @@ enum SwatchAction {
 pub(crate) struct PalState {
     /// Nummer, deren Farbwähler gerade am Feld offen ist.
     pub edit_idx: Option<Px>,
+    /// Welche Palette er bearbeitet: `None` = die des Sprites, sonst eine im
+    /// Paletten-Panel angezeigte (wie im Web — dort wirkt das Raster immer
+    /// auf die angezeigte Palette).
+    pub edit_target: Option<String>,
+    /// Der Wähler hängt am Raster im Paletten-Panel, nicht an der Farbreihe.
+    pub edit_in_library: bool,
     /// Für den offenen Farbwähler schon ein Undo-Schritt angelegt.
     pub picking: bool,
     /// „Farbe kopieren“ — für „Farbe einfügen“.
@@ -223,6 +229,27 @@ impl SpritebitApp {
         let copy = self.project.unique_palette_name(&format!("{name}_kopie"));
         self.project.palettes.push(Palette::new(copy.clone(), base.colors));
         self.project.sprite_mut().palette = copy;
+        self.project.palettes.len() - 1
+    }
+
+    /// Bearbeitbare Palette für `target` (`None` = die des Sprites, wie
+    /// own_palette). Eine eingebaute wird kopiert: nutzt der Sprite sie, bekommt
+    /// er die Kopie, sonst zeigt das Panel sie an. `target` zeigt danach auf
+    /// die Kopie.
+    fn editable(&mut self, target: &mut Option<String>) -> usize {
+        let Some(name) = target.clone().filter(|n| *n != self.project.sprite().palette) else {
+            *target = None;
+            return self.own_palette();
+        };
+        if let Some(i) = self.project.palettes.iter().position(|p| p.name == name) {
+            return i;
+        }
+        let base = self.project.palette(&name);
+        let copy = self.project.unique_palette_name(&format!("{name}_kopie"));
+        self.project.palettes.push(Palette::new(copy.clone(), base.colors));
+        self.pal.preview = Some(copy.clone());
+        self.hint = Some(trf("Eingebaute Paletten bleiben unverändert — die Änderung steht in der Kopie „{name}“.", &[("name", &copy)]));
+        *target = Some(copy);
         self.project.palettes.len() - 1
     }
 
@@ -494,9 +521,9 @@ impl SpritebitApp {
             }
         });
         if let Some(a) = action {
-            self.swatch_action(ui.ctx(), a);
+            self.swatch_action(ui.ctx(), None, a, false);
         }
-        self.swatch_editor(ui, edit_anchor);
+        self.swatch_editor(ui, edit_anchor, false);
         if dragging.is_some() && ui.input(|i| i.pointer.any_released()) {
             if let (Some(from), Some(to)) = (self.pal.drag_from.take(), drop_on) {
                 if from != to {
@@ -540,8 +567,13 @@ impl SpritebitApp {
         ui.weak(trf("Palette: {name}", &[("name", &palette.name)]));
     }
 
-    fn swatch_action(&mut self, ctx: &egui::Context, action: SwatchAction) {
-        let palette = self.project.current_palette();
+    /// Aktion an einem Farbfeld. `target`: welche Palette (`None` = die des
+    /// Sprites), `library`: ausgelöst im Raster des Paletten-Panels.
+    pub(crate) fn swatch_action(&mut self, ctx: &egui::Context, mut target: Option<String>, action: SwatchAction, library: bool) {
+        let palette = target.as_deref().map_or_else(|| self.project.current_palette(), |n| self.project.palette(n));
+        // Eine nur angezeigte Palette: Undo-Schritte sichern die Paletten mit
+        // (pal_step), Pixel ändern sich dort nie.
+        let of_sprite = target.as_deref().is_none_or(|n| n == self.project.sprite().palette);
         match action {
             SwatchAction::Add | SwatchAction::Duplicate(_) => {
                 if palette.len() >= MAX_COLORS {
@@ -554,12 +586,14 @@ impl SpritebitApp {
                 }
                 .unwrap_or([0x88, 0x88, 0x88]);
                 self.pal_step();
-                let i = self.own_palette();
+                let i = self.editable(&mut target);
                 self.project.palettes[i].colors.push(rgb);
                 let n = self.project.palettes[i].colors.len() as Px;
-                self.color = n;
+                if of_sprite {
+                    self.color = n;
+                }
                 if matches!(action, SwatchAction::Add) {
-                    self.open_swatch_editor(ctx, n);
+                    self.open_swatch_editor_at(ctx, target, n, library);
                 }
                 self.changed();
             }
@@ -571,18 +605,31 @@ impl SpritebitApp {
             }
             SwatchAction::Paste(n) => {
                 if let Some(c) = self.pal.copied {
-                    self.set_palette_color(n, c);
+                    self.set_palette_color(&mut target, n, c);
                 }
             }
-            SwatchAction::Edit(n) => self.open_swatch_editor(ctx, n),
-            SwatchAction::Remove(n) => self.remove_color(n),
+            SwatchAction::Edit(n) => self.open_swatch_editor_at(ctx, target, n, library),
+            SwatchAction::Remove(n) if of_sprite => self.remove_color(n),
+            SwatchAction::Remove(n) => {
+                // Nur eine Palette, die kein Sprite benutzt (das Menü bietet es
+                // sonst nicht an) — dann gibt es keine Pixel umzuschreiben.
+                self.pal_step();
+                let i = self.editable(&mut target);
+                if spritebit_core::palops::remove_color(&mut self.project.palettes[i], n as usize, &mut []).is_some() {
+                    self.hint = Some(trf("Farbe {n} entfernt.", &[("n", &n)]));
+                    self.changed();
+                } else {
+                    let cur = self.project.current;
+                    self.histories[cur].drop_last();
+                }
+            }
         }
     }
 
     /// Farbe der Nummer `n` setzen — als eigener Undo-Schritt.
-    fn set_palette_color(&mut self, n: Px, rgb: Rgb) {
+    fn set_palette_color(&mut self, target: &mut Option<String>, n: Px, rgb: Rgb) {
         self.pal_step();
-        let i = self.own_palette();
+        let i = self.editable(target);
         self.project.palettes[i].colors[n as usize - 1] = rgb;
         self.changed();
     }
@@ -596,16 +643,28 @@ impl SpritebitApp {
         self.pal.modal = Some(PalModal::new(Some(pal.name.clone()), pal.name.clone(), &pal));
     }
 
+    /// Für das Bild der Oberfläche (Test): Wähler an der Farbreihe.
+    #[cfg(test)]
     pub(crate) fn open_swatch_editor(&mut self, ctx: &egui::Context, n: Px) {
+        self.open_swatch_editor_at(ctx, None, n, false);
+    }
+
+    fn open_swatch_editor_at(&mut self, ctx: &egui::Context, target: Option<String>, n: Px, library: bool) {
         self.pal.edit_idx = Some(n);
+        self.pal.edit_target = target;
+        self.pal.edit_in_library = library;
         self.pal.picking = false;
         egui::Popup::open_id(ctx, egui::Id::new("pal-swatch-edit"));
     }
 
     /// Farbwähler direkt am Feld (Doppelklick, „+“, „Farbe ändern …“).
     /// Ein Undo-Schritt je Öffnen, nicht je Zug.
-    fn swatch_editor(&mut self, ui: &mut egui::Ui, anchor: Option<egui::Response>) {
+    fn swatch_editor(&mut self, ui: &mut egui::Ui, anchor: Option<egui::Response>, library: bool) {
         let Some(n) = self.pal.edit_idx else { return };
+        // Farbreihe und Paletten-Raster zeichnen beide — der Wähler hängt nur an einem.
+        if self.pal.edit_in_library != library {
+            return;
+        }
         let id = egui::Id::new("pal-swatch-edit");
         // Das Feld gibt es erst ab dem nächsten Bild (nach „+“) — dann warten.
         let Some(anchor) = anchor else {
@@ -614,11 +673,12 @@ impl SpritebitApp {
             }
             return;
         };
-        let Some(cur) = self.project.current_palette().get(n) else {
+        let target_name = self.pal.edit_target.clone().unwrap_or_else(|| self.project.sprite().palette.clone());
+        let Some(cur) = self.project.palette(&target_name).get(n) else {
             self.pal.edit_idx = None;
             return;
         };
-        let builtin = !self.project.is_custom(&self.project.sprite().palette);
+        let builtin = !self.project.is_custom(&target_name);
         let mut picked: Option<Rgb> = None;
         let mut typed: Option<Rgb> = None;
         let shown = egui::Popup::from_response(&anchor).id(id).open_memory(None).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
@@ -638,17 +698,20 @@ impl SpritebitApp {
                 }
             });
         });
+        let mut target = self.pal.edit_target.clone();
         if let Some(rgb) = typed {
-            self.set_palette_color(n, rgb);
+            self.set_palette_color(&mut target, n, rgb);
         } else if let Some(rgb) = picked.filter(|&c| c != cur) {
             if !self.pal.picking {
                 self.pal_step();
                 self.pal.picking = true;
             }
-            let i = self.own_palette();
+            let i = self.editable(&mut target);
             self.project.palettes[i].colors[n as usize - 1] = rgb;
             self.changed();
         }
+        // Wurde eine eingebaute Palette kopiert, bearbeitet der Wähler ab jetzt die Kopie.
+        self.pal.edit_target = target;
         if shown.is_none() {
             self.pal.edit_idx = None;
             self.pal.picking = false;
@@ -710,12 +773,88 @@ impl SpritebitApp {
         } else {
             trf("Ansicht: „{name}“", &[("name", &shown)])
         });
+        // Raster der angezeigten Palette — bearbeitbar wie im Web: Klick
+        // wählt, Doppelklick ändert, Rechtsklick öffnet das Menü, „+“ hängt an.
+        // Gehört sie dem Sprite, ist es dieselbe Palette wie in der Farbreihe.
+        let target = (shown != current).then(|| shown.clone());
+        let used_elsewhere = self.project.sprites.iter().any(|s| s.palette == shown);
+        let copied = self.pal.copied;
+        let last = pal.len() as Px;
+        let mut action: Option<SwatchAction> = None;
+        let mut edit_anchor: Option<egui::Response> = None;
+        let mut pick: Option<(Px, Rgb)> = None;
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = Vec2::splat(3.0);
-            for (i, &c) in pal.colors.iter().enumerate() {
-                swatch(ui, Some(c), 14.0, false, Sense::hover()).on_hover_text(format!("{} · {}", i + 1, hex(c)));
+            for (k, &c) in pal.colors.iter().enumerate() {
+                let i = k as Px + 1;
+                let active = target.is_none() && self.color == i;
+                let resp = swatch(ui, Some(c), 18.0, active, Sense::click());
+                if resp.clicked() {
+                    pick = Some((i, c));
+                }
+                if resp.double_clicked() {
+                    action = Some(SwatchAction::Edit(i));
+                }
+                resp.context_menu(|ui| {
+                    if ui.button(tr("Duplizieren")).clicked() {
+                        action = Some(SwatchAction::Duplicate(i));
+                    }
+                    if ui.button(tr("Farbe kopieren")).clicked() {
+                        action = Some(SwatchAction::Copy(i));
+                    }
+                    let paste = match copied {
+                        Some(c) => trf("{hex} einfügen", &[("hex", &hex(c))]),
+                        None => tr("Farbe einfügen").to_string(),
+                    };
+                    if ui.add_enabled(copied.is_some(), egui::Button::new(paste)).clicked() {
+                        action = Some(SwatchAction::Paste(i));
+                    }
+                    if ui.button(tr("Farbe ändern …")).clicked() {
+                        action = Some(SwatchAction::Edit(i));
+                    }
+                    ui.separator();
+                    // Eine nur angezeigte Palette, die Sprites benutzen: deren
+                    // Pixel umzuschreiben kann das Undo nicht — dort zuweisen
+                    // und in der Farbreihe entfernen.
+                    let can = last > 1 && (target.is_none() || !used_elsewhere);
+                    let r = ui.add_enabled(can, egui::Button::new(tr("Entfernen")));
+                    if r.clicked() {
+                        action = Some(SwatchAction::Remove(i));
+                    }
+                    if !can && last > 1 {
+                        r.on_disabled_hover_text(tr("Diese Palette nutzen Sprites — zum Entfernen erst zuweisen."));
+                    }
+                });
+                if self.pal.edit_in_library && self.pal.edit_idx == Some(i) {
+                    edit_anchor = Some(resp.clone());
+                }
+                let name = pal.name_of(i).map(|n| format!("{n} · ")).unwrap_or_default();
+                resp.on_hover_text(format!("{i} · {name}{}\n{}", hex(c), tr("Doppelklick: ändern · Rechtsklick: duplizieren, kopieren …")));
+            }
+            if pal.len() < MAX_COLORS {
+                let (rect, resp) = ui.allocate_exact_size(Vec2::splat(18.0), Sense::click());
+                let col = if resp.hovered() { ui.visuals().strong_text_color() } else { ui.visuals().weak_text_color() };
+                ui.painter().rect_stroke(rect.shrink(0.5), 3.0, Stroke::new(1.0, col), egui::StrokeKind::Inside);
+                ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "+", egui::FontId::proportional(14.0), col);
+                if resp.clicked() {
+                    action = Some(SwatchAction::Add);
+                }
+                resp.on_hover_text(tr("Neue Farbe hinzufügen"));
             }
         });
+        // Klick: damit malen — aus der Palette des Sprites als Nummer, aus
+        // einer nur angezeigten als Farbe (wie im Web).
+        if let Some((i, c)) = pick {
+            if target.is_none() {
+                self.color = i;
+            } else {
+                self.set_rgb(c);
+            }
+        }
+        if let Some(a) = action {
+            self.swatch_action(ui.ctx(), target.clone(), a, true);
+        }
+        self.swatch_editor(ui, edit_anchor, true);
         ui.horizontal_wrapped(|ui| {
             let other = shown != current;
             if ui.add_enabled(other, egui::Button::new(tr("Für Sprite nutzen"))).on_hover_text(tr("Zuweisen — die Zeichnung bleibt, wie sie ist")).clicked()

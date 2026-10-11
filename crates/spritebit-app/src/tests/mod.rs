@@ -233,6 +233,48 @@ fn grosser_pinsel_malt_die_ganze_flaeche() {
 }
 
 #[test]
+fn angezeigte_palette_im_paletten_panel_bearbeiten() {
+    use crate::palette_ui::SwatchAction;
+    let mut h = app();
+    let ctx = h.ctx.clone();
+    let own = h.state().project.sprite().palette.clone();
+    // Eine andere eingebaute Palette anzeigen und dort „+“: es entsteht eine
+    // Kopie, die Ansicht wechselt darauf, der Sprite behält seine Palette.
+    let other = spritebit_core::builtin::BUILTIN.iter().map(|(n, _)| n.to_string()).find(|n| *n != own).unwrap();
+    let n0 = spritebit_core::builtin::builtin(&other).unwrap().len();
+    h.state_mut().pal.preview = Some(other.clone());
+    h.state_mut().swatch_action(&ctx, Some(other.clone()), SwatchAction::Duplicate(1), true);
+    h.run();
+    let a = h.state();
+    let copy = a.pal.preview.clone().expect("Ansicht auf der Kopie");
+    assert_ne!(copy, other);
+    assert_eq!(a.project.palette(&copy).len(), n0 + 1, "duplizierte Farbe angehängt");
+    assert_eq!(a.project.sprite().palette, own, "der Sprite behält seine Palette");
+    // Entfernen geht, solange kein Sprite die Palette nutzt.
+    h.state_mut().swatch_action(&ctx, Some(copy.clone()), SwatchAction::Remove(1), true);
+    h.run();
+    assert_eq!(h.state().project.palette(&copy).len(), n0);
+    // Rückgängig holt die Farbe zurück — Paletten stecken im Undo-Schritt.
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Z);
+    h.run();
+    assert_eq!(h.state().project.palette(&copy).len(), n0 + 1);
+}
+
+#[test]
+fn palette_des_sprites_im_paletten_panel_wie_in_der_farbreihe() {
+    use crate::palette_ui::SwatchAction;
+    let mut h = app();
+    let ctx = h.ctx.clone();
+    let n0 = h.state().project.current_palette().len();
+    h.state_mut().pal.preview = None;
+    h.state_mut().swatch_action(&ctx, None, SwatchAction::Duplicate(2), true);
+    h.run();
+    let a = h.state();
+    assert_eq!(a.project.current_palette().len(), n0 + 1, "die Palette des Sprites wächst");
+    assert_eq!(a.color as usize, n0 + 1, "die neue Farbe ist gewählt");
+}
+
+#[test]
 fn stift_malt_einen_strich_ohne_luecken() {
     let mut h = app();
     drag(&mut h, (10.0, 10.0), (20.0, 10.0));
