@@ -12,10 +12,11 @@
 
 use eframe::egui::{self, Color32, Pos2, Vec2};
 use spritebit_core::selection::rgb_of;
-use spritebit_core::tilemap::{self, GodotLayer, NewTiles, Tileset, DEFAULT_TILE, TILE_SIZES};
+use spritebit_core::tilemap::{self, GodotLayer, NewTiles, Tileset, Turn, Xf, DEFAULT_TILE, TILE_SIZES};
 use spritebit_core::{export, Px};
 
 use crate::i18n::{tr, trf};
+use crate::icons;
 use crate::tools_ui::{Pointer, Tool};
 use crate::SpritebitApp;
 
@@ -38,6 +39,12 @@ pub(crate) struct TileState {
     /// Bildchen der Kacheln, neu gebaut, wenn sich der Inhalt ändert.
     thumbs: Vec<egui::TextureHandle>,
     thumbs_key: u64,
+    /// Lage beim Setzen (gedreht/gespiegelt, wie in Tiled).
+    pub xf: Xf,
+    /// Große Vorschau der gesetzten Fassung — neu, wenn sich etwas ändert.
+    xf_tex: Option<(u64, egui::TextureHandle)>,
+    /// Rückfrage „Unbenutzte entfernen“: so viele Kacheln würden gelöscht.
+    pub confirm_prune: Option<usize>,
 }
 
 impl Default for TileState {
@@ -51,6 +58,9 @@ impl Default for TileState {
             drag: None,
             thumbs: Vec::new(),
             thumbs_key: 0,
+            xf: Xf::default(),
+            xf_tex: None,
+            confirm_prune: None,
         }
     }
 }
@@ -119,6 +129,52 @@ impl SpritebitApp {
         (cx < cols && cy < rows).then_some((cx, cy))
     }
 
+    /// Nummer der Kachel, die gesetzt wird — gedreht/gespiegelt kommt eine
+    /// neue Fassung in den Satz (gehört zum selben Undo-Schritt).
+    fn placed_k(&mut self) -> usize {
+        let (k, xf) = (self.tiles.tile, self.tiles.xf);
+        let l = self.sprite().layer;
+        let Some(ts) = self.project.sprite_mut().layers[l].tileset.as_mut() else { return 0 };
+        if ts.xf_for(xf).is_plain() {
+            return k;
+        }
+        match ts.oriented(k, xf) {
+            Some(t) => ts.index_or_add(t),
+            None => k,
+        }
+    }
+
+    /// Lage weiterdrehen (Knöpfe, Z, Umschalt+Z, X, Y) — `None` = normal.
+    pub(crate) fn turn_tile(&mut self, t: Option<Turn>) {
+        let Some(ts) = self.active_tileset() else { return };
+        if matches!(t, Some(Turn::Cw | Turn::Ccw)) && ts.tw != ts.th {
+            self.hint = Some(tr("Um 90° drehen geht nur bei quadratischen Kacheln.").into());
+            return;
+        }
+        self.tiles.xf = t.map_or(Xf::default(), |t| self.tiles.xf.turn(t));
+    }
+
+    /// Z / Umschalt+Z / X / Y im Modus „Kacheln setzen“ (vor den Werkzeugtasten).
+    pub(crate) fn tile_turn_keys(&mut self, ctx: &egui::Context) {
+        if !self.tile_mode_on() || ctx.egui_wants_keyboard_input() {
+            return;
+        }
+        let none = egui::Modifiers::NONE;
+        let (ccw, cw, h, v) = ctx.input_mut(|i| {
+            (
+                i.consume_key(egui::Modifiers::SHIFT, egui::Key::Z),
+                i.consume_key(none, egui::Key::Z),
+                i.consume_key(none, egui::Key::X),
+                i.consume_key(none, egui::Key::Y),
+            )
+        });
+        for (on, t) in [(ccw, Turn::Ccw), (cw, Turn::Cw), (h, Turn::FlipH), (v, Turn::FlipV)] {
+            if on {
+                self.turn_tile(Some(t));
+            }
+        }
+    }
+
     fn place_at(&mut self, c: (u32, u32), k: usize) {
         let Some(ts) = self.active_tileset().cloned() else { return };
         ts.place(self.project.sprite_mut().active(), c.0, c.1, k);
@@ -143,6 +199,7 @@ impl SpritebitApp {
                 let k = ts.tile_at(self.sprite().target(), c.0, c.1);
                 if k > 0 {
                     self.tiles.tile = k as usize;
+                    self.tiles.xf = Xf::default();
                     self.hint = Some(trf("Kachel {k} aufgenommen.", &[("k", &k)]));
                 } else {
                     self.hint = Some(tr("Hier liegt keine Kachel.").into());
@@ -168,9 +225,10 @@ impl SpritebitApp {
                 return;
             }
             self.commit_float();
-            let k = if erase { 0 } else { self.tiles.tile };
             let cur = self.project.current;
             self.histories[cur].record(&self.project.sprites[cur]);
+            let k = if erase { 0 } else { self.placed_k() };
+            let ts = self.active_tileset().cloned().expect("tile_cell prüft die Tilemap");
             if self.tool == Tool::Fill {
                 if ts.fill(self.project.sprite_mut().active(), c.0, c.1, k) > 0 {
                     self.changed();
@@ -232,7 +290,7 @@ impl SpritebitApp {
         let Some((cx, cy)) = self.tile_cell(self.hover) else { return };
         let at = origin + Vec2::new((cx * ts.tw) as f32, (cy * ts.th) as f32) * zoom;
         if self.tool != Tool::Eraser {
-            if let Some(tile) = ts.tiles.get(self.tiles.tile.wrapping_sub(1)) {
+            if let Some(tile) = ts.oriented(self.tiles.tile, self.tiles.xf) {
                 let pal = self.project.current_palette();
                 for (i, &v) in tile.iter().enumerate() {
                     let Some(c) = rgb_of(v, &pal, &sp.free) else { continue };
@@ -353,7 +411,7 @@ impl SpritebitApp {
             });
         }
         let hint = match (self.tiles.mode, self.tiles.new_tiles) {
-            (TileMode::Tiles, _) => tr("Stift setzt die gewählte Kachel, Radierer oder Rechtsklick leert, Füllen füllt, Alt + Klick nimmt eine Kachel auf."),
+            (TileMode::Tiles, _) => tr("Stift setzt die gewählte Kachel, Radierer oder Rechtsklick leert, Füllen füllt, Alt + Klick nimmt eine Kachel auf. Z / X / Y drehen und spiegeln sie."),
             (_, NewTiles::Auto) => tr("Malen ändert die Kachel überall, wo sie liegt. Wer in eine leere Zelle malt, legt eine neue Kachel an."),
             (_, NewTiles::Manual) => tr("Malen ändert die Kachel überall, wo sie liegt. Leere Zellen bleiben leer — es entstehen keine neuen Kacheln."),
         };
@@ -384,19 +442,21 @@ impl SpritebitApp {
                     }
                 }
             });
+            if self.tiles.mode == TileMode::Tiles {
+                self.tile_turn_row(ui, &ts);
+            }
         }
         ui.horizontal(|ui| {
             if ui.button(tr("Unbenutzte entfernen")).on_hover_text(tr("Kacheln entfernen, die nirgends mehr liegen")).clicked() {
-                let mut n = 0;
-                self.tiles_structural(|sp| {
-                    let l = sp.layer;
-                    let ids: Vec<usize> = sp.frames.iter().map(|f| f.cels[l]).collect();
-                    let mut ts = sp.layers[l].tileset.take().expect("Tilemap-Ebene");
-                    n = ts.prune_unused(ids.iter().map(|&i| &sp.images[i]));
-                    sp.layers[l].tileset = Some(ts);
-                });
-                self.tiles.tile = 1;
-                self.hint = Some(if n > 0 { trf("{n} unbenutzte Kacheln entfernt.", &[("n", &n)]) } else { tr("Alle Kacheln werden benutzt.").into() });
+                // Erst zählen (an einer Kopie), dann nachfragen.
+                let sp = self.sprite();
+                let mut copy = ts.clone();
+                let n = copy.prune_unused(sp.frames.iter().map(|f| &sp.images[f.cels[sp.layer]]));
+                if n == 0 {
+                    self.hint = Some(tr("Alle Kacheln werden benutzt.").into());
+                } else {
+                    self.tiles.confirm_prune = Some(n);
+                }
             }
             if ui.button(tr("Normale Ebene")).on_hover_text(tr("Wieder eine normale Ebene — die Pixel bleiben, die Kacheln fallen weg")).clicked() {
                 self.tiles_structural(|sp| {
@@ -406,6 +466,30 @@ impl SpritebitApp {
                 self.hint = Some(tr("Wieder eine normale Ebene — die Pixel sind geblieben.").into());
             }
         });
+        if let Some(n) = self.tiles.confirm_prune {
+            let mut answer = None;
+            ui.group(|ui| {
+                ui.label(if n == 1 {
+                    tr("Eine Kachel liegt nirgends mehr. Wirklich aus dem Kachelsatz löschen? (Mit Rückgängig holst du sie wieder.)").to_string()
+                } else {
+                    trf("{n} Kacheln liegen nirgends mehr. Wirklich aus dem Kachelsatz löschen? (Mit Rückgängig holst du sie wieder.)", &[("n", &n)])
+                });
+                ui.horizontal(|ui| {
+                    if ui.button(tr("Entfernen")).clicked() {
+                        answer = Some(true);
+                    }
+                    if ui.button(tr("Abbrechen")).clicked() {
+                        answer = Some(false);
+                    }
+                });
+            });
+            if answer.is_some() {
+                self.tiles.confirm_prune = None;
+            }
+            if answer == Some(true) {
+                self.prune_tiles();
+            }
+        }
         let r = ui
             .button(tr("Für Godot exportieren"))
             .on_hover_text(tr("Ordner mit Kachelbild (PNG), Godot-Szene (.tscn mit TileMapLayer) und JSON — den Ordner ins Godot-Projekt (res://) legen"));
@@ -416,6 +500,87 @@ impl SpritebitApp {
                 Ok(None) => {}
                 Err(e) => self.error = Some(e),
             }
+        }
+    }
+
+    /// Kacheln entfernen, die in keinem Bild der Ebene mehr vorkommen.
+    pub(crate) fn prune_tiles(&mut self) {
+        let mut n = 0;
+        self.tiles_structural(|sp| {
+            let l = sp.layer;
+            let ids: Vec<usize> = sp.frames.iter().map(|f| f.cels[l]).collect();
+            let mut ts = sp.layers[l].tileset.take().expect("Tilemap-Ebene");
+            n = ts.prune_unused(ids.iter().map(|&i| &sp.images[i]));
+            sp.layers[l].tileset = Some(ts);
+        });
+        self.tiles.tile = 1;
+        self.hint = Some(if n > 0 { trf("{n} unbenutzte Kacheln entfernt.", &[("n", &n)]) } else { tr("Alle Kacheln werden benutzt.").into() });
+    }
+
+    /// Große Vorschau der Kachel, wie sie gesetzt wird; darunter fünf gleich
+    /// breite Knöpfe. Die Vorschau schrumpft erst, wenn das Panel schmal wird.
+    fn tile_turn_row(&mut self, ui: &mut egui::Ui, ts: &Tileset) {
+        let Some(tile) = ts.oriented(self.tiles.tile, self.tiles.xf) else { return };
+        let xf = ts.xf_for(self.tiles.xf);
+        let (w, h) = if xf.rot & 1 == 1 { (ts.th, ts.tw) } else { (ts.tw, ts.th) };
+        let tex = {
+            use std::hash::{Hash, Hasher};
+            let pal = self.project.current_palette();
+            let free = &self.sprite().free;
+            let mut hs = std::collections::hash_map::DefaultHasher::new();
+            (&tile, w, &pal.colors, free).hash(&mut hs);
+            let key = hs.finish();
+            match &self.tiles.xf_tex {
+                Some((k, t)) if *k == key => t.clone(),
+                _ => {
+                    let rgba: Vec<u8> = tile.iter().flat_map(|&v| rgb_of(v, &pal, free).map_or([0, 0, 0, 0], |c| [c[0], c[1], c[2], 255])).collect();
+                    let img = egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], &rgba);
+                    let t = ui.ctx().load_texture("tile-xf", img, egui::TextureOptions::NEAREST);
+                    self.tiles.xf_tex = Some((key, t.clone()));
+                    t
+                }
+            }
+        };
+        ui.add_space(4.0);
+        let side = ui.available_width().clamp(48.0, 128.0);
+        let size = if w >= h { Vec2::new(side, side * h as f32 / w as f32) } else { Vec2::new(side * w as f32 / h as f32, side) };
+        ui.vertical_centered(|ui| {
+            let r = ui.add(egui::Image::new((tex.id(), size)).bg_fill(ui.visuals().extreme_bg_color)).on_hover_text(tr("So wird die Kachel gesetzt"));
+            self.mark("tile-turn", r.rect);
+        });
+        let gap = ui.spacing().item_spacing.x;
+        let bw = ((ui.available_width() - 4.0 * gap) / 5.0).floor().max(24.0);
+        let square = ts.tw == ts.th;
+        let c = ui.visuals().text_color();
+        let mut turn: Option<Option<Turn>> = None;
+        ui.horizontal(|ui| {
+            let mut icon = |ui: &mut egui::Ui, src, tip: &str, on: bool, t: Option<Turn>| {
+                let b = egui::Button::image(icons::image(src, c).alt_text(tip));
+                if ui.add_enabled_ui(on, |ui| ui.add_sized([bw, 24.0], b)).inner.on_hover_text(tip).clicked() {
+                    turn = Some(t);
+                }
+            };
+            icon(ui, icons::UNDO, tr("90° gegen den Uhrzeigersinn (Umschalt+Z)"), square, Some(Turn::Ccw));
+            icon(ui, icons::REDO, tr("90° im Uhrzeigersinn (Z)"), square, Some(Turn::Cw));
+            icon(ui, icons::MIRROR_X, tr("Waagerecht spiegeln (X)"), true, Some(Turn::FlipH));
+            icon(ui, icons::MIRROR_Y, tr("Senkrecht spiegeln (Y)"), true, Some(Turn::FlipV));
+            let plain = xf.is_plain();
+            if ui
+                .add_enabled_ui(!plain, |ui| ui.add_sized([bw, 24.0], egui::Button::new(tr("Normal"))))
+                .inner
+                .on_hover_text(tr("Wieder normal setzen"))
+                .clicked()
+            {
+                turn = Some(None);
+            }
+        });
+        if let Some(t) = turn {
+            self.turn_tile(t);
+        }
+        if !xf.is_plain() {
+            ui.small(tr(
+                "Gesetzt wird die gedrehte/gespiegelte Fassung (Vorschau). Die Kachel selbst bleibt — ist die Fassung neu, wird sie eine eigene Kachel.",
+            ));
         }
     }
 

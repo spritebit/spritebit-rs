@@ -60,6 +60,84 @@ pub struct SyncSum {
     pub blocked: usize,
 }
 
+/// Lage einer Kachel beim Setzen (wie in Tiled/Aseprite): erst spiegeln,
+/// dann `rot` × 90° im Uhrzeigersinn drehen. Beides gespiegelt = 180°
+/// gedreht, darum kommt `fx && fy` nie vor — jede Lage hat eine Schreibweise.
+/// Dieselbe Rechnung wie im Web (js/tiles.js turnXf/orientTile).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Xf {
+    pub rot: u8,
+    pub fx: bool,
+    pub fy: bool,
+}
+
+/// Wie man die Lage weiterdreht — so, wie man sie sieht.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Turn {
+    /// 90° im Uhrzeigersinn
+    Cw,
+    /// 90° gegen den Uhrzeigersinn
+    Ccw,
+    /// waagerecht spiegeln (links ↔ rechts)
+    FlipH,
+    /// senkrecht spiegeln (oben ↔ unten)
+    FlipV,
+}
+
+impl Xf {
+    pub fn is_plain(self) -> bool {
+        self == Xf::default()
+    }
+
+    pub fn turn(self, t: Turn) -> Xf {
+        let Xf { mut rot, mut fx, mut fy } = self;
+        match t {
+            Turn::Cw => rot += 1,
+            Turn::Ccw => rot += 3,
+            // Spiegeln nach dem Drehen = vor dem Drehen spiegeln und andersherum drehen.
+            Turn::FlipH => {
+                rot = (4 - rot) & 3;
+                fx = !fx;
+            }
+            Turn::FlipV => {
+                rot = (4 - rot) & 3;
+                fy = !fy;
+            }
+        }
+        if fx && fy {
+            fx = false;
+            fy = false;
+            rot += 2;
+        }
+        Xf { rot: rot & 3, fx, fy }
+    }
+}
+
+/// Kachel (`tw × th`, zeilenweise) in Lage `xf`. 90°/270° tauschen Breite
+/// und Höhe — das Ergebnis ist dann `th × tw`.
+pub fn orient(t: &[Px], tw: u32, th: u32, xf: Xf) -> Vec<Px> {
+    let (mut w, mut h) = (tw as usize, th as usize);
+    let mut g: Vec<Px> = t.to_vec();
+    if xf.fx {
+        g.chunks_mut(w).for_each(|r| r.reverse());
+    }
+    if xf.fy {
+        g = g.chunks(w).rev().flatten().copied().collect();
+    }
+    for _ in 0..(xf.rot & 3) {
+        // neu[y][x] = alt[h-1-x][y]
+        let mut n = vec![0; w * h];
+        for y in 0..w {
+            for x in 0..h {
+                n[y * h + x] = g[(h - 1 - x) * w + y];
+            }
+        }
+        g = n;
+        std::mem::swap(&mut w, &mut h);
+    }
+    g
+}
+
 impl Tileset {
     pub fn new(tw: u32, th: u32) -> Self {
         Tileset { tw, th, tiles: Vec::new(), lib: None }
@@ -89,6 +167,34 @@ impl Tileset {
                     img.set(px, py, v);
                 }
             }
+        }
+    }
+
+    /// Nummer einer Kachel im Satz — ist sie neu, kommt sie dazu. Leer → 0.
+    pub fn index_or_add(&mut self, t: Vec<Px>) -> usize {
+        if t.iter().all(|&v| v == 0) {
+            return 0;
+        }
+        if let Some(i) = self.tiles.iter().position(|x| *x == t) {
+            return i + 1;
+        }
+        self.tiles.push(t);
+        self.tiles.len()
+    }
+
+    /// Kachel k in Lage `xf` — wie sie gesetzt wird. Bei nicht quadratischen
+    /// Kacheln zählen nur 0° und 180°.
+    pub fn oriented(&self, k: usize, xf: Xf) -> Option<Vec<Px>> {
+        let t = self.tiles.get(k.checked_sub(1)?)?;
+        Some(orient(t, self.tw, self.th, self.xf_for(xf)))
+    }
+
+    /// Lage für diesen Satz: 90°/270° nur bei quadratischen Kacheln.
+    pub fn xf_for(&self, xf: Xf) -> Xf {
+        if self.tw == self.th {
+            xf
+        } else {
+            Xf { rot: xf.rot & 2, ..xf }
         }
     }
 
@@ -503,6 +609,48 @@ pub fn tilemap_json(name: &str, layers: &[GodotLayer]) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn kachel_gedreht_und_gespiegelt_wie_man_sieht() {
+        let t: Vec<Px> = (1..=9).collect();
+        assert_eq!(orient(&t, 3, 3, Xf { rot: 1, ..Xf::default() }), vec![7, 4, 1, 8, 5, 2, 9, 6, 3]);
+        assert_eq!(orient(&t, 3, 3, Xf { fx: true, ..Xf::default() }), vec![3, 2, 1, 6, 5, 4, 9, 8, 7]);
+        assert_eq!(orient(&[1, 2], 2, 1, Xf { rot: 1, ..Xf::default() }), vec![1, 2], "90° tauscht Breite und Höhe");
+        let see = |g: &[Px], t: Turn| match t {
+            Turn::Cw => orient(g, 3, 3, Xf { rot: 1, ..Xf::default() }),
+            Turn::Ccw => orient(g, 3, 3, Xf { rot: 3, ..Xf::default() }),
+            Turn::FlipH => orient(g, 3, 3, Xf { fx: true, ..Xf::default() }),
+            Turn::FlipV => orient(g, 3, 3, Xf { fy: true, ..Xf::default() }),
+        };
+        for op in [Turn::Cw, Turn::Ccw, Turn::FlipH, Turn::FlipV] {
+            for rot in 0..4 {
+                for fx in [false, true] {
+                    let a = Xf { rot, fx, fy: false };
+                    let b = a.turn(op);
+                    assert!(!(b.fx && b.fy));
+                    assert_eq!(orient(&t, 3, 3, b), see(&orient(&t, 3, 3, a), op), "{op:?} von {a:?}");
+                }
+            }
+        }
+        assert!(Xf::default().turn(Turn::FlipH).turn(Turn::FlipH).is_plain());
+        assert!(Xf::default().turn(Turn::Cw).turn(Turn::Ccw).is_plain());
+    }
+
+    #[test]
+    fn gedrehte_fassung_wird_eigene_kachel() {
+        let mut ts = Tileset::new(2, 2);
+        ts.tiles.push(vec![1, 2, 3, 4]);
+        let turned = ts.oriented(1, Xf { rot: 2, ..Xf::default() }).unwrap();
+        assert_eq!(turned, vec![4, 3, 2, 1]);
+        assert_eq!(ts.index_or_add(turned.clone()), 2);
+        assert_eq!(ts.index_or_add(turned), 2, "schon da");
+        assert_eq!(ts.index_or_add(vec![0; 4]), 0);
+        assert_eq!(ts.tiles[0], vec![1, 2, 3, 4], "die Kachel selbst bleibt");
+        // Nicht quadratisch: 90° zählt nicht.
+        let mut wide = Tileset::new(2, 1);
+        wide.tiles.push(vec![1, 2]);
+        assert_eq!(wide.oriented(1, Xf { rot: 1, ..Xf::default() }), Some(vec![1, 2]));
+    }
+
     use super::*;
 
     // 2×2-Kacheln: A = Punkt oben links, B = volle Kachel.

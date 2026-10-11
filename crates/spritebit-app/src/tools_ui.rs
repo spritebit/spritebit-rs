@@ -310,6 +310,8 @@ impl SpritebitApp {
         if ctx.egui_wants_keyboard_input() {
             return;
         }
+        // Z / X / Y drehen und spiegeln die Kachel beim Setzen (tiles_ui.rs).
+        self.tile_turn_keys(ctx);
         for t in Tool::ALL {
             if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, t.key())) {
                 self.tool = t;

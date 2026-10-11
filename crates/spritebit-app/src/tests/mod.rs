@@ -2204,3 +2204,61 @@ fn kachelsatz_uebernehmen_behaelt_die_anordnung() {
     let sp = a.sprite();
     assert_eq!(sp.cel(0, sp.layer).get(0, 0), 1);
 }
+
+#[test]
+fn kachel_gedreht_setzen_und_unbenutzte_mit_rueckfrage() {
+    use crate::tools_ui::Pointer;
+    use spritebit_core::tilemap::{Tileset, Turn};
+    let mut h = app();
+    let a = h.state_mut();
+    // 8 × 8-Kachel „L“: links Farbe 1, unten Farbe 2.
+    a.tiles_structural(|sp| {
+        let l = sp.layer;
+        let img = sp.cel_mut(0, l);
+        for i in 0..8 {
+            img.set(0, i, 1);
+        }
+        for i in 0..8 {
+            img.set(i, 7, 2);
+        }
+        sp.layers[l].tileset = Some(Tileset::build(8, 8, [&*img]));
+    });
+    a.tiles.mode = crate::tiles_ui::TileMode::Tiles;
+    a.tiles.tile = 1;
+    a.turn_tile(Some(Turn::Cw));
+    a.turn_tile(Some(Turn::FlipH));
+    let at = |cell, pressed, primary| Pointer {
+        cell: Some(cell),
+        over: true,
+        primary,
+        secondary: false,
+        pressed,
+        released: !primary,
+        panning: false,
+        alt: false,
+        pos: None,
+    };
+    a.use_tile_tool(&at((12, 4), true, true));
+    a.use_tile_tool(&at((12, 4), false, true));
+    a.use_tile_tool(&at((12, 4), false, false));
+    a.tile_sync(false);
+    let sp = a.sprite();
+    let img = sp.cel(0, sp.layer);
+    let row = |y| (8..16).map(|x| img.get(x, y)).collect::<Vec<_>>();
+    // Gedreht und gespiegelt: oben Farbe 1, rechts Farbe 2.
+    assert_eq!(row(0), vec![1, 1, 1, 1, 1, 1, 1, 2]);
+    assert_eq!(row(3), vec![0, 0, 0, 0, 0, 0, 0, 2]);
+    let ts = sp.layers[sp.layer].tileset.as_ref().unwrap();
+    assert_eq!(ts.tiles.len(), 2, "neue Fassung = eigene Kachel");
+    assert_eq!(img.get(0, 0), 1, "die erste Kachel liegt unverändert");
+    // Rückgängig nimmt Setzen und neue Kachel zusammen zurück.
+    a.undo();
+    let sp = a.sprite();
+    assert_eq!(sp.layers[sp.layer].tileset.as_ref().unwrap().tiles.len(), 1);
+    // Unbenutzte entfernen fragt erst nach.
+    let l = a.sprite().layer;
+    a.project.sprite_mut().layers[l].tileset.as_mut().unwrap().tiles.push(vec![3; 64]);
+    a.tiles.confirm_prune = None;
+    a.prune_tiles();
+    assert_eq!(a.active_tileset().unwrap().tiles.len(), 1);
+}
