@@ -98,10 +98,14 @@ impl SpritebitApp {
             })
             .response
             .on_hover_text(tr("Wie viele Töne insgesamt"));
-        if ui
-            .button(tr("Anordnen"))
-            .on_hover_text(tr("Palette nach Farbstufen ordnen — die Töne jeder Farbe stehen dann nebeneinander, von dunkel nach hell. Das Bild bleibt gleich."))
-            .clicked()
+        // Derselbe Knopf wie im Web in der Farbzeile: Palette nach Farbstufen.
+        if crate::icons::button(
+            ui,
+            crate::icons::SHADES,
+            tr("Nach Farbstufen sortieren — gleiche Farbtöne nebeneinander, von dunkel nach hell. Die Pixel werden mit umnummeriert, das Bild bleibt gleich."),
+            true,
+        )
+        .clicked()
         {
             let pal = self.project.current_palette();
             if !self.reorder_colors(&palops::shade_order(&pal.colors)) {
@@ -182,6 +186,12 @@ impl SpritebitApp {
         };
         let shades = shade::make_shades(base, self.shade_gen);
         let added = self.add_colors_to_palette(&shades);
+        // Die Töne rücken gleich neben ihre Grundfarbe — dunkel davor, hell
+        // dahinter; der Rest der Palette bleibt, wie er ist.
+        let pal = self.project.current_palette();
+        let idx = |c: Rgb| pal.colors.iter().position(|&p| p == c).map(|k| k + 1);
+        let group: Vec<usize> = shades.iter().filter_map(|&c| idx(c)).collect();
+        self.reorder_colors(&palops::group_around(pal.len(), idx(base), &group));
         self.hint = Some(trf("{n} Töne erzeugt und als Farbreihe gewählt — {added} davon neu in der Palette.", &[("n", &shades.len()), ("added", &added)]));
         self.shade_ramp = shades;
         self.save_view();

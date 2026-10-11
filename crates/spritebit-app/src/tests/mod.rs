@@ -1889,13 +1889,10 @@ fn schattieren_abstufungen_erzeugen_und_anordnen() {
     let pal = a.project.current_palette();
     assert!(pal.len() > n, "neue Töne stehen in der Palette");
     assert!(a.shade_ramp.iter().all(|c| pal.colors.contains(c)));
-    // Anordnen: danach stehen die Töne nach Farbstufen, das Bild bleibt.
-    h.get_by_label("Anordnen").click();
-    h.run();
-    let pal = h.state().project.current_palette();
-    let order = spritebit_core::palops::shade_order(&pal.colors);
-    assert!(order.iter().enumerate().all(|(k, &o)| o == k + 1), "schon sortiert");
-    // Ein Rückgängig nimmt das Anordnen zurück, das zweite das Erzeugen.
+    // Die Töne stehen gleich zusammen neben der Grundfarbe, dunkel → hell.
+    let at: Vec<usize> = a.shade_ramp.iter().map(|c| pal.colors.iter().position(|p| p == c).unwrap()).collect();
+    assert!(at.windows(2).all(|w| w[1] == w[0] + 1), "nebeneinander: {at:?}");
+    // Rückgängig nimmt Einsortieren und Erzeugen zurück.
     h.state_mut().undo();
     h.state_mut().undo();
     h.run();
