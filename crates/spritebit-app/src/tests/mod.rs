@@ -1840,3 +1840,30 @@ fn schattieren_gedrueckt_halten_geht_weiter() {
     h.drop_at(p);
     h.run();
 }
+
+#[test]
+fn schattieren_langer_strich_bleibt_bei_einer_stufe() {
+    // Ein Strich, der eine Sekunde dauert: gedrückt halten zählt nur, wenn
+    // die Maus stillsteht — sonst liefe alles bis zur dunkelsten Farbe.
+    let mut h = app_60();
+    {
+        let a = h.state_mut();
+        a.tool = tools_ui::Tool::Shade;
+        for v in [1, 3, 4, 9] {
+            a.pick_swatch(v);
+        }
+    }
+    h.run();
+    let (a, b) = (at(&h, 2.0, 2.0), at(&h, 12.0, 2.0));
+    h.hover_at(a);
+    h.run();
+    h.drag_at(a);
+    for k in 1..=60 {
+        h.hover_at(a + (b - a) * (k as f32 / 60.0));
+        h.step();
+    }
+    h.drop_at(b);
+    h.run();
+    let row: Vec<u16> = (2..=12).map(|x| px(&h, x, 2)).collect();
+    assert!(row.iter().all(|&v| v == 1), "überall die hellste Farbe: {row:?}");
+}

@@ -485,15 +485,18 @@ impl SpritebitApp {
         };
         if let Some(last) = self.stroke_last {
             if self.tool == Tool::Shade {
+                let now = ctx.input(|i| i.time);
                 if last != cell {
                     for pt in tools::line(last.0, last.1, cell.0, cell.1).into_iter().skip(1) {
                         self.shade_at(pt);
                     }
                 }
-                // Gedrückt halten: wie ein neuer Tipp an derselben Stelle.
-                let now = ctx.input(|i| i.time);
+                // Gedrückt halten: wie ein neuer Tipp an derselben Stelle —
+                // aber nur, solange die Maus stillsteht. Jede Bewegung
+                // startet die Wartezeit neu, sonst liefe ein langsamer Strich
+                // stellenweise bis ans Ende der Reihe.
                 let due = self.shade.as_mut().is_some_and(|s| {
-                    if s.next.is_infinite() {
+                    if s.next.is_infinite() || last != cell {
                         s.next = now + SHADE_HOLD_S;
                     }
                     now >= s.next
