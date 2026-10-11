@@ -460,6 +460,7 @@ impl SpritebitApp {
         for id in self.dock.pinned(side) {
             let focus = self.dock.focus == Some(id) || (id == PanelId::Output && focus_output);
             let force = focus.then_some(true);
+            let top = ui.cursor().min.y;
             let (row, grip) = self.panel_with(
                 ui,
                 id.title(),
@@ -470,6 +471,9 @@ impl SpritebitApp {
                 move |s, ui| s.panel_header(id, ui),
                 move |s, ui| s.panel_body(id, ui),
             );
+            // Das ganze Panel (Kopf und Inhalt) als Tour-Ziel.
+            let whole = egui::Rect::from_x_y_ranges(row.rect.x_range(), top..=ui.cursor().min.y.max(row.rect.bottom()));
+            self.mark(id.key(), whole.intersect(ui.clip_rect()));
             if focus {
                 row.scroll_to_me(Some(egui::Align::TOP));
                 self.dock.focus = None;
@@ -569,7 +573,7 @@ impl SpritebitApp {
             (false, _) => self.dock.flyout_grab = None,
         }
         let (mut close, mut pin) = (false, false);
-        egui::Window::new(id.title())
+        let win = egui::Window::new(id.title())
             .id(egui::Id::new(("flyout", id.key())))
             .title_bar(false)
             .interactable(!dragging)
@@ -607,6 +611,9 @@ impl SpritebitApp {
                 ui.separator();
                 egui::ScrollArea::vertical().show(ui, |ui| self.panel_body(id, ui));
             });
+        if let Some(w) = win {
+            self.mark(id.key(), w.response.rect);
+        }
         // Klick daneben schließt — wie in der Web-Version. Nur auf der Fläche
         // dahinter (Leisten, Zeichenfläche): Klicks in Menüs, Farbwähler oder
         // Dialoge, die das Panel geöffnet hat, liegen auf eigenen Ebenen

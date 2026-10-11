@@ -287,7 +287,9 @@ impl SpritebitApp {
             ui.label(tr("Die aktive Ebene ist keine Tilemap. Eine Tilemap besteht aus Kacheln fester Größe — malt man eine Kachel an, ändert sie sich überall, wo sie liegt. Gut für Spiel-Levels und Muster."));
             self.tile_size_picker(ui);
             let (tw, th) = (self.tiles.tw, self.tiles.th);
-            if ui.button(tr("Neue Tilemap-Ebene")).on_hover_text(tr("Neue, leere Tilemap-Ebene über der aktiven anlegen")).clicked() {
+            let r = ui.button(tr("Neue Tilemap-Ebene")).on_hover_text(tr("Neue, leere Tilemap-Ebene über der aktiven anlegen"));
+            self.mark("tile-new", r.rect);
+            if r.clicked() {
                 self.tiles_structural(|sp| {
                     let n = sp.layers.len() + 1;
                     let at = sp.layer + 1;
@@ -305,8 +307,9 @@ impl SpritebitApp {
                     tr("Tilemap angelegt — einfach losmalen, jede bemalte Zelle wird eine Kachel.").into()
                 });
             }
-            if ui.button(tr("Aktive Ebene umwandeln")).on_hover_text(tr("Die aktive Ebene in Kacheln zerlegen — gleiche Stellen werden eine Kachel")).clicked()
-            {
+            let r = ui.button(tr("Aktive Ebene umwandeln")).on_hover_text(tr("Die aktive Ebene in Kacheln zerlegen — gleiche Stellen werden eine Kachel"));
+            self.mark("tile-convert", r.rect);
+            if r.clicked() {
                 let mut n = 0;
                 self.tiles_structural(|sp| {
                     let l = sp.layer;
@@ -321,7 +324,7 @@ impl SpritebitApp {
             return;
         };
 
-        ui.horizontal(|ui| {
+        let r = ui.horizontal(|ui| {
             for (m, label, tip) in [
                 (TileMode::Pixel, tr("Pixel malen"), tr("Kacheln bemalen — eine Kachel ändert sich überall, wo sie liegt")),
                 (TileMode::Tiles, tr("Kacheln setzen"), tr("Kacheln aus der Liste ins Raster setzen")),
@@ -331,6 +334,7 @@ impl SpritebitApp {
                 }
             }
         });
+        self.mark("tile-mode", r.response.rect);
         if self.tiles.mode == TileMode::Pixel {
             ui.horizontal(|ui| {
                 ui.label(tr("Neue Kacheln"));
@@ -396,11 +400,11 @@ impl SpritebitApp {
                 self.hint = Some(tr("Wieder eine normale Ebene — die Pixel sind geblieben.").into());
             }
         });
-        if ui
+        let r = ui
             .button(tr("Für Godot exportieren"))
-            .on_hover_text(tr("Ordner mit Kachelbild (PNG), Godot-Szene (.tscn mit TileMapLayer) und JSON — den Ordner ins Godot-Projekt (res://) legen"))
-            .clicked()
-        {
+            .on_hover_text(tr("Ordner mit Kachelbild (PNG), Godot-Szene (.tscn mit TileMapLayer) und JSON — den Ordner ins Godot-Projekt (res://) legen"));
+        self.mark("tile-godot", r.rect);
+        if r.clicked() {
             match self.export_godot() {
                 Ok(Some(msg)) => self.hint = Some(msg),
                 Ok(None) => {}

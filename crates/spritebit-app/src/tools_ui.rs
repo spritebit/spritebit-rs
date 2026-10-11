@@ -35,7 +35,7 @@ pub(crate) enum Tool {
 }
 
 impl Tool {
-    const ALL: [Tool; 14] = [
+    pub(crate) const ALL: [Tool; 14] = [
         Tool::Pan,
         Tool::Pencil,
         Tool::Brush,
@@ -52,7 +52,7 @@ impl Tool {
         Tool::Wand,
     ];
 
-    fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
             Tool::Pan => tr("Hand"),
             Tool::Pencil => tr("Stift"),
@@ -71,7 +71,7 @@ impl Tool {
         }
     }
 
-    fn key(self) -> Key {
+    pub(crate) fn key(self) -> Key {
         match self {
             Tool::Pan => Key::H,
             Tool::Pencil => Key::P,
@@ -106,6 +106,26 @@ impl Tool {
             Tool::Lasso => icons::LASSO,
             Tool::Magic => icons::MAGIC,
             Tool::Wand => icons::WAND,
+        }
+    }
+
+    /// Name des Knopfs als Ziel für Bittys Touren (tour_ui.rs).
+    pub(crate) fn target(self) -> &'static str {
+        match self {
+            Tool::Pan => "tool-pan",
+            Tool::Pencil => "tool-pencil",
+            Tool::Brush => "tool-brush",
+            Tool::Spray => "tool-spray",
+            Tool::Shade => "tool-shade",
+            Tool::Fill => "tool-fill",
+            Tool::Eraser => "tool-eraser",
+            Tool::Line => "tool-line",
+            Tool::Rect => "tool-rect",
+            Tool::Ellipse => "tool-ellipse",
+            Tool::Select => "tool-select",
+            Tool::Lasso => "tool-lasso",
+            Tool::Magic => "tool-magic",
+            Tool::Wand => "tool-wand",
         }
     }
 
@@ -199,6 +219,7 @@ impl SpritebitApp {
                 let color = if on { ui.visuals().strong_text_color() } else { ui.visuals().text_color() };
                 let btn = egui::Button::selectable(on, (icons::image(t.icon(), color), t.label()));
                 let r = ui.add(btn).on_hover_text(format!("{} ({key})", t.label()));
+                self.mark(t.target(), r.rect);
                 if r.clicked() {
                     self.tool = t;
                 }
@@ -438,6 +459,8 @@ impl SpritebitApp {
             self.blocked = !self.layer_ok();
             if !self.blocked {
                 if let Some(cell) = p.cell {
+                    let now = ctx.input(|i| i.time);
+                    self.paint_hints(cell, p.secondary, now);
                     self.begin(cell, p.secondary);
                 }
             }

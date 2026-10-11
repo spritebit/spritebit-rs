@@ -30,6 +30,7 @@ mod tiles_ui;
 mod timeline;
 mod tlmenu_ui;
 mod tools_ui;
+mod tour_ui;
 mod update;
 mod view_ui;
 
@@ -895,6 +896,7 @@ impl SpritebitApp {
             ui.menu_button(tr("Hilfe"), |ui| {
                 self.help_menu(ui);
                 self.bitty_menu(ui);
+                self.tour_menu(ui);
                 ui.separator();
                 self.update_menu(ui);
                 ui.separator();
@@ -1255,6 +1257,8 @@ impl SpritebitApp {
 impl eframe::App for SpritebitApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        // Tour-Ziele melden sich in diesem Bild neu (tour_ui.rs).
+        self.bitty.targets.clear();
         self.guard_close(&ctx);
         self.shortcuts(&ctx);
         self.tab_keys(&ctx);
@@ -1274,7 +1278,8 @@ impl eframe::App for SpritebitApp {
             let frame = self.banner_frame();
             egui::Panel::top("update").frame(frame).show(ui, |ui| self.update_banner(ui));
         }
-        egui::Panel::top("tools").show(ui, |ui| self.toolbar(ui));
+        let tools = egui::Panel::top("tools").show(ui, |ui| self.toolbar(ui)).response.rect;
+        self.mark("toolbar", tools);
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
         // Die Timeline dockt dort an, wo man sie im ⚙-Menü hinstellt.
         match self.tl.zone {
@@ -1319,6 +1324,8 @@ impl eframe::App for SpritebitApp {
             self.sprite_tabs(ui);
             self.canvas(ui);
         });
+        let canvas = self.canvas_rect;
+        self.mark("canvas", canvas);
         // Nach einem Strich (Maus los): Kachelsätze abgleichen.
         let down = ctx.input(|i| i.pointer.any_down());
         self.tile_sync(down);

@@ -1969,3 +1969,162 @@ fn runder_pinsel_malt_einen_kreis() {
     drag(&mut h, (20.0, 10.0), (20.0, 10.0));
     assert!((18..=22).all(|x| (8..=12).all(|y| px(&h, x, y) != 0)));
 }
+
+#[test]
+fn bitty_bietet_beim_ersten_start_die_tour_an() {
+    let mut h = app();
+    h.state_mut().bitty.tour_done = false;
+    h.state_mut().projects.start_open = false;
+    for _ in 0..6 {
+        h.step();
+    }
+    assert_eq!(h.state().bitty.guide, Some(tour_ui::Guide::Hello));
+    h.get_by_label("Nein danke").click();
+    h.run();
+    assert_eq!(h.state().bitty.guide, None);
+    assert!(h.state().bitty.tour_done, "fragt nicht noch einmal");
+}
+
+#[test]
+fn bitty_tour_animation_zeigt_auf_die_knoepfe() {
+    let mut h = app();
+    let ctx = h.ctx.clone();
+    h.state_mut().start_guide(tour_ui::Guide::Choose, &ctx);
+    h.run();
+    h.get_by_label("Animation").click();
+    h.run();
+    assert_eq!(h.state().bitty.guide, Some(tour_ui::Guide::Tour(tour_ui::TourId::Anim, 0)));
+    for key in ["tl-grid", "tl-dup", "tl-onion", "tl-play", "tl-fps", "tl-tag"] {
+        assert!(h.state().bitty.targets.contains_key(key), "{key} fehlt");
+    }
+    for _ in 0..6 {
+        h.get_by_label("Weiter").click();
+        h.run();
+    }
+    // Letzter Schritt: das Export-Panel ist aufgeklappt, der GIF-Knopf gemeldet.
+    h.run();
+    assert_eq!(h.state().bitty.guide, Some(tour_ui::Guide::Tour(tour_ui::TourId::Anim, 6)));
+    assert!(h.state().bitty.targets.contains_key("export-gif"), "Export-Panel aufgeklappt");
+    h.get_by_label("Los geht’s").click();
+    h.run();
+    assert_eq!(h.state().bitty.guide, None);
+}
+
+#[test]
+fn bitty_erste_schritte_bis_zum_ende() {
+    let mut h = app();
+    let ctx = h.ctx.clone();
+    h.state_mut().start_guide(tour_ui::Guide::Tour(tour_ui::TourId::Start, 0), &ctx);
+    h.run();
+    for key in ["toolbar", "colors", "canvas", "timeline"] {
+        assert!(h.state().bitty.targets.contains_key(key), "{key} fehlt");
+    }
+    for _ in 0..5 {
+        h.get_by_label("Weiter").click();
+        h.run();
+    }
+    // Am Ende: weitere Touren anbieten.
+    h.get_by_label("Mehr Touren").click();
+    h.run();
+    assert_eq!(h.state().bitty.guide, Some(tour_ui::Guide::Choose));
+    // („Ebenen“ steht auch als Panel-Titel da — die Tour direkt wählen.)
+    let ctx = h.ctx.clone();
+    h.state_mut().start_guide(tour_ui::Guide::Tour(tour_ui::TourId::Layers, 0), &ctx);
+    h.run();
+    for key in ["ly-list", "ly-buttons", "ly-mask", "ly-opacity"] {
+        assert!(h.state().bitty.targets.contains_key(key), "{key} fehlt");
+    }
+}
+
+#[test]
+fn bitty_lektion_schaut_selbst_nach() {
+    use tour_ui::Guide;
+    let mut h = app_60();
+    let n = h.state().project.sprites.len();
+    let ctx = h.ctx.clone();
+    h.state_mut().start_guide(Guide::LessonHello, &ctx);
+    h.run();
+    h.get_by_label("Zeig her").click();
+    for _ in 0..3 {
+        h.step();
+    }
+    assert_eq!(h.state().project.sprites.len(), n + 1, "eigener, frischer Sprite");
+    assert_eq!(h.state().sprite().width, 16);
+    assert_eq!(h.state().bitty.guide, Some(Guide::Lesson(0)));
+    // Lob steht gut eine Sekunde, dann kommt der nächste Schritt.
+    let wait = |h: &mut Harness<'_, SpritebitApp>, want: usize| {
+        for _ in 0..120 {
+            h.step();
+            if h.state().bitty.guide == Some(Guide::Lesson(want)) {
+                return;
+            }
+        }
+        panic!("Schritt {want} kam nicht: {:?}", h.state().bitty.guide);
+    };
+    // 1: mit dem Stift mindestens 8 Pixel
+    h.state_mut().color = 5;
+    for x in 2..12 {
+        h.state_mut().project.sprite_mut().active().set(x, 3, 5);
+    }
+    wait(&mut h, 1);
+    // 2: Füllen-Werkzeug und etwas gefüllt
+    h.state_mut().tool = tools_ui::Tool::Fill;
+    h.state_mut().project.sprite_mut().active().set(5, 6, 2);
+    wait(&mut h, 2);
+    // 3: Frame duplizieren
+    h.state_mut().edit_sprite(|s| {
+        let f = s.frame;
+        s.add_frame(f, true);
+    });
+    wait(&mut h, 3);
+    // 4: im neuen Frame etwas ändern — erst dann zählt es
+    h.state_mut().project.sprite_mut().frame = 1;
+    h.state_mut().edit_sprite(|_| {});
+    for _ in 0..10 {
+        h.step();
+    }
+    assert_eq!(h.state().bitty.guide, Some(Guide::Lesson(3)), "unveränderter Frame zählt nicht");
+    h.state_mut().project.sprite_mut().active().set(2, 3, 0);
+    wait(&mut h, 4);
+    // 5: abspielen
+    h.state_mut().playing = true;
+    wait(&mut h, 5);
+    h.state_mut().playing = false;
+    // 6: GIF-Knopf (ohne echten Dateidialog) — das Panel klappt im nächsten Bild auf.
+    h.step();
+    h.step();
+    assert!(h.state().bitty.targets.contains_key("export-gif"), "Export-Panel aufgeklappt");
+    h.state_mut().bitty.gif_clicked = true;
+    wait(&mut h, 6);
+    h.step();
+    assert!(h.query_by_label_contains("Geschafft").is_some());
+    h.get_by_label("Los geht’s").click();
+    h.step();
+    assert_eq!(h.state().bitty.guide, None);
+}
+
+#[test]
+fn bitty_hinweise_beim_malen() {
+    let mut h = app();
+    // Farbe 0: durchsichtig — Bitty bietet Farbe 1 an.
+    h.state_mut().tool = tools_ui::Tool::Pencil;
+    h.state_mut().color = 0;
+    h.run();
+    drag(&mut h, (3.0, 3.0), (3.0, 3.0));
+    assert_eq!(h.state().bitty.hint_id(), Some("color0"));
+    h.get_by_label("Farbe 1 nehmen").click();
+    h.run();
+    assert_eq!(h.state().color, 1);
+    // Ebene mit 0 % Deckkraft
+    h.state_mut().edit_sprite(|s| {
+        let l = s.layer;
+        s.layers[l].opacity = 0.0;
+    });
+    h.run();
+    drag(&mut h, (4.0, 4.0), (4.0, 4.0));
+    assert_eq!(h.state().bitty.hint_id(), Some("layerOpacity"));
+    h.get_by_label("Auf 100 % stellen").click();
+    h.run();
+    let sp = h.state().sprite();
+    assert_eq!(sp.layers[sp.layer].opacity, 1.0);
+}

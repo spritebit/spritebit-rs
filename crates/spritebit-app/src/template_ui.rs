@@ -152,7 +152,9 @@ impl SpritebitApp {
     }
 
     pub(crate) fn template_panel(&mut self, ui: &mut egui::Ui) {
-        if ui.button(tr("Bild laden …")).clicked() {
+        let r = ui.button(tr("Bild laden …"));
+        self.mark("tpl-load", r.rect);
+        if r.clicked() {
             if let Some(path) =
                 rfd::FileDialog::new().set_title(tr("Schablone laden")).add_filter(tr("Bilder"), &["png", "jpg", "jpeg", "gif", "webp", "bmp"]).pick_file()
             {
@@ -205,7 +207,9 @@ impl SpritebitApp {
             ui.label(tr("Reduzieren auf"));
             ui.add(egui::DragValue::new(&mut self.template.colors).range(2..=64));
             ui.label(tr("Farben"));
-            if ui.button(tr("Übernehmen")).clicked() {
+            let r = ui.button(tr("Übernehmen"));
+            self.mark("tpl-trace", r.rect);
+            if r.clicked() {
                 let n = self.template.colors;
                 self.trace_template(TraceMode::Quantize(n));
             }

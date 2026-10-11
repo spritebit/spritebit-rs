@@ -478,7 +478,7 @@ impl SpritebitApp {
         let mut edit_anchor: Option<egui::Response> = None;
         let copied = self.pal.copied;
         let last = palette.len() as Px;
-        ui.horizontal_wrapped(|ui| {
+        let row = ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing = Vec2::splat(4.0);
             for i in 0..=palette.len() as Px {
                 let sense = if i == 0 { Sense::click() } else { Sense::click_and_drag() };
@@ -548,6 +548,7 @@ impl SpritebitApp {
                 resp.on_hover_text(tr("Neue Farbe hinzufügen"));
             }
         });
+        self.mark("colors", row.response.rect);
         if let Some(a) = action {
             self.swatch_action(ui.ctx(), None, a, false);
         }
@@ -924,8 +925,9 @@ impl SpritebitApp {
                 self.pal.modal = Some(PalModal::new(Some(name.clone()), name.clone(), &pal));
                 self.changed();
             }
-            if ui.button(tr("Bild » Palette …")).on_hover_text(tr("Aus den Farben des Bildes eine Palette machen — wie viele Farben, wählst du aus")).clicked()
-            {
+            let r = ui.button(tr("Bild » Palette …")).on_hover_text(tr("Aus den Farben des Bildes eine Palette machen — wie viele Farben, wählst du aus"));
+            self.mark("pal-from-image", r.rect);
+            if r.clicked() {
                 self.open_reduce();
             }
         });

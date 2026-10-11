@@ -125,7 +125,7 @@ impl SpritebitApp {
         std::fs::write(path, bytes).map_err(|e| trf("{path} konnte nicht geschrieben werden: {e}", &[("path", &path.display()), ("e", &e)]))
     }
 
-    fn report_export(&mut self, r: Result<Option<String>, String>) {
+    pub(crate) fn report_export(&mut self, r: Result<Option<String>, String>) {
         match r {
             Ok(Some(msg)) => {
                 self.hint = Some(msg);
@@ -167,7 +167,7 @@ impl SpritebitApp {
         )))
     }
 
-    fn export_gif(&mut self) -> Result<Option<String>, String> {
+    pub(crate) fn export_gif(&mut self) -> Result<Option<String>, String> {
         self.commit_float();
         let sp = self.sprite().clone();
         let pal = self.project.current_palette();
@@ -300,7 +300,10 @@ impl SpritebitApp {
                 let r = self.export_image("pdf");
                 self.report_export(r);
             }
-            if ui.button("GIF").on_hover_text(tr("Animation als GIF — alle Frames, läuft endlos")).clicked() {
+            let r = ui.button("GIF").on_hover_text(tr("Animation als GIF — alle Frames, läuft endlos"));
+            self.mark("export-gif", r.rect);
+            if r.clicked() {
+                self.bitty.gif_clicked = true;
                 let r = self.export_gif();
                 self.report_export(r);
             }

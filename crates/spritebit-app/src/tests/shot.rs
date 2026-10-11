@@ -99,6 +99,21 @@ fn bild_der_oberflaeche() {
         }
         h.run();
     }
+    // SPRITEBIT_SHOT_TOUR=n: Animations-Tour bei Schritt n (0 = Timeline).
+    if let Some(n) = std::env::var("SPRITEBIT_SHOT_TOUR").ok().and_then(|v| v.parse::<usize>().ok()) {
+        let ctx = h.ctx.clone();
+        h.state_mut().start_guide(crate::tour_ui::Guide::Tour(crate::tour_ui::TourId::Anim, n), &ctx);
+        h.run();
+        h.run();
+    }
+    // SPRITEBIT_SHOT_SEARCH=wort: Bittys Blase mit diesem Suchwort.
+    if let Ok(q) = std::env::var("SPRITEBIT_SHOT_SEARCH") {
+        let a = h.state_mut();
+        a.bitty.open = true;
+        a.bitty.query = q;
+        h.run();
+        h.run();
+    }
     let img = h.render().expect("Bild");
     img.save(path).expect("speichern");
 }

@@ -443,14 +443,18 @@ impl SpritebitApp {
             ui.add(egui::Slider::new(&mut self.image.bg_tolerance, 0.0..=1.0).custom_formatter(|v, _| format!("{:.0} %", v * 100.0)))
                 .on_hover_text(tr("Toleranz: wie ähnlich die Farben vom Rand her sein dürfen"));
         });
-        if ui.button(tr("Hintergrund entfernen")).clicked() {
+        let r = ui.button(tr("Hintergrund entfernen"));
+        self.mark("bg-remove", r.rect);
+        if r.clicked() {
             let tol = self.image.bg_tolerance;
             if let Some(n) = self.clean(|img, pal, free| cleanup::remove_background(img, pal, free, tol)) {
                 self.hint =
                     Some(if n > 0 { trf("Hintergrund entfernt — {n} Pixel.", &[("n", &n)]) } else { tr("Nichts entfernt — Toleranz erhöhen?").into() });
             }
         }
-        if ui.button(tr("Glätten")).on_hover_text(tr("Einzelne Streupixel auf die Farbe ihrer Nachbarn setzen")).clicked() {
+        let r = ui.button(tr("Glätten")).on_hover_text(tr("Einzelne Streupixel auf die Farbe ihrer Nachbarn setzen"));
+        self.mark("despeckle", r.rect);
+        if r.clicked() {
             if let Some(n) = self.clean(|img, _, _| cleanup::despeckle(img)) {
                 self.hint = Some(if n > 0 { trf("Geglättet — {n} Pixel angepasst.", &[("n", &n)]) } else { tr("Nichts zu glätten gefunden.").into() });
             }

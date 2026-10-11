@@ -58,19 +58,29 @@ impl SpritebitApp {
     /// Das Panel „Ebenen“: oberste Ebene oben.
     pub(crate) fn layers_panel(&mut self, ui: &mut egui::Ui) {
         let nl = self.project.sprite().layers.len();
+        let top = ui.cursor().min.y;
         for l in (0..nl).rev() {
             self.layer_row(ui, l);
         }
+        let list = egui::Rect::from_x_y_ranges(ui.max_rect().x_range(), top..=ui.cursor().min.y);
+        self.mark("ly-list", list);
         ui.add_space(4.0);
-        ui.horizontal_wrapped(|ui| self.layer_buttons(ui));
-        ui.horizontal_wrapped(|ui| {
-            ui.weak(tr("Maske"));
-            self.mask_buttons(ui);
-        });
-        ui.horizontal(|ui| {
-            ui.weak(tr("Deckkraft"));
-            self.opacity_field(ui);
-        });
+        let r = ui.horizontal_wrapped(|ui| self.layer_buttons(ui)).response;
+        self.mark("ly-buttons", r.rect);
+        let r = ui
+            .horizontal_wrapped(|ui| {
+                ui.weak(tr("Maske"));
+                self.mask_buttons(ui);
+            })
+            .response;
+        self.mark("ly-mask", r.rect);
+        let r = ui
+            .horizontal(|ui| {
+                ui.weak(tr("Deckkraft"));
+                self.opacity_field(ui);
+            })
+            .response;
+        self.mark("ly-opacity", r.rect);
         ui.weak(tr("Doppelklick auf den Namen benennt um. Export und Vorschau zeigen alle sichtbaren Ebenen übereinander."));
     }
 

@@ -113,6 +113,8 @@ impl SpritebitApp {
     }
 
     pub(crate) fn timeline(&mut self, ui: &mut egui::Ui) {
+        let all = ui.max_rect();
+        self.mark("timeline", all);
         self.timeline_buttons(ui);
         ui.add_space(4.0);
         let thumb = if self.tl.thumb_size > 0.0 { self.tl.thumb_size.round() } else { self.fit_thumb(ui.available_width()) };
@@ -131,7 +133,9 @@ impl SpritebitApp {
                 self.go_frame((cur + n - 1) % n);
             }
             let play = if self.playing { icons::PAUSE } else { icons::PLAY };
-            if icons::button(ui, play, tr("Abspielen / Anhalten (Enter)"), n > 1).clicked() {
+            let r = icons::button(ui, play, tr("Abspielen / Anhalten (Enter)"), n > 1);
+            self.mark("tl-play", r.rect);
+            if r.clicked() {
                 self.toggle_play(ui.ctx());
             }
             if icons::button(ui, icons::NEXT, tr("Nächster Frame (Punkt oder Pfeil rechts)"), true).clicked() {
@@ -148,7 +152,9 @@ impl SpritebitApp {
                     s.add_frame(f, false);
                 });
             }
-            if icons::button(ui, icons::COPY, tr("Frame duplizieren"), true).clicked() {
+            let r = icons::button(ui, icons::COPY, tr("Frame duplizieren"), true);
+            self.mark("tl-dup", r.rect);
+            if r.clicked() {
                 self.edit_sprite(|s| {
                     let f = s.frame;
                     s.add_frame(f, true);
@@ -237,7 +243,9 @@ impl SpritebitApp {
                 });
             }
             ui.separator();
-            if icons::button(ui, icons::TAG, tr("Tag anlegen — benennt den Bereich bzw. den Frame, z. B. „Laufen“"), true).clicked() {
+            let tb = icons::button(ui, icons::TAG, tr("Tag anlegen — benennt den Bereich bzw. den Frame, z. B. „Laufen“"), true);
+            self.mark("tl-tag", tb.rect);
+            if tb.clicked() {
                 let k = self.project.sprite().tags.len();
                 self.edit_sprite(|s| {
                     s.tags.push(Tag {
@@ -252,14 +260,18 @@ impl SpritebitApp {
             }
             let tip = tr("Onion Skin — voriger (rot) und nächster Frame (blau) scheinen durch");
             let onion_btn = egui::Button::selectable(self.onion, icons::image(icons::ONION, ui.visuals().text_color()).alt_text(tip));
-            if ui.add(onion_btn).on_hover_text(tip).clicked() {
+            let r = ui.add(onion_btn).on_hover_text(tip);
+            self.mark("tl-onion", r.rect);
+            if r.clicked() {
                 self.onion = !self.onion;
                 self.version = self.version.wrapping_add(1);
             }
             ui.separator();
             let mut fps = self.project.sprite().fps;
-            ui.label(tr("FPS"));
-            if ui.add(egui::DragValue::new(&mut fps).range(1..=60)).changed() {
+            let l = ui.label(tr("FPS"));
+            let r = ui.add(egui::DragValue::new(&mut fps).range(1..=60));
+            self.mark("tl-fps", l.rect.union(r.rect));
+            if r.changed() {
                 self.project.sprite_mut().fps = fps;
                 self.dirty = true;
             }
@@ -285,6 +297,7 @@ impl SpritebitApp {
         let tag_h = if sp.tags.is_empty() { 0.0 } else { TAG_H + 2.0 };
         let size = Vec2::new(LAYER_W + n as f32 * cell_w + 8.0, tag_h + head_h + nl as f32 * ROW_H + 4.0);
         let (resp, painter) = ui.allocate_painter(size, Sense::click_and_drag());
+        self.bitty.targets.insert("tl-grid", resp.rect.intersect(ui.clip_rect()));
         let o = resp.rect.min;
         let font = FontId::proportional(12.0);
         // Tags und Kopfzeile kleben oben, wenn die Ebenen gescrollt werden:
