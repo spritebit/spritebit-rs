@@ -217,7 +217,7 @@ impl SpritebitApp {
         if self.shade_ramp.is_empty() {
             tr("Schattieren hat nichts geändert: in der Palette gibt es keinen dunkleren (bzw. helleren) Ton dieser Farbe. Wähle die Farbreihe selbst — klicke die Farben in der Palette an.").into()
         } else {
-            tr("Schattieren hat nichts geändert: Pixel in Farben, die nicht in der Farbreihe stehen, bleiben, wie sie sind — und an der dunkelsten (bzw. hellsten) Farbe geht es nicht weiter.").into()
+            tr("Schattieren hat nichts geändert: diese Pixel sind schon bei der letzten Farbe der Reihe — weiter geht es nicht. Rechtsklick läuft die Reihe zurück.").into()
         }
     }
 }

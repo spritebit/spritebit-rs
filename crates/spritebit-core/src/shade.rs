@@ -7,7 +7,8 @@
 //!
 //! * leerer Pixel → die erste Farbe der Reihe
 //! * Farbe aus der Reihe → die nächste, an der letzten Schluss
-//! * andere Farbe → bleibt (z. B. die Umrisslinie)
+//! * andere Farbe → wie leer: die erste Farbe der Reihe — so lässt sich auch
+//!   über schon Gemaltes schattieren
 //!
 //! Rechtsklick geht die Reihe andersherum. Pro Strich ändert sich jeder
 //! Pixel höchstens einmal; gedrückt halten geht Stufe um Stufe weiter (das
@@ -198,11 +199,9 @@ impl Shader {
         if self.order.is_empty() {
             return self.auto(v, pal, free);
         }
-        if v == 0 {
-            return self.value_of(self.order[0], free);
-        }
-        let Some(c) = Self::color_of(v, pal, free) else { return v };
-        let Some(i) = self.order.iter().position(|&o| o == c) else { return v };
+        // Leer oder eine Farbe, die nicht in der Reihe steht: dort beginnt sie.
+        let at = Self::color_of(v, pal, free).and_then(|c| self.order.iter().position(|&o| o == c));
+        let Some(i) = at else { return self.value_of(self.order[0], free) };
         match self.order.get(i + 1) {
             Some(&next) => self.value_of(next, free),
             None => v,
@@ -281,11 +280,13 @@ mod tests {
     }
 
     #[test]
-    fn andere_farben_bleiben() {
+    fn andere_farben_wie_leer() {
         let (p, mut free) = (pal(), vec![[1, 2, 3]]);
         let mut s = Shader::new(&p, &ramp(), true, 0);
-        assert_eq!(s.step(4, &p, &mut free), 4);
-        assert_eq!(s.step(FREE_BASE, &p, &mut free), FREE_BASE);
+        assert_eq!(s.step(4, &p, &mut free), 3, "Grün → rot (erste der Reihe)");
+        assert_eq!(s.step(FREE_BASE, &p, &mut free), 3, "freie Farbe genauso");
+        let mut back = Shader::new(&p, &ramp(), false, 0);
+        assert_eq!(back.step(4, &p, &mut free), 2, "rückwärts: letzte Farbe");
     }
 
     #[test]

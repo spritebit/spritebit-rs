@@ -1769,7 +1769,7 @@ fn schattieren_wie_ein_stift() {
     {
         let a = h.state_mut();
         a.tool = tools_ui::Tool::Shade;
-        // Farbe 2 (#cccccc) als Umriss, der unberührt bleiben muss.
+        // Farbe 2 (#cccccc) ist vorher gemalt und steht nicht in der Reihe.
         a.project.sprite_mut().active().set(5, 5, 2);
         // Farbreihe wie per Klick in der Palette: Weiß, #999, #404040.
         let color = a.color;
@@ -1788,8 +1788,9 @@ fn schattieren_wie_ein_stift() {
     shade_drag(&mut h, (2.0, 2.0), (2.0, 2.0));
     assert_eq!(px(&h, 2, 2), 9, "an der dunkelsten ist Schluss");
     shade_drag(&mut h, (5.0, 5.0), (5.0, 5.0));
-    assert_eq!(px(&h, 5, 5), 2, "andere Farben bleiben");
-    assert!(h.state().hint.as_deref().is_some_and(|t| t.contains("nichts geändert")));
+    assert_eq!(px(&h, 5, 5), 1, "schon Gemaltes wird wie leer behandelt: erste Farbe");
+    shade_drag(&mut h, (2.0, 2.0), (2.0, 2.0));
+    assert!(h.state().hint.as_deref().is_some_and(|t| t.contains("nichts geändert")), "am Ende der Reihe");
     // Ein Strich geht über jeden Pixel nur einmal, auch hin und zurück.
     shade_drag(&mut h, (8.0, 2.0), (11.0, 2.0));
     shade_drag(&mut h, (11.0, 3.0), (11.0, 3.0));
