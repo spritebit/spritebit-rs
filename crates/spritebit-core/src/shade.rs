@@ -1,0 +1,261 @@
+//! Schattieren: ein Stift, der mit jedem Strich eine Stufe weitergeht —
+//! wie in der Web-Version (js/shade.js).
+//!
+//! Man wählt eine Farbreihe (Farben, sortiert von dunkel nach hell). Dann
+//! arbeitet sich das Werkzeug durch sie hindurch (Richtung „dunkler",
+//! Linksklick):
+//!
+//! * leerer Pixel → die hellste Farbe der Reihe
+//! * Farbe aus der Reihe → eine Stufe dunkler, an der dunkelsten Schluss
+//! * andere Farbe → bleibt (z. B. die Umrisslinie)
+//!
+//! Richtung „heller" (Rechtsklick) genau andersherum. Pro Strich ändert
+//! sich jeder Pixel höchstens einmal; gedrückt halten geht Stufe um Stufe
+//! weiter (das steuert die App).
+//!
+//! Ohne Reihe geht es automatisch: ein leerer Pixel bekommt die aktuelle
+//! Farbe, ein farbiger die nächsthellere bzw. -dunklere seiner Farbfamilie
+//! aus der Palette ([`palette_step`]); freie Farben werden direkt ein Stück
+//! heller oder dunkler gerechnet.
+//!
+//! Die Reihe hält Farben statt Nummern — sie überlebt so das Umsortieren
+//! der Palette und gilt auch für freie Farben im Bild.
+
+use std::collections::HashMap;
+
+use crate::image::{Px, FREE_BASE};
+use crate::light::{palette_step, shift};
+use crate::palette::{Palette, Rgb};
+
+/// So weit geht ein Schritt im Automatik-Modus (Helligkeit 0..1).
+const AUTO_STEP: f64 = 0.1;
+
+/// So viele Stufen geht die Mitte mit Verlauf, wenn keine Reihe gewählt ist.
+pub const AUTO_LEVELS: u32 = 3;
+
+/// Wahrgenommene Helligkeit (Rec. 601).
+fn luma(c: Rgb) -> f64 {
+    0.299 * c[0] as f64 + 0.587 * c[1] as f64 + 0.114 * c[2] as f64
+}
+
+/// Reihe bereinigen: ohne Doppelte, von dunkel nach hell.
+pub fn normalize_ramp(ramp: &[Rgb]) -> Vec<Rgb> {
+    let mut out: Vec<Rgb> = Vec::with_capacity(ramp.len());
+    for &c in ramp {
+        if !out.contains(&c) {
+            out.push(c);
+        }
+    }
+    out.sort_by(|a, b| luma(*a).total_cmp(&luma(*b)).then(a.cmp(b)));
+    out
+}
+
+/// Farbe in die Reihe aufnehmen oder wieder herausnehmen.
+pub fn toggle_ramp(ramp: &[Rgb], c: Rgb) -> Vec<Rgb> {
+    if ramp.contains(&c) {
+        normalize_ramp(&ramp.iter().copied().filter(|&r| r != c).collect::<Vec<_>>())
+    } else {
+        let mut v = ramp.to_vec();
+        v.push(c);
+        normalize_ramp(&v)
+    }
+}
+
+/// Stufen für einen Pixel im Abstand (dx, dy) zur Pinselmitte, wenn
+/// „Verlauf" an ist: in der Mitte `levels`, zum Rand weniger, ganz außen 1.
+/// 0 = liegt außerhalb des runden Pinsels.
+pub fn soft_level(dx: f64, dy: f64, size: u32, levels: u32) -> u32 {
+    let r = (size.max(1) as f64 - 1.0) / 2.0;
+    let d = dx.hypot(dy);
+    if d > r + 0.5 {
+        return 0;
+    }
+    ((levels as f64 * (1.0 - d / (r + 1.0))).ceil() as u32).max(1)
+}
+
+/// Stufen in der Mitte: so viele, wie die Reihe von leer bis zur letzten
+/// Farbe braucht; ohne Reihe [`AUTO_LEVELS`].
+pub fn ramp_levels(ramp: &[Rgb]) -> u32 {
+    if ramp.is_empty() {
+        AUTO_LEVELS
+    } else {
+        ramp.len() as u32
+    }
+}
+
+/// Rechner für einen Strich: Pixelwert → Wert eine Stufe weiter.
+pub struct Shader {
+    /// Die Reihe in Mal-Reihenfolge (erste Farbe = die für leere Pixel).
+    order: Vec<Rgb>,
+    dark: bool,
+    cur: Px,
+    /// Farbe → Palettennummer (die erste mit dieser Farbe).
+    index: HashMap<Rgb, Px>,
+    /// Automatik: einmal gerechnete Schritte merken.
+    memo: HashMap<Px, Px>,
+}
+
+impl Shader {
+    /// `ramp` sortiert (normalize_ramp); `dark` = Richtung dunkler; `cur` =
+    /// aktuelle Farbe (nur die Automatik malt damit in leere Pixel).
+    pub fn new(pal: &Palette, ramp: &[Rgb], dark: bool, cur: Px) -> Self {
+        let mut order = ramp.to_vec();
+        if dark {
+            order.reverse();
+        }
+        let mut index = HashMap::new();
+        for (k, &c) in pal.colors.iter().enumerate() {
+            index.entry(c).or_insert(k as Px + 1);
+        }
+        Shader { order, dark, cur, index, memo: HashMap::new() }
+    }
+
+    /// Farbe als Pixelwert: Nummer, wenn sie in der Palette steht, sonst
+    /// eine freie Farbe (neue werden an `free` angehängt).
+    fn value_of(&self, c: Rgb, free: &mut Vec<Rgb>) -> Px {
+        if let Some(&i) = self.index.get(&c) {
+            return i;
+        }
+        let k = free.iter().position(|&f| f == c).unwrap_or_else(|| {
+            free.push(c);
+            free.len() - 1
+        });
+        FREE_BASE + k as Px
+    }
+
+    /// Farbe eines Pixelwerts (0 → `None`).
+    fn color_of(v: Px, pal: &Palette, free: &[Rgb]) -> Option<Rgb> {
+        if v >= FREE_BASE {
+            free.get((v - FREE_BASE) as usize).copied()
+        } else {
+            pal.get(v)
+        }
+    }
+
+    /// Ein Schritt für den Pixelwert `v`.
+    pub fn step(&mut self, v: Px, pal: &Palette, free: &mut Vec<Rgb>) -> Px {
+        if self.order.is_empty() {
+            return self.auto(v, pal, free);
+        }
+        if v == 0 {
+            return self.value_of(self.order[0], free);
+        }
+        let Some(c) = Self::color_of(v, pal, free) else { return v };
+        let Some(i) = self.order.iter().position(|&o| o == c) else { return v };
+        match self.order.get(i + 1) {
+            Some(&next) => self.value_of(next, free),
+            None => v,
+        }
+    }
+
+    fn auto(&mut self, v: Px, pal: &Palette, free: &mut Vec<Rgb>) -> Px {
+        if v == 0 {
+            return self.cur;
+        }
+        if let Some(&n) = self.memo.get(&v) {
+            return n;
+        }
+        let sign = if self.dark { -1 } else { 1 };
+        let n = if v >= FREE_BASE {
+            match Self::color_of(v, pal, free) {
+                Some(c) => self.value_of(shift(c, sign, AUTO_STEP), free),
+                None => v,
+            }
+        } else {
+            palette_step(pal, v, sign, AUTO_STEP).unwrap_or(v)
+        };
+        self.memo.insert(v, n);
+        n
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const DARK: Rgb = [0x80, 0, 0];
+    const RED: Rgb = [0xff, 0, 0];
+    const LIGHT: Rgb = [0xff, 0x80, 0x80];
+
+    /// Drei Rottöne, absichtlich nicht nach Helligkeit sortiert, dazu Grün.
+    fn pal() -> Palette {
+        Palette::new("t", vec![LIGHT, DARK, RED, [0, 0xff, 0]])
+    }
+
+    fn ramp() -> Vec<Rgb> {
+        normalize_ramp(&[LIGHT, DARK, RED])
+    }
+
+    #[test]
+    fn reihe_von_dunkel_nach_hell_ohne_doppelte() {
+        assert_eq!(ramp(), vec![DARK, RED, LIGHT]);
+        assert_eq!(normalize_ramp(&[RED, RED]), vec![RED]);
+        let r = toggle_ramp(&[DARK], LIGHT);
+        assert_eq!(r, vec![DARK, LIGHT]);
+        assert_eq!(toggle_ramp(&r, LIGHT), vec![DARK]);
+    }
+
+    #[test]
+    fn wie_ein_stift_leer_hellste_dann_dunkler() {
+        let (p, mut free) = (pal(), Vec::new());
+        let mut s = Shader::new(&p, &ramp(), true, 0);
+        let mut v = 0;
+        let mut seen = Vec::new();
+        for _ in 0..4 {
+            v = s.step(v, &p, &mut free);
+            seen.push(v);
+        }
+        assert_eq!(seen, vec![1, 3, 2, 2], "hellrot, rot, dunkelrot, bleibt");
+    }
+
+    #[test]
+    fn andersherum_leer_dunkelste_dann_heller() {
+        let (p, mut free) = (pal(), Vec::new());
+        let mut s = Shader::new(&p, &ramp(), false, 0);
+        assert_eq!(s.step(0, &p, &mut free), 2);
+        assert_eq!(s.step(2, &p, &mut free), 3);
+        assert_eq!(s.step(1, &p, &mut free), 1, "am Ende geht es nicht weiter");
+    }
+
+    #[test]
+    fn andere_farben_bleiben() {
+        let (p, mut free) = (pal(), vec![[1, 2, 3]]);
+        let mut s = Shader::new(&p, &ramp(), true, 0);
+        assert_eq!(s.step(4, &p, &mut free), 4);
+        assert_eq!(s.step(FREE_BASE, &p, &mut free), FREE_BASE);
+    }
+
+    #[test]
+    fn farbe_nicht_in_der_palette_wird_freie_farbe() {
+        let (p, mut free) = (pal(), Vec::new());
+        let mid = [0xc0, 0x40, 0x40];
+        let mut s = Shader::new(&p, &normalize_ramp(&[DARK, mid]), false, 0);
+        assert_eq!(s.step(2, &p, &mut free), FREE_BASE);
+        assert_eq!(free, vec![mid]);
+        let mut back = Shader::new(&p, &normalize_ramp(&[DARK, mid]), true, 0);
+        assert_eq!(back.step(FREE_BASE, &p, &mut free), 2);
+    }
+
+    #[test]
+    fn ohne_reihe_aktuelle_farbe_dann_farbfamilie() {
+        let p = Palette::new("t", vec![[0x40, 0, 0], [0x90, 0, 0], [0xe0, 0x40, 0x40], [0, 0xc0, 0]]);
+        let mut free = Vec::new();
+        let mut s = Shader::new(&p, &[], true, 3);
+        assert_eq!(s.step(0, &p, &mut free), 3, "leer → aktuelle Farbe");
+        assert_eq!(s.step(2, &p, &mut free), 1, "eine Stufe dunkler, nie Grün");
+        let mut up = Shader::new(&p, &[], false, 0);
+        assert_eq!(up.step(3, &p, &mut free), 3, "heller gibt es nicht");
+        assert_eq!(up.step(0, &p, &mut free), 0, "ohne Farbe bleibt leer");
+    }
+
+    #[test]
+    fn verlauf_mitte_mehr_als_der_rand() {
+        assert_eq!(soft_level(0.0, 0.0, 7, 4), 4);
+        let near = soft_level(1.0, 0.0, 7, 4);
+        assert!((1..=4).contains(&near));
+        assert_eq!(soft_level(3.0, 0.0, 7, 4), 1);
+        assert_eq!(soft_level(3.0, 3.0, 7, 4), 0, "Ecke liegt außerhalb des Kreises");
+        assert_eq!(ramp_levels(&[]), AUTO_LEVELS);
+        assert_eq!(ramp_levels(&[DARK, RED]), 2);
+    }
+}

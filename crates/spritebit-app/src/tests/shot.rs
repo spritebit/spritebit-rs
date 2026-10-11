@@ -88,6 +88,17 @@ fn bild_der_oberflaeche() {
         h.run();
         h.run();
     }
+    // SPRITEBIT_SHOT_SHADE=1: Schattieren aktiv, Farbreihe gewählt, Verlauf an.
+    if std::env::var_os("SPRITEBIT_SHOT_SHADE").is_some() {
+        let a = h.state_mut();
+        a.tool = crate::tools_ui::Tool::Shade;
+        a.size = 5;
+        a.shade_soft = true;
+        for v in [1, 3, 4, 9] {
+            a.pick_swatch(v);
+        }
+        h.run();
+    }
     let img = h.render().expect("Bild");
     img.save(path).expect("speichern");
 }

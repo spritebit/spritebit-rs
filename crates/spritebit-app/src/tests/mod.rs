@@ -1735,3 +1735,108 @@ fn neuer_frame_aus_der_timeline() {
 
 mod monkey;
 mod shot;
+
+/// App mit echter Bildrate (1/60 s je Bild) — fürs Schattieren, wo
+/// gedrückt halten nach Zeit weitergeht.
+fn app_60<'a>() -> Harness<'a, SpritebitApp> {
+    let mut h = Harness::builder().with_size(Vec2::new(1280.0, 2400.0)).with_step_dt(1.0 / 60.0).build_eframe(|cc| {
+        egui_extras::install_image_loaders(&cc.egui_ctx);
+        SpritebitApp::new()
+    });
+    h.run();
+    h
+}
+
+/// Wie `drag`, aber Bild für Bild: solange gedrückt ist, will das
+/// Schattieren weiterzeichnen (gedrückt halten geht weiter).
+fn shade_drag(h: &mut Harness<'_, SpritebitApp>, from: (f32, f32), to: (f32, f32)) {
+    let (a, b) = (at(h, from.0, from.1), at(h, to.0, to.1));
+    h.hover_at(a);
+    h.run();
+    h.drag_at(a);
+    h.step();
+    for k in 1..=8 {
+        h.hover_at(a + (b - a) * (k as f32 / 8.0));
+        h.step();
+    }
+    h.drop_at(b);
+    h.run();
+}
+
+#[test]
+fn schattieren_wie_ein_stift() {
+    let mut h = app_60();
+    {
+        let a = h.state_mut();
+        a.tool = tools_ui::Tool::Shade;
+        // Farbe 2 (#cccccc) als Umriss, der unberührt bleiben muss.
+        a.project.sprite_mut().active().set(5, 5, 2);
+        // Farbreihe wie per Klick in der Palette: Weiß, #999, #404040.
+        let color = a.color;
+        for v in [1, 3, 9] {
+            a.pick_swatch(v);
+        }
+        assert_eq!(a.shade_ramp, vec![[0x40, 0x40, 0x40], [0x99, 0x99, 0x99], [0xff, 0xff, 0xff]]);
+        assert_eq!(a.color, color, "beim Schattieren wählt ein Klick keine Malfarbe");
+    }
+    h.run();
+    shade_drag(&mut h, (2.0, 2.0), (2.0, 2.0));
+    assert_eq!(px(&h, 2, 2), 1, "leer → hellste Farbe der Reihe");
+    shade_drag(&mut h, (2.0, 2.0), (2.0, 2.0));
+    assert_eq!(px(&h, 2, 2), 3, "noch ein Strich → eine Stufe dunkler");
+    shade_drag(&mut h, (2.0, 2.0), (2.0, 2.0));
+    shade_drag(&mut h, (2.0, 2.0), (2.0, 2.0));
+    assert_eq!(px(&h, 2, 2), 9, "an der dunkelsten ist Schluss");
+    shade_drag(&mut h, (5.0, 5.0), (5.0, 5.0));
+    assert_eq!(px(&h, 5, 5), 2, "andere Farben bleiben");
+    assert!(h.state().hint.as_deref().is_some_and(|t| t.contains("nichts geändert")));
+    // Ein Strich geht über jeden Pixel nur einmal, auch hin und zurück.
+    shade_drag(&mut h, (8.0, 2.0), (11.0, 2.0));
+    shade_drag(&mut h, (11.0, 3.0), (11.0, 3.0));
+    assert_eq!((px(&h, 8, 2), px(&h, 11, 2), px(&h, 11, 3)), (1, 1, 1));
+}
+
+#[test]
+fn schattieren_mit_verlauf() {
+    let mut h = app_60();
+    {
+        let a = h.state_mut();
+        a.tool = tools_ui::Tool::Shade;
+        a.size = 7;
+        a.shade_soft = true;
+        for v in [1, 3, 4, 9] {
+            a.pick_swatch(v);
+        }
+    }
+    h.run();
+    shade_drag(&mut h, (8.0, 8.0), (8.0, 8.0));
+    assert_eq!(px(&h, 8, 8), 9, "Mitte: alle Stufen bis zur dunkelsten");
+    assert_eq!(px(&h, 11, 8), 1, "Rand: eine Stufe");
+    assert_eq!(px(&h, 11, 11), 0, "Ecke liegt außerhalb des runden Pinsels");
+}
+
+#[test]
+fn schattieren_gedrueckt_halten_geht_weiter() {
+    let mut h = app_60();
+    {
+        let a = h.state_mut();
+        a.tool = tools_ui::Tool::Shade;
+        for v in [1, 3, 9] {
+            a.pick_swatch(v);
+        }
+    }
+    h.run();
+    let p = at(&h, 4.0, 4.0);
+    h.hover_at(p);
+    h.run();
+    h.drag_at(p);
+    h.step();
+    assert_eq!(px(&h, 4, 4), 1, "erster Tipp: hellste Farbe");
+    // Gut eine halbe Sekunde halten: eine Stufe weiter (alle 0,35 s).
+    for _ in 0..40 {
+        h.step();
+    }
+    assert_eq!(px(&h, 4, 4), 3, "gehalten: eine Stufe dunkler");
+    h.drop_at(p);
+    h.run();
+}

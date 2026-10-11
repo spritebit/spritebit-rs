@@ -20,6 +20,7 @@
 //! * [`cels`] — Zellen-Bereiche der Timeline: verschieben, kopieren, verknüpfen
 //! * [`cleanup`] — Hintergrund entfernen, glätten, Outline, Median-Cut
 //! * [`light`] — Lichtquelle: Kantenlicht und Schlagschatten
+//! * [`shade`] — Schattieren: ein Stift, der mit jedem Strich dunkler wird
 //! * [`mask`] — Ebenenmasken: Teile einer Ebene ausblenden, ohne sie zu löschen
 //! * [`export`] — PNG, GIF, Spritesheet mit JSON-Atlas
 //! * [`template`] — Schablone: Lage, Pipette, aufs Raster übernehmen
@@ -45,6 +46,7 @@ pub mod palette;
 pub mod palops;
 pub mod project;
 pub mod selection;
+pub mod shade;
 pub mod sprite;
 pub mod template;
 pub mod tilemap;

@@ -962,7 +962,6 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Speichern / Öffnen / Exportieren", "Save / Open / Export", "Speichern / Aufmochn / Exportiern"),
     ("Spiegeln und Drehen wirken auf die Auswahl, wenn es eine gibt — sonst auf den ganzen Sprite.", "Flip and rotate act on the selection if there is one — otherwise on the whole sprite.", "Spiagln und Drahn wirkn auf d’Auswoi, wenn’s ane gibt — sonst auf’n ganzn Sprite."),
     ("Startseite", "Start page", ""),
-    ("Stift · Pinsel · Spray · Füllen · Radierer · Zauberstab", "Pencil · Brush · Spray · Fill · Eraser · Magic wand", "Stift · Pinsl · Spray · Aufülln · Radiergummi · Zauberstaberl"),
     ("Stift — einzelne Pixel. Pinsel — Fläche; Stärke = Dichte, Größe = Kantenlänge. Spray — zufällige Pixel; Stärke = Menge.", "Pencil — single pixels. Brush — area; strength = density, size = edge length. Spray — random pixels; strength = amount.", "Stift — anzelne Pixel. Pinsl — Flächn; Stärkn = Dichte, Greß = Kantnlängn. Spray — zufällige Pixel; Stärkn = Mengn."),
     ("Strg + A / C / X / V", "Ctrl + A / C / X / V", ""),
     ("Strg + Mausrad", "Ctrl + mouse wheel", ""),
@@ -1025,7 +1024,6 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Maske löschen — alles wieder sichtbar", "Delete the mask — everything visible again", "Maskn weg — ois wieder sichtbar"),
     // ── Werkzeuggröße per Alt + Rechts ──
     ("Größe {n}", "Size {n}", "Greß {n}"),
-    ("Größe von Pinsel, Radierer und Spray — auch mit Alt + rechter Maustaste ziehen", "Size of brush, eraser and spray — or Alt + right-drag", "Greß vom Pinsl, Radiergummi und Spray — a mit Alt + rechta Maustastn ziehn"),
     ("Alt + Rechts ziehen", "Alt + right-drag", "Alt + Rechts ziehn"),
     ("Größe von Pinsel, Radierer und Spray", "Size of brush, eraser and spray", "Greß vom Pinsl, Radiergummi und Spray"),
     // ── Update-Hinweis ──
@@ -1083,6 +1081,21 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Für eine Animation reichen oft 2–4 Frames. Ein Frame, der länger steht, gibt Gewicht — z. B. beim Landen.", "An animation often needs only 2–4 frames. A frame that stays longer adds weight — say, when landing.", ""),
     ("Gleich breite Farbstreifen parallel zur Kontur („Banding“) wirken matschig. Versetz die Übergänge lieber.", "Equal-width color bands running along the outline (“banding”) look mushy. Stagger the transitions instead.", ""),
     ("F1 öffnet die Hilfe mit allen Tastenkürzeln.", "F1 opens the help with every shortcut.", ""),
+    // ── Schattieren (shade_ui.rs) ──
+    ("Schattieren", "Shade", "Schattiern"),
+    ("Größe von Pinsel, Radierer, Spray und Schattieren — auch mit Alt + rechter Maustaste ziehen", "Size of brush, eraser, spray and shade — or Alt + right-drag", "Greß vom Pinsl, Radiergummi, Spray und Schattiern — a mit Alt + rechta Maustastn ziehn"),
+    ("Schattieren geht nicht in einer Maske.", "Shading does not work in a mask.", ""),
+    ("Schattieren: eine Farbe allein ist noch keine Reihe — klicke mindestens eine zweite an. Oder „Leeren“: dann malt es mit der aktuellen Farbe.", "Shade: one colour alone is not a ramp yet — click at least one more. Or “Clear”: then it paints with the current colour.", ""),
+    ("Farbreihe", "Ramp", ""),
+    ("Aktuelle Farbe — oder Farben in der Palette anklicken", "Current colour — or click colours in the palette", ""),
+    ("{hex} — klicken nimmt die Farbe aus der Reihe", "{hex} — click to take the colour out of the ramp", ""),
+    ("Farbreihe leeren", "Clear the ramp", ""),
+    ("Verlauf", "Gradient", ""),
+    ("Verlauf: runder Pinsel, in der Mitte mehrere Stufen auf einmal, zum Rand hin weniger — braucht eine Größe ab 2", "Gradient: round brush, several steps at once in the middle, fewer towards the edge — needs a size of 2 or more", ""),
+    ("Schattieren hat nichts geändert: in der Palette gibt es keinen dunkleren (bzw. helleren) Ton dieser Farbe. Wähle die Farbreihe selbst — klicke die Farben in der Palette an.", "Shading changed nothing: the palette has no darker (or lighter) shade of that colour. Pick the ramp yourself — click the colours in the palette.", ""),
+    ("Schattieren hat nichts geändert: Pixel in Farben, die nicht in der Farbreihe stehen, bleiben, wie sie sind — und an der dunkelsten (bzw. hellsten) Farbe geht es nicht weiter.", "Shading changed nothing: pixels in colours that are not in the ramp stay as they are — and at the darkest (or lightest) colour it stops.", ""),
+    ("Schattieren (D) — ein Stift, der mit jedem Strich eine Stufe dunkler wird. Farbreihe festlegen: bei aktivem Werkzeug Farben in der Palette anklicken, z. B. drei Rottöne. Ein leerer Pixel bekommt zuerst die hellste, jeder weitere Strich darüber macht ihn eine Stufe dunkler; gedrückt halten geht von selbst weiter. Rechtsklick läuft die Reihe andersherum. Pixel in anderen Farben (z. B. Umrisse) bleiben unberührt. Ohne Reihe malt es mit der aktuellen Farbe und nimmt danach den nächsten Ton derselben Farbe. „Verlauf“ macht den Pinsel rund und weich: in der Mitte mehrere Stufen, zum Rand hin weniger.", "Shade (D) — a pen that gets one step darker with every stroke. Set the ramp: with the tool active, click colours in the palette, e.g. three reds. An empty pixel first gets the lightest, every further stroke over it makes it one step darker; keep pressing and it moves on by itself. Right click runs the ramp the other way round. Pixels in other colours (e.g. outlines) stay untouched. Without a ramp it paints with the current colour and then takes the next shade of the same colour. “Gradient” makes the brush round and soft: several steps in the middle, fewer towards the edge.", ""),
+    ("Stift · Pinsel · Spray · Schattieren · Füllen · Radierer · Zauberstab", "Pencil · Brush · Spray · Shade · Fill · Eraser · Magic wand", "Stift · Pinsl · Spray · Schattiern · Aufülln · Radiergummi · Zauberstaberl"),
 ];
 
 /// Fehler beim Laden in der gewählten Sprache.

@@ -454,9 +454,9 @@ impl SpritebitApp {
             ui.spacing_mut().item_spacing = Vec2::splat(4.0);
             for i in 0..=palette.len() as Px {
                 let sense = if i == 0 { Sense::click() } else { Sense::click_and_drag() };
-                let resp = swatch(ui, palette.get(i), 22.0, self.color == i, sense);
+                let resp = swatch(ui, palette.get(i), 22.0, self.swatch_on(i, palette.get(i)), sense);
                 if resp.clicked() {
-                    self.color = i;
+                    self.pick_swatch(i);
                 }
                 if i > 0 && resp.double_clicked() {
                     action = Some(SwatchAction::Edit(i));
@@ -550,10 +550,11 @@ impl SpritebitApp {
                 ui.spacing_mut().item_spacing = Vec2::splat(4.0);
                 for c in free.iter().take(64) {
                     let v = self.project.sprite().free.iter().position(|f| f == c).map(|k| FREE_BASE + k as Px);
-                    let r = swatch(ui, Some(*c), 16.0, v == Some(self.color), Sense::click());
+                    let on = v.is_some_and(|v| self.swatch_on(v, Some(*c)));
+                    let r = swatch(ui, Some(*c), 16.0, on, Sense::click());
                     if r.clicked() {
                         if let Some(v) = v {
-                            self.color = v;
+                            self.pick_swatch(v);
                         }
                     }
                     r.on_hover_text(hex(*c));
@@ -787,7 +788,7 @@ impl SpritebitApp {
             ui.spacing_mut().item_spacing = Vec2::splat(3.0);
             for (k, &c) in pal.colors.iter().enumerate() {
                 let i = k as Px + 1;
-                let active = target.is_none() && self.color == i;
+                let active = if self.tool == crate::tools_ui::Tool::Shade { self.shade_ramp.contains(&c) } else { target.is_none() && self.color == i };
                 let resp = swatch(ui, Some(c), 18.0, active, Sense::click());
                 if resp.clicked() {
                     pick = Some((i, c));
@@ -845,7 +846,9 @@ impl SpritebitApp {
         // Klick: damit malen — aus der Palette des Sprites als Nummer, aus
         // einer nur angezeigten als Farbe (wie im Web).
         if let Some((i, c)) = pick {
-            if target.is_none() {
+            if self.pick_shade_rgb(c) {
+                // Schattieren: der Klick hat die Farbreihe geändert.
+            } else if target.is_none() {
                 self.color = i;
             } else {
                 self.set_rgb(c);

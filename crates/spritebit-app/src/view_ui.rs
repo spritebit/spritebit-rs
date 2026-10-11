@@ -76,12 +76,22 @@ impl SpritebitApp {
         self.view.light = v["bg"].as_str() == Some("light");
         self.pixel_perfect = v["pixelPerfect"].as_bool().unwrap_or(false);
         self.fill_visible = v["fillVisible"].as_bool().unwrap_or(false);
+        self.shade_soft = v["shadeSoft"].as_bool().unwrap_or(false);
+        let ramp: Vec<_> = v["shadeRamp"].as_array().into_iter().flatten().filter_map(|c| c.as_str().and_then(spritebit_core::palette::parse_hex)).collect();
+        self.shade_ramp = spritebit_core::shade::normalize_ramp(&ramp);
     }
 
     pub(crate) fn save_view(&self) {
         if let (true, Some(d)) = (self.view.persist, dir()) {
             let _ = std::fs::create_dir_all(&d);
-            let v = serde_json::json!({ "bg": if self.view.light { "light" } else { "dark" }, "pixelPerfect": self.pixel_perfect, "fillVisible": self.fill_visible });
+            let ramp: Vec<String> = self.shade_ramp.iter().map(|&c| crate::palette_ui::hex(c)).collect();
+            let v = serde_json::json!({
+                "bg": if self.view.light { "light" } else { "dark" },
+                "pixelPerfect": self.pixel_perfect,
+                "fillVisible": self.fill_visible,
+                "shadeRamp": ramp,
+                "shadeSoft": self.shade_soft,
+            });
             let _ = std::fs::write(d.join("view.json"), v.to_string());
         }
     }
@@ -435,6 +445,7 @@ pub(crate) fn help_sections() -> Vec<(&'static str, Vec<&'static str>)> {
         ]),
         (tr("Werkzeuge"), vec![
             tr("Stift — einzelne Pixel. Pinsel — Fläche; Stärke = Dichte, Größe = Kantenlänge. Spray — zufällige Pixel; Stärke = Menge."),
+            tr("Schattieren (D) — ein Stift, der mit jedem Strich eine Stufe dunkler wird. Farbreihe festlegen: bei aktivem Werkzeug Farben in der Palette anklicken, z. B. drei Rottöne. Ein leerer Pixel bekommt zuerst die hellste, jeder weitere Strich darüber macht ihn eine Stufe dunkler; gedrückt halten geht von selbst weiter. Rechtsklick läuft die Reihe andersherum. Pixel in anderen Farben (z. B. Umrisse) bleiben unberührt. Ohne Reihe malt es mit der aktuellen Farbe und nimmt danach den nächsten Ton derselben Farbe. „Verlauf“ macht den Pinsel rund und weich: in der Mitte mehrere Stufen, zum Rand hin weniger."),
             tr("Füllen — zusammenhängende gleiche Fläche. Radierer — setzt auf transparent. Zauberstab — löscht zusammenhängende ähnliche Fläche."),
             tr("Füllen mit „Grenzen: alle Ebenen“: die Fläche endet, wo sich im sichtbaren Bild etwas ändert — gemalt wird in die aktive Ebene. So malst du eine Vorlage auf eigener Ebene aus."),
             tr("Größe 1–1000 per Regler oder Zahlenfeld; Alt + rechte Maustaste ziehen verstellt sie direkt auf der Fläche. Ein Umriss zeigt, was Pinsel, Radierer und Spray gleich treffen."),
@@ -501,7 +512,7 @@ pub(crate) fn help_keys() -> Vec<(&'static str, &'static str)> {
         (tr("Alt + Rechts ziehen"), tr("Größe von Pinsel, Radierer und Spray")),
         ("Shift + Alt", tr("Schablone: halten = vorn, ziehen = verschieben, Klick = Farbe")),
         ("0 – 9", tr("Farbe mit dieser Nummer")),
-        ("P B S F E W", tr("Stift · Pinsel · Spray · Füllen · Radierer · Zauberstab")),
+        ("P B S D F E W", tr("Stift · Pinsel · Spray · Schattieren · Füllen · Radierer · Zauberstab")),
         ("I R O", tr("Linie · Rechteck · Ellipse")),
         ("A L K", tr("Auswahl · Lasso · Farbwahl")),
         ("H", tr("Hand — Ansicht verschieben")),

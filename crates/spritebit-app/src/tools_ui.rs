@@ -1,11 +1,15 @@
 //! Werkzeuge: Leiste, Tastenkürzel und was ein Klick auf der Fläche tut.
 //!
-//! Wie in der Web-Version: H Hand, P Stift, B Pinsel, S Spray, F Füllen,
-//! E Radierer, I Linie, R Rechteck, O Ellipse. Rechte Maustaste radiert
-//! mit jedem Malwerkzeug. Formen werden beim Ziehen als Vorschau gezeigt
+//! Wie in der Web-Version: H Hand, P Stift, B Pinsel, S Spray, D Schattieren,
+//! F Füllen, E Radierer, I Linie, R Rechteck, O Ellipse. Rechte Maustaste
+//! radiert mit jedem Malwerkzeug — beim Schattieren läuft sie die Farbreihe
+//! andersherum. Formen werden beim Ziehen als Vorschau gezeigt
 //! und beim Loslassen gemalt — ein Undo-Schritt je Strich bzw. Form.
 
+use std::collections::HashMap;
+
 use eframe::egui::{self, Color32, Key, Modifiers, Pos2, Vec2};
+use spritebit_core::shade::Shader;
 use spritebit_core::tools::{self, Span};
 use spritebit_core::Px;
 
@@ -18,6 +22,7 @@ pub(crate) enum Tool {
     Pencil,
     Brush,
     Spray,
+    Shade,
     Fill,
     Eraser,
     Line,
@@ -30,11 +35,12 @@ pub(crate) enum Tool {
 }
 
 impl Tool {
-    const ALL: [Tool; 13] = [
+    const ALL: [Tool; 14] = [
         Tool::Pan,
         Tool::Pencil,
         Tool::Brush,
         Tool::Spray,
+        Tool::Shade,
         Tool::Fill,
         Tool::Eraser,
         Tool::Line,
@@ -52,6 +58,7 @@ impl Tool {
             Tool::Pencil => tr("Stift"),
             Tool::Brush => tr("Pinsel"),
             Tool::Spray => tr("Spray"),
+            Tool::Shade => tr("Schattieren"),
             Tool::Fill => tr("Füllen"),
             Tool::Eraser => tr("Radierer"),
             Tool::Line => tr("Linie"),
@@ -70,6 +77,7 @@ impl Tool {
             Tool::Pencil => Key::P,
             Tool::Brush => Key::B,
             Tool::Spray => Key::S,
+            Tool::Shade => Key::D,
             Tool::Fill => Key::F,
             Tool::Eraser => Key::E,
             Tool::Line => Key::I,
@@ -88,6 +96,7 @@ impl Tool {
             Tool::Pencil => icons::PENCIL,
             Tool::Brush => icons::BRUSH,
             Tool::Spray => icons::SPRAY,
+            Tool::Shade => icons::SHADE,
             Tool::Fill => icons::FILL,
             Tool::Eraser => icons::ERASER,
             Tool::Line => icons::LINE,
@@ -102,7 +111,7 @@ impl Tool {
 
     /// Hat das Werkzeug eine Größe?
     fn sized(self) -> bool {
-        matches!(self, Tool::Brush | Tool::Spray | Tool::Eraser)
+        matches!(self, Tool::Brush | Tool::Spray | Tool::Eraser | Tool::Shade)
     }
 
     fn is_shape(self) -> bool {
@@ -141,6 +150,22 @@ pub(crate) fn dragged_size(start_size: u32, dx: f32) -> u32 {
 /// Umschalt beim Malen: wo die gerade Linie beginnt und ihre Richtung
 /// (`None`, bis der Strich weit genug ist).
 pub(crate) type StrokeLock = ((i64, i64), Option<(i64, i64)>);
+
+/// Gedrückt halten beim Schattieren: alle so viele Sekunden eine Stufe weiter.
+const SHADE_HOLD_S: f64 = 0.35;
+
+/// Ein laufender Strich beim Schattieren.
+pub(crate) struct ShadeStroke {
+    pub(crate) shader: Shader,
+    /// Je Pixel: wie viele Stufen er in diesem Strich schon gegangen ist.
+    pub(crate) done: HashMap<(i64, i64), u32>,
+    /// Hat der Strich irgendetwas geändert? Sonst sagt die Statusleiste, warum.
+    pub(crate) changed: bool,
+    /// Gedrückt halten: wann die nächste Stufe fällig ist (egui-Zeit).
+    pub(crate) next: f64,
+    /// Ab dem ersten Halte-Schritt geht jeder Pixel nur noch eine Stufe.
+    pub(crate) repeat: bool,
+}
 
 pub(crate) struct Pointer {
     pub cell: Option<(i64, i64)>,
@@ -205,9 +230,12 @@ impl SpritebitApp {
                 // 1–1000: Regler logarithmisch (kleine Größen bleiben treffbar),
                 // Zahlenfeld schneller, je größer (auch Alt + Rechts ziehen).
                 ui.add(egui::Slider::new(&mut self.size, 1..=MAX_SIZE).logarithmic(true).show_value(false))
-                    .on_hover_text(tr("Größe von Pinsel, Radierer und Spray — auch mit Alt + rechter Maustaste ziehen"));
+                    .on_hover_text(tr("Größe von Pinsel, Radierer, Spray und Schattieren — auch mit Alt + rechter Maustaste ziehen"));
                 let speed = (self.size as f64 * 0.03).max(0.2);
                 ui.add(egui::DragValue::new(&mut self.size).range(1..=MAX_SIZE).speed(speed).suffix(" px"));
+            }
+            if self.tool == Tool::Shade {
+                self.shade_bar(ui);
             }
             if matches!(self.tool, Tool::Brush | Tool::Spray | Tool::Eraser) {
                 ui.label(tr("Stärke")).on_hover_text(tr("Pinsel und Radierer: Dichte — Spray: Menge je Schritt"));
@@ -334,7 +362,7 @@ impl SpritebitApp {
         }
         let size = match self.tool {
             Tool::Pencil => 1,
-            Tool::Brush | Tool::Eraser | Tool::Spray => self.size,
+            Tool::Brush | Tool::Eraser | Tool::Spray | Tool::Shade => self.size,
             _ => return,
         };
         let cell = match &self.size_drag {
@@ -347,6 +375,13 @@ impl SpritebitApp {
         if self.tool == Tool::Spray {
             let c = origin + Vec2::new(x as f32 + 0.5, y as f32 + 0.5) * zoom;
             let r = (size as f32 + 0.5) * zoom;
+            painter.circle_stroke(c, r, dark);
+            painter.circle_stroke(c, r, light);
+        } else if self.tool == Tool::Shade && self.shade_soft && size > 1 {
+            // Verlauf: der Pinsel ist rund (shade::soft_level).
+            let s = tools::stamp(x, y, size);
+            let c = origin + Vec2::new((s.x0 + s.x1 + 1) as f32 / 2.0, (s.y0 + s.y1 + 1) as f32 / 2.0) * zoom;
+            let r = size as f32 / 2.0 * zoom;
             painter.circle_stroke(c, r, dark);
             painter.circle_stroke(c, r, light);
         } else {
@@ -407,6 +442,11 @@ impl SpritebitApp {
             self.stroke_lock = None;
             self.pp = None;
             self.blocked = false;
+            if let Some(s) = self.shade.take() {
+                if !s.changed {
+                    self.hint = Some(self.shade_nothing());
+                }
+            }
             return;
         }
         if self.blocked {
@@ -444,7 +484,30 @@ impl SpritebitApp {
             (None, _) => cell,
         };
         if let Some(last) = self.stroke_last {
-            if self.tool == Tool::Spray {
+            if self.tool == Tool::Shade {
+                if last != cell {
+                    for pt in tools::line(last.0, last.1, cell.0, cell.1).into_iter().skip(1) {
+                        self.shade_at(pt);
+                    }
+                }
+                // Gedrückt halten: wie ein neuer Tipp an derselben Stelle.
+                let now = ctx.input(|i| i.time);
+                let due = self.shade.as_mut().is_some_and(|s| {
+                    if s.next.is_infinite() {
+                        s.next = now + SHADE_HOLD_S;
+                    }
+                    now >= s.next
+                });
+                if due {
+                    if let Some(s) = &mut self.shade {
+                        s.next = now + SHADE_HOLD_S;
+                        s.repeat = true;
+                        s.done.clear();
+                    }
+                    self.shade_at(cell);
+                }
+                ctx.request_repaint_after(std::time::Duration::from_secs_f64(SHADE_HOLD_S / 2.0));
+            } else if self.tool == Tool::Spray {
                 self.spray_at(cell, p.secondary);
                 // Spray sprüht weiter, auch wenn die Maus stillsteht.
                 ctx.request_repaint();
@@ -502,6 +565,26 @@ impl SpritebitApp {
                 self.record();
                 self.stroke_last = Some(cell);
                 self.spray_at(cell, erase);
+            }
+            Tool::Shade => {
+                if self.sprite().editing_mask() {
+                    self.hint = Some(tr("Schattieren geht nicht in einer Maske.").into());
+                    self.blocked = true;
+                    return;
+                }
+                if self.shade_ramp.len() == 1 {
+                    self.hint = Some(tr("Schattieren: eine Farbe allein ist noch keine Reihe — klicke mindestens eine zweite an. Oder „Leeren“: dann malt es mit der aktuellen Farbe.").into());
+                    self.blocked = true;
+                    return;
+                }
+                self.record();
+                // Linksklick dunkler (leer → hellste Farbe), Rechtsklick andersherum.
+                let pal = self.project.current_palette();
+                let shader = Shader::new(&pal, &self.shade_ramp, !erase, self.color);
+                self.shade = Some(ShadeStroke { shader, done: HashMap::new(), changed: false, next: f64::INFINITY, repeat: false });
+                self.stroke_last = Some(cell);
+                self.stroke_lock = Some((cell, None));
+                self.shade_at(cell);
             }
             _ => {
                 self.record();

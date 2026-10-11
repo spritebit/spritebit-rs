@@ -73,6 +73,7 @@ pub const RESET: ImageSource<'static> = include_image!("../assets/icons/reset.sv
 pub const SAVE: ImageSource<'static> = include_image!("../assets/icons/save.svg");
 pub const SEL_ALL: ImageSource<'static> = include_image!("../assets/icons/selAll.svg");
 pub const SELECT: ImageSource<'static> = include_image!("../assets/icons/select.svg");
+pub const SHADE: ImageSource<'static> = include_image!("../assets/icons/shade.svg");
 pub const SHADES: ImageSource<'static> = include_image!("../assets/icons/shades.svg");
 pub const SHRINK: ImageSource<'static> = include_image!("../assets/icons/shrink.svg");
 pub const SLIDERS: ImageSource<'static> = include_image!("../assets/icons/sliders.svg");

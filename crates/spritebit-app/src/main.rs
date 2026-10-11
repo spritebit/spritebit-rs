@@ -22,6 +22,7 @@ mod preview_ui;
 mod projects_ui;
 mod selection_ui;
 mod selfupdate;
+mod shade_ui;
 mod sprites_ui;
 mod tabs;
 mod template_ui;
@@ -167,6 +168,11 @@ struct SpritebitApp {
     pixel_perfect: bool,
     /// Füllen: Grenzen von allen sichtbaren Ebenen (wie im Web).
     fill_visible: bool,
+    /// Schattieren (spritebit_core::shade): Farbreihe dunkel → hell, Verlauf
+    /// an/aus und der laufende Strich.
+    shade_ramp: Vec<spritebit_core::Rgb>,
+    shade_soft: bool,
+    shade: Option<tools_ui::ShadeStroke>,
     /// Umschalt beim Malen: wo die gerade Linie beginnt und ihre Richtung.
     stroke_lock: Option<tools_ui::StrokeLock>,
     /// Skalieren der Auswahl: unskaliertes Original, seine Maske und das
@@ -298,6 +304,9 @@ impl SpritebitApp {
             size_drag: None,
             pixel_perfect: false,
             fill_visible: false,
+            shade_ramp: Vec::new(),
+            shade_soft: false,
+            shade: None,
             stroke_lock: None,
             scale_base: None,
             pp: None,
