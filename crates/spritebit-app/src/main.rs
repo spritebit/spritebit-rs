@@ -170,6 +170,9 @@ struct SpritebitApp {
     fill_visible: bool,
     /// Schattieren (spritebit_core::shade): Farbreihe dunkel → hell, Verlauf
     /// an/aus und der laufende Strich.
+    /// Pinselform für Pinsel, Radierer und Schattieren: rund statt eckig
+    /// (spritebit_core::tools::in_round).
+    brush_round: bool,
     shade_ramp: Vec<spritebit_core::Rgb>,
     shade_soft: bool,
     /// „Abstufungen“: so viele Töne je Seite (1–4, also 3–9 insgesamt).
@@ -306,6 +309,7 @@ impl SpritebitApp {
             size_drag: None,
             pixel_perfect: false,
             fill_visible: false,
+            brush_round: false,
             shade_ramp: Vec::new(),
             shade_soft: false,
             shade_gen: 2,

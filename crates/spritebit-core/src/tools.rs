@@ -80,6 +80,105 @@ pub fn swept_stamp(a: (i64, i64), b: (i64, i64), size: u32) -> Vec<Span> {
     out
 }
 
+// ── Runder Pinsel ───────────────────────────────────────────────────
+// Wie im Web (js/brushshape.js): ein Kreis, so gerastert, wie man ihn in
+// Pixel-Art setzt — 1 und 2 px voll, 3 px ein Plus, ab 4 px ohne Ecken.
+// Die Pixel liegen wie beim Quadrat (stamp) bei Versatz lo..=hi um den
+// Zeiger; bei gerader Größe liegt die Mitte zwischen zwei Pixeln.
+
+/// Radius² des runden Pinsels: etwas mehr als r², sonst würden die Kreise
+/// eckig-dünn (bei 5 px fehlten die Pixel neben den Spitzen).
+fn round_r2(size: u32) -> f64 {
+    let r = (size.max(1) as f64 - 1.0) / 2.0;
+    r * r + 0.8 * r
+}
+
+/// Mitte des Pinsels relativ zum Zeiger (lo + r).
+fn round_mid(size: u32) -> f64 {
+    let n = size.max(1) as i64;
+    -((n - 1) / 2) as f64 + (n - 1) as f64 / 2.0
+}
+
+/// Gehört der Pixel mit Versatz (dx, dy) zum runden Pinsel der Größe `size`?
+pub fn in_round(dx: i64, dy: i64, size: u32) -> bool {
+    let m = round_mid(size);
+    let (x, y) = (dx as f64 - m, dy as f64 - m);
+    x * x + y * y <= round_r2(size)
+}
+
+/// Runder Pinsel um (x, y) als Zeilenabschnitte.
+pub fn round_spans(x: i64, y: i64, size: u32) -> Vec<Span> {
+    swept_round((x, y), (x, y), size)
+}
+
+/// Fläche, die ein runder Pinsel überstreicht, wenn er von `a` nach `b`
+/// gezogen wird — eine „Kapsel“: je Zeile ein Abschnitt, egal wie lang der
+/// Strich ist (wie `swept_stamp` für den eckigen). Für a == b genau der
+/// runde Pinsel ([`in_round`]); entlang der Strecke bis auf höchstens einen
+/// Pixel am Rand dasselbe wie ein runder Pinsel je Punkt der Linie.
+pub fn swept_round(a: (i64, i64), b: (i64, i64), size: u32) -> Vec<Span> {
+    let m = round_mid(size);
+    let r = round_r2(size).sqrt();
+    let (ax, ay) = (a.0 as f64 + m, a.1 as f64 + m);
+    let (bx, by) = (b.0 as f64 + m, b.1 as f64 + m);
+    let (dx, dy) = (bx - ax, by - ay);
+    let len = dx.hypot(dy);
+    let (y0, y1) = ((ay.min(by) - r - 0.5).ceil() as i64, (ay.max(by) + r + 0.5).floor() as i64);
+    let mut out = Vec::with_capacity((y1 - y0 + 1).max(0) as usize);
+    // Ein Intervall x mit lo <= k·x + c <= hi (k = 0: alles oder nichts).
+    let solve = |k: f64, c: f64, lo: f64, hi: f64| -> Option<(f64, f64)> {
+        if k.abs() < 1e-12 {
+            return (lo <= c && c <= hi).then_some((f64::NEG_INFINITY, f64::INFINITY));
+        }
+        let (p, q) = ((lo - c) / k, (hi - c) / k);
+        Some((p.min(q), p.max(q)))
+    };
+    for y in y0..=y1 {
+        let yf = y as f64;
+        let mut span: Option<(f64, f64)> = None;
+        let mut add = |s: (f64, f64)| {
+            span = Some(match span {
+                None => s,
+                Some((p, q)) => (p.min(s.0), q.max(s.1)),
+            });
+        };
+        // Die beiden Endkreise …
+        for (cx, cy) in [(ax, ay), (bx, by)] {
+            let h = r * r - (yf - cy) * (yf - cy);
+            if h >= 0.0 {
+                let w = h.sqrt();
+                add((cx - w, cx + w));
+            }
+        }
+        // … und das Band dazwischen: Abstand zur Strecke höchstens r, und
+        // der Fußpunkt liegt auf ihr. Ein halber Pixel Spielraum quer: die
+        // gerasterte Linie (line) weicht um bis zu so viel von der genauen
+        // Strecke ab — wie bei swept_stamp. Die Kapsel ist konvex, ihre
+        // Teile überlappen sich, die Vereinigung ist ein Abschnitt.
+        if len > 0.0 {
+            let (ux, uy) = (dx / len, dy / len);
+            let (nx, ny) = (-uy, ux);
+            let rb = r + 0.5;
+            let across = solve(nx, (yf - ay) * ny - ax * nx, -rb, rb);
+            let along = solve(ux, (yf - ay) * uy - ax * ux, 0.0, len);
+            if let (Some(p), Some(q)) = (across, along) {
+                let (lo, hi) = (p.0.max(q.0), p.1.min(q.1));
+                if lo <= hi {
+                    add((lo, hi));
+                }
+            }
+        }
+        if let Some((p, q)) = span {
+            // Kleine Rundungsreserve: ein Pixel genau auf dem Rand gehört dazu.
+            let (x0, x1) = ((p - 1e-9).ceil() as i64, (q + 1e-9).floor() as i64);
+            if x0 <= x1 {
+                out.push((y, x0, x1));
+            }
+        }
+    }
+    out
+}
+
 /// Ein Rechteck aus Zeilen `y0..=y1` und Spalten `x0..=x1`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Span3 {
@@ -426,6 +525,56 @@ impl PixelPerfect {
 
 #[cfg(test)]
 mod tests {
+
+    /// Der runde Pinsel als Bild ('#' gehört dazu).
+    fn round_shape(n: u32) -> Vec<String> {
+        let lo = -((n as i64 - 1) / 2);
+        let hi = lo + n as i64 - 1;
+        (lo..=hi).map(|dy| (lo..=hi).map(|dx| if in_round(dx, dy, n) { '#' } else { '.' }).collect()).collect()
+    }
+
+    #[test]
+    fn runder_pinsel_wie_im_web() {
+        assert_eq!(round_shape(1), vec!["#"]);
+        assert_eq!(round_shape(2), vec!["##", "##"]);
+        assert_eq!(round_shape(3), vec![".#.", "###", ".#."]);
+        assert_eq!(round_shape(4), vec![".##.", "####", "####", ".##."]);
+        assert_eq!(round_shape(5), vec![".###.", "#####", "#####", "#####", ".###."]);
+    }
+
+    #[test]
+    fn runde_abschnitte_passen_zum_pinsel() {
+        for n in [1, 3, 4, 5, 8, 13] {
+            let mut want: Vec<(i64, i64)> = Vec::new();
+            let lo = -((n as i64 - 1) / 2);
+            for dy in lo..lo + n as i64 {
+                for dx in lo..lo + n as i64 {
+                    if in_round(dx, dy, n) {
+                        want.push((10 + dx, 20 + dy));
+                    }
+                }
+            }
+            let mut got: Vec<(i64, i64)> = round_spans(10, 20, n).into_iter().flat_map(|(y, a, b)| (a..=b).map(move |x| (x, y))).collect();
+            want.sort();
+            got.sort();
+            assert_eq!(got, want, "Größe {n}");
+        }
+    }
+
+    #[test]
+    fn kapsel_deckt_alle_kreise_entlang_der_strecke() {
+        use std::collections::HashSet;
+        for (a, b, n) in [((0, 0), (20, 7), 9), ((5, 5), (5, 30), 12), ((0, 0), (-15, -15), 10)] {
+            let got: HashSet<(i64, i64)> = swept_round(a, b, n).into_iter().flat_map(|(y, p, q)| (p..=q).map(move |x| (x, y))).collect();
+            for (x, y) in line(a.0, a.1, b.0, b.1) {
+                for (yy, p, q) in round_spans(x, y, n) {
+                    for xx in p..=q {
+                        assert!(got.contains(&(xx, yy)), "{a:?}→{b:?} Größe {n}: ({xx}, {yy}) fehlt");
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn umschalt_rastet_wie_im_web_ein() {

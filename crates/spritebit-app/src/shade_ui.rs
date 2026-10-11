@@ -134,7 +134,8 @@ impl SpritebitApp {
         for py in st.y0..=st.y1 {
             for px in st.x0..=st.x1 {
                 let level = if soft { soft_level(px as f64 - mx, py as f64 - my, size, levels) } else { 1 };
-                if level == 0 {
+                // Runder Pinsel ohne Verlauf: die Ecken fallen weg.
+                if level == 0 || (!soft && self.brush_round && size > 2 && !tools::in_round(px - x, py - y, size)) {
                     continue;
                 }
                 for (gy, gx, _) in tools::mirror_spans(vec![(py, px, px)], w, h, self.mirror_x, self.mirror_y) {

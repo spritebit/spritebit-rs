@@ -1081,6 +1081,10 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Für eine Animation reichen oft 2–4 Frames. Ein Frame, der länger steht, gibt Gewicht — z. B. beim Landen.", "An animation often needs only 2–4 frames. A frame that stays longer adds weight — say, when landing.", ""),
     ("Gleich breite Farbstreifen parallel zur Kontur („Banding“) wirken matschig. Versetz die Übergänge lieber.", "Equal-width color bands running along the outline (“banding”) look mushy. Stagger the transitions instead.", ""),
     ("F1 öffnet die Hilfe mit allen Tastenkürzeln.", "F1 opens the help with every shortcut.", ""),
+    // ── Pinselform (tools_ui.rs) ──
+    ("Eckiger Pinsel", "Square brush", ""),
+    ("Runder Pinsel — ab Größe 3 (3 px ist ein Plus)", "Round brush — from size 3 (3 px is a plus)", ""),
+    ("Pinselform — Pinsel, Radierer und Schattieren malen eckig oder rund (die zwei Knöpfe hinter der Größe). Rund ist ab Größe 3 zu sehen: 3 px ist ein Plus, 5 px ein runder Fleck.", "Brush shape — brush, eraser and shade paint square or round (the two buttons after the size). Round shows from size 3: 3 px is a plus, 5 px a round dot.", ""),
     // ── Schattieren (shade_ui.rs) ──
     ("Farbreihe nach Farbstufen ordnen — von hell nach dunkel. Sonst bleibt sie in der Reihenfolge, in der du die Farben angeklickt hast.", "Sort the ramp by shades — light to dark. Otherwise it keeps the order in which you clicked the colours.", ""),
     ("Abstufungen", "Shades", ""),

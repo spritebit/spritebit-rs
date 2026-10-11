@@ -10,6 +10,7 @@
 use eframe::egui::{self, include_image, Color32, ImageSource, Response, Ui, Vec2};
 
 pub const BRUSH: ImageSource<'static> = include_image!("../assets/icons/brush.svg");
+pub const CIRCLE: ImageSource<'static> = include_image!("../assets/icons/circle.svg");
 pub const CLEANUP: ImageSource<'static> = include_image!("../assets/icons/cleanup.svg");
 pub const CLOSE: ImageSource<'static> = include_image!("../assets/icons/close.svg");
 pub const COLORS: ImageSource<'static> = include_image!("../assets/icons/colors.svg");
@@ -79,6 +80,7 @@ pub const SHRINK: ImageSource<'static> = include_image!("../assets/icons/shrink.
 pub const SLIDERS: ImageSource<'static> = include_image!("../assets/icons/sliders.svg");
 pub const SPOT: ImageSource<'static> = include_image!("../assets/icons/spot.svg");
 pub const SPRAY: ImageSource<'static> = include_image!("../assets/icons/spray.svg");
+pub const SQUARE: ImageSource<'static> = include_image!("../assets/icons/square.svg");
 pub const SPRITES: ImageSource<'static> = include_image!("../assets/icons/sprites.svg");
 pub const TAG: ImageSource<'static> = include_image!("../assets/icons/tag.svg");
 pub const TEMPLATE: ImageSource<'static> = include_image!("../assets/icons/template.svg");

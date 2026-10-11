@@ -231,6 +231,19 @@ impl SpritebitApp {
                     .on_hover_text(tr("Größe von Pinsel, Radierer, Spray und Schattieren — auch mit Alt + rechter Maustaste ziehen"));
                 let speed = (self.size as f64 * 0.03).max(0.2);
                 ui.add(egui::DragValue::new(&mut self.size).range(1..=MAX_SIZE).speed(speed).suffix(" px"));
+                // Pinselform: eckig oder rund — Spray ist immer rund.
+                if self.tool != Tool::Spray {
+                    let c = ui.visuals().text_color();
+                    for (round, icon, tip) in
+                        [(false, icons::SQUARE, tr("Eckiger Pinsel")), (true, icons::CIRCLE, tr("Runder Pinsel — ab Größe 3 (3 px ist ein Plus)"))]
+                    {
+                        let b = egui::Button::selectable(self.brush_round == round, icons::image(icon, c));
+                        if ui.add(b).on_hover_text(tip).clicked() && self.brush_round != round {
+                            self.brush_round = round;
+                            self.save_view();
+                        }
+                    }
+                }
             }
             if self.tool == Tool::Shade {
                 self.shade_bar(ui);
@@ -375,8 +388,8 @@ impl SpritebitApp {
             let r = (size as f32 + 0.5) * zoom;
             painter.circle_stroke(c, r, dark);
             painter.circle_stroke(c, r, light);
-        } else if self.tool == Tool::Shade && self.shade_soft && size > 1 {
-            // Verlauf: der Pinsel ist rund (shade::soft_level).
+        } else if size > 2 && (self.brush_round || (self.tool == Tool::Shade && self.shade_soft)) {
+            // Runder Pinsel — und Schattieren mit Verlauf (shade::soft_level).
             let s = tools::stamp(x, y, size);
             let c = origin + Vec2::new((s.x0 + s.x1 + 1) as f32 / 2.0, (s.y0 + s.y1 + 1) as f32 / 2.0) * zoom;
             let r = size as f32 / 2.0 * zoom;
@@ -614,12 +627,15 @@ impl SpritebitApp {
             return;
         }
         let size = if self.tool == Tool::Pencil { 1 } else { self.size };
+        // Runder Pinsel (tools::in_round) — ab 3 px sieht man den Unterschied.
+        let round = self.brush_round && size > 2;
         // Große Pinsel: die ganze überstrichene Fläche auf einmal statt eines
         // Stempels je Punkt der Linie — bei 1000 px sonst Millionen Pixel je Zug.
-        let spans: Vec<Span> = if size > tools::SWEEP_FROM {
-            tools::swept_stamp(a, b, size)
-        } else {
-            tools::line(a.0, a.1, b.0, b.1).into_iter().flat_map(|(x, y)| tools::stamp(x, y, size).spans()).collect()
+        let spans: Vec<Span> = match (size > tools::SWEEP_FROM, round) {
+            (true, false) => tools::swept_stamp(a, b, size),
+            (true, true) => tools::swept_round(a, b, size),
+            (false, false) => tools::line(a.0, a.1, b.0, b.1).into_iter().flat_map(|(x, y)| tools::stamp(x, y, size).spans()).collect(),
+            (false, true) => tools::line(a.0, a.1, b.0, b.1).into_iter().flat_map(|(x, y)| tools::round_spans(x, y, size)).collect(),
         };
         // Stärke = Dichte bei Pinsel und Radierer: jedes Pixel nur mit dieser
         // Wahrscheinlichkeit (wie im Web). Der Stift malt immer voll.

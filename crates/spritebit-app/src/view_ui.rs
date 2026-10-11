@@ -77,6 +77,7 @@ impl SpritebitApp {
         self.pixel_perfect = v["pixelPerfect"].as_bool().unwrap_or(false);
         self.fill_visible = v["fillVisible"].as_bool().unwrap_or(false);
         self.shade_soft = v["shadeSoft"].as_bool().unwrap_or(false);
+        self.brush_round = v["brushRound"].as_bool().unwrap_or(false);
         let ramp: Vec<_> = v["shadeRamp"].as_array().into_iter().flatten().filter_map(|c| c.as_str().and_then(spritebit_core::palette::parse_hex)).collect();
         self.shade_ramp = spritebit_core::shade::normalize_ramp(&ramp);
     }
@@ -91,6 +92,7 @@ impl SpritebitApp {
                 "fillVisible": self.fill_visible,
                 "shadeRamp": ramp,
                 "shadeSoft": self.shade_soft,
+                "brushRound": self.brush_round,
             });
             let _ = std::fs::write(d.join("view.json"), v.to_string());
         }
@@ -448,6 +450,7 @@ pub(crate) fn help_sections() -> Vec<(&'static str, Vec<&'static str>)> {
             tr("Schattieren (D) — ein Stift, der sich mit jedem Strich durch eine Farbreihe arbeitet. Reihe zusammenstellen: bei aktivem Werkzeug Farben in der Palette anklicken, in der Reihenfolge, in der sie aufeinander folgen sollen. Ein leerer Pixel bekommt zuerst die erste Farbe, jeder weitere Strich darüber die nächste; gedrückt halten wirkt wie eine Airbrush: wo der Pinsel länger bleibt, geht es von selbst weiter, immer schneller — auch beim langsamen Malen. Rechtsklick läuft die Reihe andersherum. Pixel in anderen Farben (z. B. Umrisse) bleiben unberührt. Der Balken-Knopf ordnet die Reihe nach Farbstufen, hell → dunkel — von selbst passiert das nie. „Abstufungen“ erzeugt aus der aktuellen Farbe passende hellere und dunklere Töne, hängt sie an die Palette und wählt sie als Reihe. Ohne Reihe malt es mit der aktuellen Farbe und nimmt danach den nächstdunkleren Ton derselben Farbe. „Verlauf“ macht den Pinsel rund und weich: in der Mitte mehrere Stufen, zum Rand hin weniger."),
             tr("Füllen — zusammenhängende gleiche Fläche. Radierer — setzt auf transparent. Zauberstab — löscht zusammenhängende ähnliche Fläche."),
             tr("Füllen mit „Grenzen: alle Ebenen“: die Fläche endet, wo sich im sichtbaren Bild etwas ändert — gemalt wird in die aktive Ebene. So malst du eine Vorlage auf eigener Ebene aus."),
+            tr("Pinselform — Pinsel, Radierer und Schattieren malen eckig oder rund (die zwei Knöpfe hinter der Größe). Rund ist ab Größe 3 zu sehen: 3 px ist ein Plus, 5 px ein runder Fleck."),
             tr("Größe 1–1000 per Regler oder Zahlenfeld; Alt + rechte Maustaste ziehen verstellt sie direkt auf der Fläche. Ein Umriss zeigt, was Pinsel, Radierer und Spray gleich treffen."),
             tr("Clean Stroke — beim Stift (und beim Radierer mit Größe 1) verschwinden die L-Ecken einer freihändigen Linie: saubere 1-Pixel-Linien."),
             tr("Linie · Rechteck · Ellipse — aufziehen, Loslassen zeichnet. „Gefüllt“ schaltet zwischen Kontur und Fläche."),

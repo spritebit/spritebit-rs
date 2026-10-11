@@ -1948,3 +1948,23 @@ fn schattieren_langsam_malen_wird_gleichmaessig_dunkler() {
     let row: Vec<u16> = (2..=6).map(|x| px(&h, x, 8)).collect();
     assert!(row.iter().all(|&v| v == 3), "überall eine Stufe mehr: {row:?}");
 }
+
+#[test]
+fn runder_pinsel_malt_einen_kreis() {
+    let mut h = app();
+    {
+        let a = h.state_mut();
+        a.tool = tools_ui::Tool::Brush;
+        a.size = 5;
+        a.brush_round = true;
+    }
+    h.run();
+    drag(&mut h, (10.0, 10.0), (10.0, 10.0));
+    let row = |h: &Harness<'_, SpritebitApp>, y: u32| (8..=12).map(|x| if px(h, x, y) != 0 { '#' } else { '.' }).collect::<String>();
+    let got: Vec<String> = (8..=12).map(|y| row(&h, y)).collect();
+    assert_eq!(got, vec![".###.", "#####", "#####", "#####", ".###."]);
+    // Eckig wieder: volles Quadrat.
+    h.state_mut().brush_round = false;
+    drag(&mut h, (20.0, 10.0), (20.0, 10.0));
+    assert!((18..=22).all(|x| (8..=12).all(|y| px(&h, x, y) != 0)));
+}
