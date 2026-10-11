@@ -114,6 +114,26 @@ fn bild_der_oberflaeche() {
         h.run();
         h.run();
     }
+    // SPRITEBIT_SHOT_TILELIB=1: Tilemap-Ebene mit Bibliothek, Panel „Kacheln“ offen.
+    if std::env::var_os("SPRITEBIT_SHOT_TILELIB").is_some() {
+        let a = h.state_mut();
+        a.tiles_structural(|sp| {
+            let l = sp.layer;
+            let img = sp.cel_mut(0, l);
+            for x in 0..32 {
+                for y in 0..16 {
+                    img.set(x, y, if x < 16 { 3 } else { 6 });
+                }
+            }
+            let ts = spritebit_core::tilemap::Tileset::build(16, 16, [&*img]);
+            sp.layers[l].tileset = Some(ts);
+        });
+        a.save_to_lib("Wald".into(), false);
+        a.project.tileset_lib.insert("Höhle".into(), spritebit_core::tilelib::LibSet { tw: 8, th: 8, tiles: vec![vec![Some([9, 9, 9]); 64]] });
+        a.dock.focus = Some(crate::dock_ui::PanelId::Tiles);
+        h.run();
+        h.run();
+    }
     let img = h.render().expect("Bild");
     img.save(path).expect("speichern");
 }

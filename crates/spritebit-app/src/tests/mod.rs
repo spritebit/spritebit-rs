@@ -2128,3 +2128,79 @@ fn bitty_hinweise_beim_malen() {
     let sp = h.state().sprite();
     assert_eq!(sp.layers[sp.layer].opacity, 1.0);
 }
+
+#[test]
+fn kachelsatz_bibliothek_in_anderen_sprite() {
+    use spritebit_core::tilemap::Tileset;
+    let mut h = app();
+    {
+        let a = h.state_mut();
+        // Tilemap-Ebene mit zwei Kacheln (2 × 2): rot und grün nebeneinander.
+        a.tiles_structural(|sp| {
+            let l = sp.layer;
+            let img = sp.cel_mut(0, l);
+            for (x, v) in [(0, 6), (1, 6), (2, 9), (3, 9)] {
+                img.set(x, 0, v);
+                img.set(x, 1, v);
+            }
+            let ts = Tileset::build(2, 2, [&*img]);
+            sp.layers[l].tileset = Some(ts);
+        });
+        a.save_to_lib("Wald".into(), false);
+        assert_eq!(a.project.tileset_lib["Wald"].tiles.len(), 2);
+        assert_eq!(a.active_tileset().and_then(|t| t.lib.clone()).as_deref(), Some("Wald"), "Ebene merkt sich die Herkunft");
+        // Zweiter Sprite mit anderer Palette
+        a.project.sprites.push(spritebit_core::Sprite::new("Level 2", 8, 8).unwrap());
+        a.project.sprites[1].palette = "pico8".into();
+        a.project.current = 1;
+        a.histories.push(Default::default());
+        a.new_layer_from_lib("Wald".into());
+        let sp = a.sprite();
+        let ts = sp.layers[sp.layer].tileset.clone().unwrap();
+        assert_eq!((ts.tiles.len(), ts.lib.as_deref()), (2, Some("Wald")));
+        // Gleiche Farben wie gespeichert, auch mit anderer Palette.
+        let pal = a.project.current_palette();
+        let rgb = spritebit_core::selection::rgb_of(ts.tiles[0][0], &pal, &sp.free);
+        assert_eq!(rgb, Some([0xff, 0x80, 0x80]), "Farbe 6 aus „graustufen“");
+    }
+    h.run();
+    // Ein anderer Satz gleichen Namens ersetzt erst nach Rückfrage.
+    let a = h.state_mut();
+    a.project.current = 0;
+    let l = a.sprite().layer;
+    a.project.sprite_mut().layers[l].tileset.as_mut().unwrap().lib = None;
+    a.save_to_lib("Wald".into(), false);
+    assert_eq!(a.tlib.confirm_replace.as_deref(), Some("Wald"));
+    // Projekt speichern und laden: die Bibliothek ist dabei.
+    let back = spritebit_core::load_native(&spritebit_core::save_native(&a.project)).unwrap();
+    assert_eq!(back.tileset_lib, a.project.tileset_lib);
+}
+
+#[test]
+fn kachelsatz_uebernehmen_behaelt_die_anordnung() {
+    use spritebit_core::tilelib::LibSet;
+    use spritebit_core::tilemap::Tileset;
+    let mut h = app();
+    let a = h.state_mut();
+    a.tiles_structural(|sp| {
+        let l = sp.layer;
+        let img = sp.cel_mut(0, l);
+        for (x, v) in [(0, 1), (1, 1), (2, 2), (3, 2)] {
+            img.set(x, 0, v);
+            img.set(x, 1, v);
+        }
+        sp.layers[l].tileset = Some(Tileset::build(2, 2, [&*img]));
+    });
+    let black = Some([0, 0, 0]);
+    a.project.tileset_lib.insert("Nacht".into(), LibSet { tw: 2, th: 2, tiles: vec![vec![black; 4], vec![None, black, black, None]] });
+    a.use_from_lib("Nacht".into());
+    let sp = a.sprite();
+    let img = sp.cel(0, sp.layer);
+    let row = |y| (0..4).map(|x| img.get(x, y)).collect::<Vec<_>>();
+    assert_eq!(row(0), vec![5, 5, 0, 5], "links Kachel 1 (schwarz = Farbe 5), rechts Kachel 2");
+    assert_eq!(sp.layers[sp.layer].tileset.as_ref().unwrap().lib.as_deref(), Some("Nacht"));
+    // Ein Schritt zurück: wieder wie vorher.
+    a.undo();
+    let sp = a.sprite();
+    assert_eq!(sp.cel(0, sp.layer).get(0, 0), 1);
+}

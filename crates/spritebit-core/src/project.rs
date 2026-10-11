@@ -20,6 +20,9 @@ pub struct Project {
     /// Materialien je Palette (für „JSON (Spiel)“): Name → Nummer → Material.
     /// Auch für eingebaute Paletten; fehlende Nummern sind „none“.
     pub materials: BTreeMap<String, BTreeMap<u16, String>>,
+    /// Kachelsatz-Bibliothek ([`crate::tilelib`]): Name → Satz, mit Farben
+    /// statt Nummern — passt so in jeden Sprite.
+    pub tileset_lib: BTreeMap<String, crate::tilelib::LibSet>,
 }
 
 impl Default for Project {
@@ -30,6 +33,7 @@ impl Default for Project {
             palettes: Vec::new(),
             current: 0,
             materials: BTreeMap::new(),
+            tileset_lib: BTreeMap::new(),
         }
     }
 }
@@ -75,7 +79,7 @@ impl Project {
         let sp = self.sprites[i].clone();
         let palettes = self.palettes.iter().filter(|p| p.name == sp.palette).cloned().collect();
         let materials = self.materials.iter().filter(|(k, _)| **k == sp.palette).map(|(k, v)| (k.clone(), v.clone())).collect();
-        Project { name: String::new(), sprites: vec![sp], palettes, current: 0, materials }
+        Project { name: String::new(), sprites: vec![sp], palettes, current: 0, materials, tileset_lib: BTreeMap::new() }
     }
 
     /// Die Sprites eines anderen Projekts dazunehmen, ohne hier etwas zu

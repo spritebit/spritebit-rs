@@ -23,6 +23,7 @@
 //! * [`shade`] — Schattieren: ein Stift, der mit jedem Strich dunkler wird
 //! * [`mask`] — Ebenenmasken: Teile einer Ebene ausblenden, ohne sie zu löschen
 //! * [`export`] — PNG, GIF, Spritesheet mit JSON-Atlas
+//! * [`tilelib`] — Kachelsätze speichern, in andere Ebenen/Projekte laden
 //! * [`template`] — Schablone: Lage, Pipette, aufs Raster übernehmen
 //! * [`transform`] — spiegeln, drehen, zuschneiden, Leinwand, skalieren
 //! * [`builtin`] — die eingebauten Paletten der Web-Version
@@ -49,6 +50,7 @@ pub mod selection;
 pub mod shade;
 pub mod sprite;
 pub mod template;
+pub mod tilelib;
 pub mod tilemap;
 pub mod tools;
 pub mod transform;

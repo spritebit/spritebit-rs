@@ -37,6 +37,9 @@ pub struct Tileset {
     pub tw: u32,
     pub th: u32,
     pub tiles: Vec<Vec<Px>>,
+    /// Name des Satzes in der Bibliothek, aus dem er kommt
+    /// ([`crate::tilelib`]) — für „Neu laden“ und „In Bibliothek speichern“.
+    pub lib: Option<String>,
 }
 
 /// Neue Kacheln beim Malen in leere Zellen?
@@ -59,7 +62,7 @@ pub struct SyncSum {
 
 impl Tileset {
     pub fn new(tw: u32, th: u32) -> Self {
-        Tileset { tw, th, tiles: Vec::new() }
+        Tileset { tw, th, tiles: Vec::new(), lib: None }
     }
 
     /// Wie viele ganze Kacheln passen in `w × h`? (Spalten, Zeilen)
@@ -314,7 +317,11 @@ impl Tileset {
     pub fn to_json(&self, px: impl Fn(Px) -> Value) -> Value {
         let tiles: Vec<Value> =
             self.tiles.iter().map(|t| Value::Array(t.chunks(self.tw as usize).map(|r| Value::Array(r.iter().map(|&v| px(v)).collect())).collect())).collect();
-        json!({ "tw": self.tw, "th": self.th, "tiles": tiles })
+        let mut v = json!({ "tw": self.tw, "th": self.th, "tiles": tiles });
+        if let Some(l) = &self.lib {
+            v["lib"] = json!(l);
+        }
+        v
     }
 
     /// Aus dem Speicherstand; `px` übersetzt einen Wert (Zahl oder Hex).
@@ -326,6 +333,7 @@ impl Tileset {
             return None;
         }
         let mut ts = Tileset::new(tw, th);
+        ts.lib = v.get("lib").and_then(Value::as_str).map(str::trim).filter(|s| !s.is_empty()).map(String::from);
         for t in v.get("tiles").and_then(Value::as_array).into_iter().flatten() {
             let Some(rows) = t.as_array().filter(|r| r.len() == th as usize) else { continue };
             let mut data = Vec::with_capacity((tw * th) as usize);

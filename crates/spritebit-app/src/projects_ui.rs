@@ -147,8 +147,13 @@ impl SpritebitApp {
     /// Ein neues Projekt `name` in `path`: ein leerer Sprite; eigene Paletten
     /// und ihre Materialien kommen mit (wie im Web).
     pub(crate) fn create_project_at(&mut self, name: String, path: &Path) {
-        let p =
-            Project { name: name.trim().to_string(), palettes: self.project.palettes.clone(), materials: self.project.materials.clone(), ..Default::default() };
+        let p = Project {
+            name: name.trim().to_string(),
+            palettes: self.project.palettes.clone(),
+            materials: self.project.materials.clone(),
+            tileset_lib: self.project.tileset_lib.clone(),
+            ..Default::default()
+        };
         self.replace_project(p, None);
         self.write_native(path);
         self.hint = Some(trf("Neues Projekt „{name}“ angelegt.", &[("name", &self.project_display_name())]));

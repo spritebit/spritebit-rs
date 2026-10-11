@@ -26,6 +26,7 @@ mod shade_ui;
 mod sprites_ui;
 mod tabs;
 mod template_ui;
+mod tilelib_ui;
 mod tiles_ui;
 mod timeline;
 mod tlmenu_ui;
@@ -264,6 +265,8 @@ struct SpritebitApp {
     image: image_ui::ImagePanel,
     /// Panel „Kacheln“ (Tilemap-Ebenen).
     tiles: tiles_ui::TileState,
+    /// Kachelsatz-Bibliothek im Panel (tilelib_ui.rs).
+    tlib: tilelib_ui::LibState,
 }
 
 /// Was nach der Rückfrage „Ungespeicherte Änderungen" passieren soll.
@@ -363,6 +366,7 @@ impl SpritebitApp {
             allow_close: false,
             image: image_ui::ImagePanel::default(),
             tiles: tiles_ui::TileState::default(),
+            tlib: Default::default(),
             rng: spritebit_core::tools::Rng::new(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(1, |d| d.as_nanos() as u64)),
         }
     }
@@ -602,7 +606,7 @@ impl SpritebitApp {
         };
         match spritebit_core::aseprite::read(&bytes, &name) {
             Ok(a) => {
-                let p = Project { name: String::new(), sprites: vec![a.sprite], palettes: vec![a.palette], current: 0, materials: Default::default() };
+                let p = Project { name: String::new(), sprites: vec![a.sprite], palettes: vec![a.palette], current: 0, ..Default::default() };
                 self.merge_project(p);
             }
             Err(e) => self.error = Some(i18n::ase_error(&e)),

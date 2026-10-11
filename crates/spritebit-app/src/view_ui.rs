@@ -492,6 +492,7 @@ pub(crate) fn help_sections() -> Vec<(&'static str, Vec<&'static str>)> {
             tr("Eine Tilemap-Ebene besteht aus Kacheln fester Größe (8–64 px). Malt man eine Kachel an, ändert sie sich überall, wo sie liegt — auch in anderen Frames."),
             tr("Panel Kacheln: neue Tilemap-Ebene oder die aktive umwandeln. Pixel malen: Auto legt in leeren Zellen neue Kacheln an, Manuell nicht."),
             tr("Kacheln setzen: Kachel in der Liste wählen, dann setzt der Stift sie, Radierer oder Rechtsklick leert, Füllen füllt, Alt+Klick nimmt eine Kachel auf."),
+            tr("Bibliothek: „Speichern“ legt den Kachelsatz der aktiven Tilemap-Ebene unter einem Namen ins Projekt. „Neue Ebene“ holt ihn in jeden Sprite, „Übernehmen“ legt seine Kacheln in die aktive Tilemap-Ebene (die Anordnung bleibt). Gespeichert werden die Farben, nicht die Nummern — der Satz passt auch zu einer anderen Palette. Für andere Projekte: „Als Datei speichern …“ und „Datei laden …“, auch mit einem fremden Kachelbild (PNG)."),
             tr("„Für Godot exportieren“ schreibt einen Ordner mit Kachelbild (PNG), Szene (.tscn mit TileMapLayer) und JSON — in den Godot-Projektordner legen (Godot 4.3 oder neuer)."),
         ]),
         (tr("Schablone"), vec![

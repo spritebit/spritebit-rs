@@ -238,6 +238,7 @@ pub fn save_native(p: &Project) -> Vec<u8> {
         "current": p.current,
         "palettes": p.palettes.iter().map(|pal| json!({ "name": pal.name, "colors": palette_json(pal), "names": names_json(&pal.names) })).collect::<Vec<_>>(),
         "materials": materials_json(&p.materials),
+        "tilesetLib": crate::tilelib::lib_to_json(&p.tileset_lib),
         "sprites": sprites.iter().map(|s| json!({
             "name": s.name, "width": s.width, "height": s.height, "palette": s.palette, "fps": s.fps,
             "frame": s.frame, "layer": s.layer,
@@ -375,7 +376,8 @@ pub fn load_native(bytes: &[u8]) -> Result<Project, IoError> {
     }
     let current = (head["current"].as_u64().unwrap_or(0) as usize).min(sprites.len() - 1);
     let name = head["name"].as_str().unwrap_or("").to_string();
-    Ok(Project { name, sprites, palettes, current, materials: parse_materials(head.get("materials")) })
+    let tileset_lib = crate::tilelib::lib_from_json(head.get("tilesetLib"));
+    Ok(Project { name, sprites, palettes, current, materials: parse_materials(head.get("materials")), tileset_lib })
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -480,7 +482,8 @@ pub fn import_web(text: &str) -> Result<Project, IoError> {
     let cur = v.pointer("/ui/curSprite").and_then(Value::as_str);
     let current = cur.and_then(|c| ids.iter().position(|id| id == c)).unwrap_or(0);
     let name = v.get("name").and_then(Value::as_str).unwrap_or("").to_string();
-    Ok(Project { name, sprites, palettes, current, materials: parse_materials(v.get("paletteMaterials")) })
+    let tileset_lib = crate::tilelib::lib_from_json(v.get("tilesetLib"));
+    Ok(Project { name, sprites, palettes, current, materials: parse_materials(v.get("paletteMaterials")), tileset_lib })
 }
 
 /// Id aus einem Namen, wie die Web-Version sie bildet — und eindeutig.
@@ -558,6 +561,7 @@ pub fn export_web(p: &Project) -> String {
         "sprites": sprites,
         "customPalettes": custom,
         "paletteMaterials": materials_json(&p.materials),
+        "tilesetLib": crate::tilelib::lib_to_json(&p.tileset_lib),
         "paletteColorNames": names,
         "ui": { "curSprite": ids.get(p.current) },
     });
@@ -601,7 +605,9 @@ mod tests {
         materials.insert("meine".to_string(), BTreeMap::from([(2u16, "sand".to_string())]));
         let mut meine = Palette::new("meine", vec![[9, 9, 9], [8, 8, 8], [7, 7, 7]]);
         meine.names.insert(2, "Haut".into());
-        Project { name: "Mein Spiel".into(), sprites: vec![a, b], palettes: vec![meine], current: 1, materials }
+        let mut tileset_lib = BTreeMap::new();
+        tileset_lib.insert("Wald".to_string(), crate::tilelib::LibSet { tw: 1, th: 2, tiles: vec![vec![Some([0xff, 0, 0]), None]] });
+        Project { name: "Mein Spiel".into(), sprites: vec![a, b], palettes: vec![meine], current: 1, materials, tileset_lib }
     }
 
     fn assert_same(a: &Project, b: &Project) {
@@ -653,7 +659,7 @@ mod tests {
             sp.add_frame(i, true);
         }
         sp.active().set(4000, 4000, 1);
-        let p = Project { name: String::new(), sprites: vec![sp], palettes: vec![], current: 0, materials: BTreeMap::new() };
+        let p = Project { name: String::new(), sprites: vec![sp], palettes: vec![], current: 0, materials: BTreeMap::new(), tileset_lib: BTreeMap::new() };
         let bytes = save_native(&p);
         assert!(bytes.len() < 20_000, "{} Bytes", bytes.len());
         let back = load_native(&bytes).unwrap();

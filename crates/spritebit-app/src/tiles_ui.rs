@@ -248,7 +248,7 @@ impl SpritebitApp {
 
     // ── Panel ───────────────────────────────────────────────────────
 
-    fn tiles_structural(&mut self, f: impl FnOnce(&mut spritebit_core::Sprite)) {
+    pub(crate) fn tiles_structural(&mut self, f: impl FnOnce(&mut spritebit_core::Sprite)) {
         self.commit_float();
         self.selection = None;
         let cur = self.project.current;
@@ -283,6 +283,12 @@ impl SpritebitApp {
             ui.label(tr("Gerade wird eine Maske bearbeitet — Kacheln gibt es erst wieder danach."));
             return;
         }
+        self.tiles_panel_main(ui);
+        // Bibliothek (tilelib_ui.rs) — mit und ohne Tilemap-Ebene.
+        self.tiles_library(ui);
+    }
+
+    fn tiles_panel_main(&mut self, ui: &mut egui::Ui) {
         let Some(ts) = self.active_tileset().cloned() else {
             ui.label(tr("Die aktive Ebene ist keine Tilemap. Eine Tilemap besteht aus Kacheln fester Größe — malt man eine Kachel an, ändert sie sich überall, wo sie liegt. Gut für Spiel-Levels und Muster."));
             self.tile_size_picker(ui);

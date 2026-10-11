@@ -63,7 +63,7 @@ fn sample() -> Project {
     let mut pal = Palette::new("interop", PAL.to_vec());
     pal.names.insert(1, "Kontur".into());
     pal.names.insert(3, "Grund".into());
-    let mut p = Project { name: String::new(), sprites: vec![sp], palettes: vec![pal], current: 0, materials: Default::default() };
+    let mut p = Project { name: String::new(), sprites: vec![sp], palettes: vec![pal], current: 0, ..Default::default() };
     p.materials.insert("interop".into(), [(3u16, "stone".to_string())].into_iter().collect());
     p
 }
