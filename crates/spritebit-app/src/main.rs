@@ -202,6 +202,8 @@ struct SpritebitApp {
     /// Angehobener Inhalt der Auswahl, der gerade verschoben wird.
     float: Option<selection_ui::Float>,
     sel_drag: Option<selection_ui::SelDrag>,
+    /// Knöpfe Neu/+/− der Auswahl: was eine neue Form ohne Umschalt/Strg tut.
+    sel_op: spritebit_core::selection::SelOp,
     /// Zwischenablage: das Stück und woher seine Farben stammen (Palette und
     /// freie Farben des Quell-Sprites) — siehe selection_ui.rs `paste_clipboard`.
     clipboard: Option<selection_ui::ClipSrc>,
@@ -331,6 +333,7 @@ impl SpritebitApp {
             selection: None,
             float: None,
             sel_drag: None,
+            sel_op: Default::default(),
             clipboard: None,
             clip_text: None,
             tolerance: 0.25,

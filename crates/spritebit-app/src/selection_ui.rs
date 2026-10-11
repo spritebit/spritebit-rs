@@ -7,7 +7,7 @@
 //! Verschieben ist ein Undo-Schritt.
 
 use eframe::egui::{self, Color32, Key, Modifiers, Pos2, Stroke, Vec2};
-use spritebit_core::selection::{self, Clip, Handle, Selection};
+use spritebit_core::selection::{self, Clip, Handle, SelOp, Selection};
 
 use crate::i18n::{keys, tr, trf};
 use crate::tools_ui::{Pointer, Tool};
@@ -29,11 +29,15 @@ pub(crate) struct Float {
 }
 
 /// Ein laufender Zug mit einem Auswahl-Werkzeug.
+///
+/// Rechteck und Lasso merken sich, was mit der neuen Form passiert (`op`,
+/// siehe [`SelOp`]) und die Auswahl von vorher (`base`), mit der sie
+/// zusammengelegt wird — wie js/selection.js.
 pub(crate) enum SelDrag {
     /// Rechteck aufziehen ab dieser Ecke.
-    Rect((i64, i64)),
+    Rect { start: (i64, i64), op: SelOp, base: Option<Selection> },
     /// Lasso: die bisherigen Punkte.
-    Lasso(Vec<(i64, i64)>),
+    Lasso { points: Vec<(i64, i64)>, op: SelOp, base: Option<Selection> },
     /// Schwebenden Inhalt schieben: Startpunkt und Lage zu Beginn.
     Move { start: (i64, i64), from: (i64, i64) },
     /// An einem Anfasser skalieren: welcher und das Rechteck beim Anfassen.
@@ -162,8 +166,17 @@ impl SpritebitApp {
         }
         let Some(cell) = p.cell else { return };
         if p.pressed && p.over && !p.secondary {
+            // Umschalt legt dazu, Strg zieht ab — sonst gilt der Knopf Neu/+/−.
+            // Hinzufügen und Abziehen beginnen immer eine neue Form, auch über
+            // der Auswahl (die dann nicht verschoben wird).
+            let op = match (self.tool, self.modifiers) {
+                (Tool::Wand, _) => SelOp::New,
+                (_, m) if m.shift => SelOp::Add,
+                (_, m) if m.command => SelOp::Sub,
+                _ => self.sel_op,
+            };
             let inside = self.selection.as_ref().is_some_and(|s| s.contains(cell.0, cell.1));
-            if inside && self.tool != Tool::Wand {
+            if inside && op == SelOp::New && self.tool != Tool::Wand {
                 // Alt: das Original bleibt stehen, verschoben wird eine Kopie.
                 if p.alt && self.float.is_none() {
                     self.lift_copy();
@@ -174,14 +187,24 @@ impl SpritebitApp {
                 self.sel_drag = Some(SelDrag::Move { start: cell, from });
                 return;
             }
-            self.deselect();
+            let base = if op == SelOp::New {
+                self.deselect();
+                None
+            } else {
+                // Schwebendes absetzen, die Auswahl selbst bleibt stehen.
+                self.commit_float();
+                self.sel_drag = None;
+                self.selection.clone()
+            };
             let palette = self.project.current_palette();
             match self.tool {
-                Tool::Select => self.sel_drag = Some(SelDrag::Rect(cell)),
-                Tool::Lasso => self.sel_drag = Some(SelDrag::Lasso(vec![cell])),
+                Tool::Select => self.sel_drag = Some(SelDrag::Rect { start: cell, op, base }),
+                Tool::Lasso => self.sel_drag = Some(SelDrag::Lasso { points: vec![cell], op, base }),
                 Tool::Magic => {
                     let sp = self.project.sprite();
-                    self.selection = selection::region(sp.target(), &palette, &sp.free, cell.0, cell.1, self.tolerance);
+                    if let Some(r) = selection::region(sp.target(), &palette, &sp.free, cell.0, cell.1, self.tolerance) {
+                        self.selection = selection::combine(base.as_ref(), &r, op);
+                    }
                 }
                 Tool::Wand => {
                     if !self.layer_ok() {
@@ -202,22 +225,34 @@ impl SpritebitApp {
         }
         let down = p.primary;
         match &mut self.sel_drag {
-            Some(SelDrag::Rect(start)) => {
-                let s = *start;
-                self.selection = Some(Selection::rect(s.0, s.1, cell.0, cell.1));
+            Some(SelDrag::Rect { start, op, base }) => {
+                // Beim Ziehen schon das Ergebnis zeigen — beim Abziehen also mit Loch.
+                let shape = Selection::rect(start.0, start.1, cell.0, cell.1);
+                let res = selection::combine(base.as_ref(), &shape, *op);
+                self.selection = match res {
+                    // Alles abgezogen: beim Ziehen wenigstens das Rechteck zeigen.
+                    None if down => Some(shape),
+                    r => r,
+                };
                 if !down {
                     self.sel_drag = None;
                 }
             }
-            Some(SelDrag::Lasso(points)) => {
+            Some(SelDrag::Lasso { points, op, base }) => {
                 if points.last() != Some(&cell) {
                     // Lücken zwischen schnellen Bewegungen auffüllen.
                     let last = *points.last().expect("Lasso hat einen Startpunkt");
                     points.extend(spritebit_core::tools::line(last.0, last.1, cell.0, cell.1).into_iter().skip(1));
                 }
                 if !down {
-                    let pts = std::mem::take(points);
-                    self.selection = Selection::lasso(&pts);
+                    // Beim Hinzufügen und Abziehen bleibt die Auswahl stehen,
+                    // bis die Spur geschlossen ist; ist sie keine Form, bleibt
+                    // alles, wie es war.
+                    match Selection::lasso(points) {
+                        Some(shape) => self.selection = selection::combine(base.as_ref(), &shape, *op),
+                        None if *op == SelOp::New => self.selection = None,
+                        None => {}
+                    }
                     self.sel_drag = None;
                 }
             }
@@ -447,6 +482,19 @@ impl SpritebitApp {
 
     /// Knöpfe neben den Werkzeugen, solange es eine Auswahl gibt.
     pub(crate) fn selection_bar(&mut self, ui: &mut egui::Ui) {
+        // Mehrere Bereiche: neu, hinzufügen (Umschalt), abziehen (Strg).
+        if matches!(self.tool, Tool::Select | Tool::Lasso | Tool::Magic) {
+            ui.separator();
+            for (op, label, tip) in [
+                (SelOp::New, tr("Neu"), tr("Neue Auswahl — ersetzt die bisherige")),
+                (SelOp::Add, "+", tr("Hinzufügen — weitere Bereiche zur Auswahl nehmen (Umschalt gedrückt halten)")),
+                (SelOp::Sub, "−", tr("Abziehen — Bereiche aus der Auswahl nehmen (Strg gedrückt halten)")),
+            ] {
+                if ui.add(egui::Button::selectable(self.sel_op == op, label)).on_hover_text(tip).clicked() {
+                    self.sel_op = op;
+                }
+            }
+        }
         if matches!(self.tool, Tool::Magic | Tool::Wand) {
             ui.label(tr("Toleranz"));
             let mut pct = (self.tolerance * 100.0).round() as u32;
@@ -487,14 +535,14 @@ impl SpritebitApp {
         let dark = Stroke::new(2.0, Color32::from_black_alpha(200));
         let light = Stroke::new(1.0, Color32::WHITE);
         let to = |x: i64, y: i64| origin + Vec2::new(x as f32, y as f32) * zoom;
-        if let Some(SelDrag::Lasso(points)) = &self.sel_drag {
+        if let Some(SelDrag::Lasso { points, .. }) = &self.sel_drag {
             let pts: Vec<Pos2> = points.iter().map(|&(x, y)| to(x, y) + Vec2::splat(zoom / 2.0)).collect();
             painter.add(egui::Shape::line(pts.clone(), dark));
             painter.add(egui::Shape::line(pts, light));
         }
         let Some(s) = &self.selection else { return };
         // Anfasser zum Skalieren — solange ein Auswahl-Werkzeug aktiv ist.
-        if self.is_select_tool() && self.tool != Tool::Wand && !matches!(self.sel_drag, Some(SelDrag::Rect(_) | SelDrag::Lasso(_))) {
+        if self.is_select_tool() && self.tool != Tool::Wand && !matches!(self.sel_drag, Some(SelDrag::Rect { .. } | SelDrag::Lasso { .. })) {
             let r = (s.x, s.y, s.w, s.h);
             for h in Handle::ALL {
                 let (hx, hy) = h.pos(r);

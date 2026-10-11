@@ -99,6 +99,16 @@ fn bild_der_oberflaeche() {
         }
         h.run();
     }
+    // SPRITEBIT_SHOT_SELOP=1: Auswahl-Werkzeug mit Knöpfen Neu/+/−, Auswahl mit Loch.
+    if std::env::var_os("SPRITEBIT_SHOT_SELOP").is_some() {
+        use spritebit_core::selection::{combine, SelOp, Selection};
+        let a = h.state_mut();
+        a.tool = crate::tools_ui::Tool::Select;
+        a.sel_op = SelOp::Sub;
+        let two = combine(Some(&Selection::rect(2, 2, 9, 9)), &Selection::rect(12, 4, 14, 7), SelOp::Add);
+        a.selection = combine(two.as_ref(), &Selection::rect(4, 4, 6, 6), SelOp::Sub);
+        h.run();
+    }
     // SPRITEBIT_SHOT_TOUR=n: Animations-Tour bei Schritt n (0 = Timeline).
     if let Some(n) = std::env::var("SPRITEBIT_SHOT_TOUR").ok().and_then(|v| v.parse::<usize>().ok()) {
         let ctx = h.ctx.clone();

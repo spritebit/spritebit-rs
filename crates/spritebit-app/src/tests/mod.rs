@@ -2262,3 +2262,29 @@ fn kachel_gedreht_setzen_und_unbenutzte_mit_rueckfrage() {
     a.prune_tiles();
     assert_eq!(a.active_tileset().unwrap().tiles.len(), 1);
 }
+
+#[test]
+fn auswahl_mit_umschalt_dazu_und_mit_strg_abziehen() {
+    let mut h = app();
+    h.state_mut().tool = Tool::Select;
+    h.run();
+    drag(&mut h, (1.0, 1.0), (4.0, 4.0));
+    // Umschalt: ein zweiter, getrennter Bereich kommt dazu.
+    h.event(egui::Event::ModifiersChanged(Modifiers::SHIFT));
+    drag(&mut h, (8.0, 1.0), (9.0, 2.0));
+    let s = h.state().selection.clone().expect("Auswahl");
+    assert!(s.contains(2, 2) && s.contains(9, 2) && !s.contains(6, 2));
+    // Strg: ein Loch in den ersten Bereich — auch wenn man darin ansetzt.
+    h.event(egui::Event::ModifiersChanged(Modifiers::COMMAND));
+    drag(&mut h, (2.0, 2.0), (3.0, 3.0));
+    h.event(egui::Event::ModifiersChanged(Modifiers::NONE));
+    h.run();
+    let s = h.state().selection.clone().expect("Auswahl");
+    assert!(s.contains(1, 1) && !s.contains(2, 2) && !s.contains(3, 3) && s.contains(4, 4) && s.contains(9, 2));
+    // Knopf „+“ statt Umschalt — der in der Werkzeugleiste ganz oben.
+    h.get_all_by_label("+").min_by(|a, b| a.rect().top().total_cmp(&b.rect().top())).expect("Knopf +").click();
+    h.run();
+    drag(&mut h, (1.0, 8.0), (2.0, 9.0));
+    let s = h.state().selection.clone().expect("Auswahl");
+    assert!(s.contains(1, 8) && s.contains(1, 1) && !s.contains(2, 2));
+}

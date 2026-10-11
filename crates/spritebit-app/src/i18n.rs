@@ -242,6 +242,9 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Ebene „{name}“ ist ausgeblendet — Auge in der Timeline.", "Layer “{name}” is hidden — see the eye in the timeline.", "D’Ebene „{name}“ is ausblendt — s’Aug in da Timeline."),
     // ── Auswahl ──
     ("Toleranz", "Tolerance", ""),
+    ("Neue Auswahl — ersetzt die bisherige", "New selection — replaces the current one", "Neiche Auswoi — ersetzt de oide"),
+    ("Hinzufügen — weitere Bereiche zur Auswahl nehmen (Umschalt gedrückt halten)", "Add — take more areas into the selection (hold Shift)", ""),
+    ("Abziehen — Bereiche aus der Auswahl nehmen (Strg gedrückt halten)", "Subtract — take areas out of the selection (hold Ctrl)", ""),
     ("Auswahl mit der aktuellen Farbe füllen", "Fill the selection with the current color", "D’Auswoi mit da aktuelln Farb aufülln"),
     ("Leeren", "Clear", "Ausleern"),
     ("Aufheben", "Deselect", "Weg damit"),

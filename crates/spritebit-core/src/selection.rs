@@ -119,6 +119,51 @@ impl Selection {
     }
 }
 
+/// Was eine neu gezogene Form mit der bestehenden Auswahl macht: ersetzen,
+/// dazulegen (Umschalt) oder abziehen (Strg).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum SelOp {
+    #[default]
+    New,
+    Add,
+    Sub,
+}
+
+/// Bestehende Auswahl `a` und neue Form `b` zusammenlegen (wie
+/// js/selcombine.js). Das Ergebnis ist auf seinen Inhalt zugeschnitten, ein
+/// volles Rechteck verliert die Maske; bleibt nichts übrig: `None`.
+pub fn combine(a: Option<&Selection>, b: &Selection, op: SelOp) -> Option<Selection> {
+    let a = match (a, op) {
+        (_, SelOp::New) | (None, SelOp::Add) => return Some(b.clone()),
+        (None, SelOp::Sub) => return None,
+        (Some(a), _) => a,
+    };
+    // Abziehen kann nichts außerhalb von a erzeugen — die Box von a reicht.
+    let (x0, y0, x1, y1) = match op {
+        SelOp::Add => (a.x.min(b.x), a.y.min(b.y), (a.x + a.w as i64).max(b.x + b.w as i64), (a.y + a.h as i64).max(b.y + b.h as i64)),
+        _ => (a.x, a.y, a.x + a.w as i64, a.y + a.h as i64),
+    };
+    let (w, h) = ((x1 - x0) as u32, (y1 - y0) as u32);
+    let mut mask = Vec::with_capacity((w * h) as usize);
+    let mut any = false;
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let (in_a, in_b) = (a.contains(x, y), b.contains(x, y));
+            let on = if op == SelOp::Add { in_a || in_b } else { in_a && !in_b };
+            any |= on;
+            mask.push(on);
+        }
+    }
+    if !any {
+        return None;
+    }
+    let mut s = Selection { x: x0, y: y0, w, h, mask: Some(mask) }.trimmed();
+    if s.mask.as_ref().is_some_and(|m| m.iter().all(|&v| v)) {
+        s.mask = None;
+    }
+    Some(s)
+}
+
 /// Die acht Anfasser einer Auswahl (wie js/scale.js).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Handle {
@@ -530,6 +575,30 @@ mod tests {
         img.set(1, 0, 3);
         assert!(!region(&img, &pal, &[], 0, 0, 0.0).unwrap().contains(1, 0));
         assert!(region(&img, &pal, &[], 0, 0, 0.3).unwrap().contains(1, 0));
+    }
+
+    #[test]
+    fn zusammenlegen_wie_im_web() {
+        let a = Selection::rect(0, 0, 3, 3);
+        // Hinzufügen: zwei getrennte Bereiche in einer Auswahl.
+        let s = combine(Some(&a), &Selection::rect(6, 0, 7, 1), SelOp::Add).unwrap();
+        assert_eq!((s.x, s.y, s.w, s.h), (0, 0, 8, 4));
+        assert!(s.contains(1, 1) && s.contains(7, 1) && !s.contains(5, 0) && !s.contains(7, 3));
+        // Abziehen: Loch in der Mitte, die Box bleibt.
+        let s = combine(Some(&a), &Selection::rect(1, 1, 2, 2), SelOp::Sub).unwrap();
+        assert_eq!((s.x, s.y, s.w, s.h), (0, 0, 4, 4));
+        assert!(s.contains(0, 0) && !s.contains(1, 1) && !s.contains(2, 2) && s.contains(3, 3));
+        // Abziehen am Rand schneidet zu; volles Rechteck verliert die Maske.
+        let s = combine(Some(&a), &Selection::rect(2, 0, 9, 9), SelOp::Sub).unwrap();
+        assert_eq!((s.x, s.y, s.w, s.h, s.mask.is_none()), (0, 0, 2, 4, true));
+        // Hinzufügen zum vollen Rechteck daneben: wieder ein Rechteck ohne Maske.
+        let s = combine(Some(&a), &Selection::rect(4, 0, 5, 3), SelOp::Add).unwrap();
+        assert_eq!((s.w, s.h, s.mask.is_none()), (6, 4, true));
+        // Alles abgezogen → nichts; ohne bestehende Auswahl.
+        assert!(combine(Some(&a), &Selection::rect(-1, -1, 9, 9), SelOp::Sub).is_none());
+        assert!(combine(None, &a, SelOp::Sub).is_none());
+        assert_eq!(combine(None, &a, SelOp::Add), Some(a.clone()));
+        assert_eq!(combine(Some(&a), &Selection::rect(5, 5, 5, 5), SelOp::New), Some(Selection::rect(5, 5, 5, 5)));
     }
 
     #[test]
