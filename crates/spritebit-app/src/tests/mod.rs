@@ -1873,3 +1873,31 @@ fn schattieren_langer_strich_bleibt_bei_einer_stufe() {
     let row: Vec<u16> = (2..=12).map(|x| px(&h, x, 2)).collect();
     assert!(row.iter().all(|&v| v == 1), "überall die hellste Farbe: {row:?}");
 }
+
+#[test]
+fn schattieren_abstufungen_erzeugen_und_anordnen() {
+    let mut h = app();
+    h.state_mut().tool = tools_ui::Tool::Shade;
+    h.state_mut().color = 6; // #ff8080 in „graustufen“
+    h.run();
+    let n = h.state().project.current_palette().len();
+    h.get_by_label("Abstufungen").click();
+    h.run();
+    let a = h.state();
+    assert_eq!(a.shade_ramp.len(), 5, "fünf Töne als Farbreihe");
+    assert!(a.shade_ramp.contains(&[0xff, 0x80, 0x80]), "Grundfarbe dabei");
+    let pal = a.project.current_palette();
+    assert!(pal.len() > n, "neue Töne stehen in der Palette");
+    assert!(a.shade_ramp.iter().all(|c| pal.colors.contains(c)));
+    // Anordnen: danach stehen die Töne nach Farbstufen, das Bild bleibt.
+    h.get_by_label("Anordnen").click();
+    h.run();
+    let pal = h.state().project.current_palette();
+    let order = spritebit_core::palops::shade_order(&pal.colors);
+    assert!(order.iter().enumerate().all(|(k, &o)| o == k + 1), "schon sortiert");
+    // Ein Rückgängig nimmt das Anordnen zurück, das zweite das Erzeugen.
+    h.state_mut().undo();
+    h.state_mut().undo();
+    h.run();
+    assert_eq!(h.state().project.current_palette().len(), n);
+}

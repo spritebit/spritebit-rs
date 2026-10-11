@@ -172,6 +172,8 @@ struct SpritebitApp {
     /// an/aus und der laufende Strich.
     shade_ramp: Vec<spritebit_core::Rgb>,
     shade_soft: bool,
+    /// „Abstufungen“: so viele Töne je Seite (1–4, also 3–9 insgesamt).
+    shade_gen: u32,
     shade: Option<tools_ui::ShadeStroke>,
     /// Umschalt beim Malen: wo die gerade Linie beginnt und ihre Richtung.
     stroke_lock: Option<tools_ui::StrokeLock>,
@@ -306,6 +308,7 @@ impl SpritebitApp {
             fill_visible: false,
             shade_ramp: Vec::new(),
             shade_soft: false,
+            shade_gen: 2,
             shade: None,
             stroke_lock: None,
             scale_base: None,

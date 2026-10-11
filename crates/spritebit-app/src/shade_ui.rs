@@ -9,7 +9,7 @@
 
 use eframe::egui::{self, Color32, Sense, Stroke, Vec2};
 use spritebit_core::shade::{self, ramp_levels, soft_level};
-use spritebit_core::{selection::rgb_of, tools, Px, Rgb};
+use spritebit_core::{palops, selection::rgb_of, tools, Px, Rgb};
 
 use crate::i18n::{tr, trf};
 use crate::tools_ui::Tool;
@@ -80,6 +80,34 @@ impl SpritebitApp {
             self.shade_ramp.clear();
             self.save_view();
         }
+        // Aus der aktuellen Farbe passende Töne erzeugen (shade::make_shades).
+        if ui
+            .button(tr("Abstufungen"))
+            .on_hover_text(tr("Aus der aktuellen Farbe passende dunklere und hellere Töne erzeugen — Schatten etwas kühler, Licht etwas wärmer. Sie kommen in die Palette und werden die Farbreihe."))
+            .clicked()
+        {
+            self.make_shade_ramp();
+        }
+        egui::ComboBox::from_id_salt("shade-gen")
+            .width(44.0)
+            .selected_text((self.shade_gen * 2 + 1).to_string())
+            .show_ui(ui, |ui| {
+                for n in 1..=4u32 {
+                    ui.selectable_value(&mut self.shade_gen, n, (n * 2 + 1).to_string());
+                }
+            })
+            .response
+            .on_hover_text(tr("Wie viele Töne insgesamt"));
+        if ui
+            .button(tr("Anordnen"))
+            .on_hover_text(tr("Palette nach Farbstufen ordnen — die Töne jeder Farbe stehen dann nebeneinander, von dunkel nach hell. Das Bild bleibt gleich."))
+            .clicked()
+        {
+            let pal = self.project.current_palette();
+            if !self.reorder_colors(&palops::shade_order(&pal.colors)) {
+                self.hint = Some(tr("Schon nach Farbstufen geordnet.").into());
+            }
+        }
         if ui
             .selectable_label(self.shade_soft, tr("Verlauf"))
             .on_hover_text(tr("Verlauf: runder Pinsel, in der Mitte mehrere Stufen auf einmal, zum Rand hin weniger — braucht eine Größe ab 2"))
@@ -143,6 +171,20 @@ impl SpritebitApp {
         if changed {
             self.changed();
         }
+    }
+
+    /// „Abstufungen“: Töne aus der aktuellen Farbe erzeugen, fehlende in die
+    /// Palette, alle zusammen als Farbreihe.
+    fn make_shade_ramp(&mut self) {
+        let Some(base) = self.current_rgb() else {
+            self.hint = Some(tr("Wähle zuerst eine Farbe — aus ihr werden die Abstufungen erzeugt.").into());
+            return;
+        };
+        let shades = shade::make_shades(base, self.shade_gen);
+        let added = self.add_colors_to_palette(&shades);
+        self.hint = Some(trf("{n} Töne erzeugt und als Farbreihe gewählt — {added} davon neu in der Palette.", &[("n", &shades.len()), ("added", &added)]));
+        self.shade_ramp = shades;
+        self.save_view();
     }
 
     /// Statuszeile nach einem Strich, der nichts geändert hat.

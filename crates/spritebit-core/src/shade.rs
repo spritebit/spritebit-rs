@@ -98,6 +98,30 @@ pub fn hold_delay(n: u32) -> f64 {
     (HOLD_FIRST_S * HOLD_FACTOR.powi(n.min(64) as i32)).max(HOLD_MIN_S)
 }
 
+// ── Abstufungen erzeugen ────────────────────────────────────────────
+// Aus einer Farbe eine passende Reihe machen: `n` dunklere und `n` hellere
+// Töne — Schatten etwas kühler, Licht etwas wärmer ([`shift`]). Jeder
+// Schritt baut auf dem vorigen auf, der Farbton wandert also mit. Graue
+// bleiben grau. Wie im Web (js/shade.js makeShades).
+
+/// So weit liegt ein Ton vom nächsten (Helligkeit 0..1).
+pub const GEN_STEP: f64 = 0.12;
+
+/// Grundfarbe in der Mitte, dazu `n` dunklere und `n` hellere Töne — von
+/// dunkel nach hell, ohne Doppelte (nah an Schwarz oder Weiß fallen
+/// Stufen zusammen).
+pub fn make_shades(c: Rgb, n: u32) -> Vec<Rgb> {
+    let mut out = vec![c];
+    let (mut dark, mut light) = (c, c);
+    for _ in 0..n {
+        dark = shift(dark, -1, GEN_STEP);
+        light = shift(light, 1, GEN_STEP);
+        out.push(dark);
+        out.push(light);
+    }
+    normalize_ramp(&out)
+}
+
 /// Rechner für einen Strich: Pixelwert → Wert eine Stufe weiter.
 pub struct Shader {
     /// Die Reihe in Mal-Reihenfolge (erste Farbe = die für leere Pixel).
@@ -261,6 +285,19 @@ mod tests {
         let mut up = Shader::new(&p, &[], false, 0);
         assert_eq!(up.step(3, &p, &mut free), 3, "heller gibt es nicht");
         assert_eq!(up.step(0, &p, &mut free), 0, "ohne Farbe bleibt leer");
+    }
+
+    #[test]
+    fn abstufungen_erzeugen() {
+        let base = [0xc0, 0x40, 0x40];
+        let r = make_shades(base, 2);
+        assert_eq!(r.len(), 5);
+        assert_eq!(r[2], base, "Grundfarbe in der Mitte");
+        assert_eq!(r, normalize_ramp(&r), "schon sortiert");
+        // Schatten kühler: im dunkelsten Ton ist Blau im Verhältnis stärker.
+        assert!(r[0][2] as f64 / (r[0][0] as f64 + 1.0) > 0x40 as f64 / 0xc0 as f64);
+        assert!(make_shades([0x80; 3], 2).iter().all(|c| c[0] == c[1] && c[1] == c[2]), "Grau bleibt grau");
+        assert!(make_shades([0xff; 3], 2).len() < 5, "an Weiß fallen Stufen zusammen");
     }
 
     #[test]

@@ -366,6 +366,34 @@ impl SpritebitApp {
         }
     }
 
+    /// Farben hinten an die Palette des Sprites hängen, soweit sie fehlen
+    /// (erzeugte Abstufungen, shade_ui.rs). Freie Pixel in diesen Farben
+    /// bekommen die neue Nummer. Ein Undo-Schritt; gibt zurück, wie viele neu sind.
+    pub(crate) fn add_colors_to_palette(&mut self, add: &[Rgb]) -> usize {
+        let pal = self.project.current_palette();
+        if add.iter().all(|c| pal.colors.contains(c)) {
+            return 0;
+        }
+        self.pal_step();
+        let i = self.own_palette();
+        let cur = self.project.current;
+        let mut colors = self.project.palettes[i].colors.clone();
+        let mut n = 0;
+        for &c in add {
+            if let Some(next) = palops::add_color(&mut self.project.sprites[cur], &colors, c) {
+                colors = next;
+                n += 1;
+            }
+        }
+        if n == 0 {
+            self.histories[cur].drop_last();
+            return 0;
+        }
+        self.project.palettes[i].colors = colors;
+        self.changed();
+        n
+    }
+
     fn add_free_to_palette(&mut self) {
         let pal = self.project.current_palette();
         self.pal_step();
