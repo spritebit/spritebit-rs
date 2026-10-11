@@ -137,9 +137,24 @@ impl SpritebitApp {
     }
 
     /// „Pixelraster anzeigen“ (Menü „Ansicht“): Datei „grid“ mit 0 oder 1.
+    /// Dazu der Kachelmodus: Datei „tiled“ mit off, both, x oder y.
     pub(crate) fn load_grid_pref(&mut self) {
-        if let Some(s) = crate::i18n::settings_dir().and_then(|d| std::fs::read_to_string(d.join("grid")).ok()) {
+        let dir = crate::i18n::settings_dir();
+        if let Some(s) = dir.as_ref().and_then(|d| std::fs::read_to_string(d.join("grid")).ok()) {
             self.show_grid = s.trim() != "0";
+        }
+        if let Some(t) = dir.and_then(|d| std::fs::read_to_string(d.join("tiled")).ok()).and_then(|s| spritebit_core::tiled::Tiled::from_key(&s)) {
+            self.tiled = t;
+        }
+    }
+
+    pub(crate) fn save_tiled_pref(&self) {
+        if !self.tl_persist {
+            return;
+        }
+        if let Some(dir) = crate::i18n::settings_dir() {
+            let _ = std::fs::create_dir_all(&dir);
+            let _ = std::fs::write(dir.join("tiled"), self.tiled.key());
         }
     }
 

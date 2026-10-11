@@ -174,11 +174,13 @@ pub(crate) enum Cmd {
     Guides,
     Fit,
     Fullscreen,
+    /// Kachelmodus (Menü „Ansicht“).
+    Tiled(spritebit_core::tiled::Tiled),
     Help,
 }
 
 impl Cmd {
-    const ALL: [Cmd; 23] = [
+    const ALL: [Cmd; 27] = [
         Cmd::Save,
         Cmd::SaveAs,
         Cmd::Export,
@@ -201,6 +203,10 @@ impl Cmd {
         Cmd::Guides,
         Cmd::Fit,
         Cmd::Fullscreen,
+        Cmd::Tiled(spritebit_core::tiled::Tiled::Both),
+        Cmd::Tiled(spritebit_core::tiled::Tiled::X),
+        Cmd::Tiled(spritebit_core::tiled::Tiled::Y),
+        Cmd::Tiled(spritebit_core::tiled::Tiled::Off),
         Cmd::Help,
     ];
 
@@ -229,6 +235,15 @@ impl Cmd {
             Cmd::Guides => (tr("Hilfslinien ein / aus"), tr("Ansicht")),
             Cmd::Fit => (tr("Einpassen"), tr("Ansicht")),
             Cmd::Fullscreen => (tr("Vollbild"), tr("Ansicht")),
+            Cmd::Tiled(t) => (
+                match t {
+                    spritebit_core::tiled::Tiled::Off => tr("Kachelmodus aus"),
+                    spritebit_core::tiled::Tiled::Both => tr("Kachelmodus ringsum"),
+                    spritebit_core::tiled::Tiled::X => tr("Kachelmodus nur nebeneinander"),
+                    spritebit_core::tiled::Tiled::Y => tr("Kachelmodus nur übereinander"),
+                },
+                tr("Ansicht"),
+            ),
             Cmd::Help => (tr("Hilfe und Tastenkürzel"), tr("Hilfe")),
         }
     }
@@ -1096,6 +1111,7 @@ impl crate::SpritebitApp {
             Cmd::Guides => self.guides.show = !self.guides.show,
             Cmd::Fit => self.fit_pending = true,
             Cmd::Fullscreen => self.toggle_fullscreen(ctx),
+            Cmd::Tiled(t) => self.set_tiled(t),
             Cmd::Help => self.view.help_open = true,
         }
     }

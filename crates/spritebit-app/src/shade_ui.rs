@@ -138,7 +138,7 @@ impl SpritebitApp {
                 if level == 0 || (!soft && self.brush_round && size > 2 && !tools::in_round(px - x, py - y, size)) {
                     continue;
                 }
-                for (gy, gx, _) in tools::mirror_spans(vec![(py, px, px)], w, h, self.mirror_x, self.mirror_y) {
+                for (gy, gx, _) in self.mirror_wrap(vec![(py, px, px)], w, h) {
                     if gx >= 0 && gy >= 0 && gx < w as i64 && gy < h as i64 {
                         out.push(((gx, gy), level));
                     }

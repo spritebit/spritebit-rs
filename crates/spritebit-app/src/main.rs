@@ -39,6 +39,7 @@ use std::path::{Path, PathBuf};
 
 use crate::i18n::{keys, tr, trf};
 use eframe::egui::{self, Color32, Key, Modifiers, Pos2, Sense, Stroke, Vec2};
+use spritebit_core::tiled::Tiled;
 use spritebit_core::{export_web, import_web, load_native, render_rgba_step, save_native, selection, History, Project, Px, Rect, Selection, Sprite};
 use tools_ui::{Pointer, Tool};
 
@@ -144,6 +145,8 @@ struct SpritebitApp {
     pan: Vec2,
     fit_pending: bool,
     show_grid: bool,
+    /// Kachelmodus (Menü „Ansicht“): Bild ringsum wiederholt, Malen läuft über den Rand.
+    tiled: spritebit_core::tiled::Tiled,
     texture: Option<CanvasTexture>,
     /// Zählt jede Änderung am Bild hoch — Teil des Textur-Schlüssels.
     version: u64,
@@ -299,6 +302,7 @@ impl SpritebitApp {
             pan: Vec2::ZERO,
             fit_pending: true,
             show_grid: true,
+            tiled: Default::default(),
             texture: None,
             version: 0,
             stroke_last: None,
@@ -894,6 +898,16 @@ impl SpritebitApp {
                     self.save_grid_pref();
                 }
                 ui.separator();
+                // Kachelmodus (wie im Web): Bild ringsum wiederholt, Malen läuft über den Rand.
+                ui.label(tr("Kachelmodus")).on_hover_text(tr(
+                    "Das Bild wiederholt daneben zeigen — wer über den Rand malt, malt auf der anderen Seite weiter. Für nahtlose Muster.",
+                ));
+                for (t, label) in [(Tiled::Off, tr("Aus")), (Tiled::Both, tr("Ringsum")), (Tiled::X, tr("Nur nebeneinander")), (Tiled::Y, tr("Nur übereinander"))] {
+                    if ui.radio(self.tiled == t, label).clicked() {
+                        self.set_tiled(t);
+                    }
+                }
+                ui.separator();
                 self.view_menu(ui);
                 ui.separator();
                 ui.menu_button(tr("Sprache"), |ui| {
@@ -1051,10 +1065,28 @@ impl SpritebitApp {
         let (sw, sh) = (self.sprite().width, self.sprite().height);
         let lo = (area.min - origin) / zoom;
         let hi = (area.max - origin) / zoom;
-        let x0 = lo.x.floor().clamp(0.0, sw as f32) as u32;
-        let y0 = lo.y.floor().clamp(0.0, sh as f32) as u32;
-        let x1 = hi.x.ceil().clamp(0.0, sw as f32) as u32;
-        let y1 = hi.y.ceil().clamp(0.0, sh as f32) as u32;
+        // Kachelmodus: Was auf den Kopien zu sehen ist, ins Bild zurückgerechnet
+        // — liegt eine Naht im Blick, das ganze Bild in dieser Richtung.
+        let (tx, ty) = self.tiled.axes();
+        let span = |lo: f32, hi: f32, n: u32, tiled: bool| -> (u32, u32) {
+            let nf = n as f32;
+            if !tiled {
+                return (lo.floor().clamp(0.0, nf) as u32, hi.ceil().clamp(0.0, nf) as u32);
+            }
+            let (a, b) = (lo.floor().clamp(-nf, 2.0 * nf) as i64, hi.ceil().clamp(-nf, 2.0 * nf) as i64);
+            let a2 = a.rem_euclid(n as i64);
+            if b - a >= n as i64 || a2 + (b - a) > n as i64 {
+                (0, n)
+            } else {
+                (a2 as u32, (a2 + b - a) as u32)
+            }
+        };
+        let (x0, x1) = span(lo.x, hi.x, sw, tx);
+        let (y0, y1) = span(lo.y, hi.y, sh, ty);
+        // Die Kopien: Versatz in Bildern (0, 0 = das Bild selbst).
+        let copies: Vec<Vec2> = (if ty { -1..=1 } else { 0..=0 })
+            .flat_map(|j| (if tx { -1..=1 } else { 0..=0 }).map(move |i| Vec2::new(i as f32 * sw as f32, j as f32 * sh as f32) * zoom))
+            .collect();
         painter.rect_filled(area, 0.0, STAGE_BG);
         if x1 <= x0 || y1 <= y0 {
             return;
@@ -1116,6 +1148,23 @@ impl SpritebitApp {
             });
             let k = 2.0 * step as f32;
             let cuv = egui::Rect::from_min_max(Pos2::new(x0 as f32 / k, y0 as f32 / k), Pos2::new(ex as f32 / k, ey as f32 / k));
+            // Kachelmodus: erst die Kopien ringsum — Schachbrett, Onion Skin und
+            // Pixel wie beim Bild, ohne Schablone und „Farbe zeigen“ (wie im Web).
+            for &off in copies.iter().filter(|o| **o != Vec2::ZERO) {
+                let s = screen.translate(off);
+                if !s.intersects(area) {
+                    continue;
+                }
+                painter.image(checker.id(), s, cuv, Color32::WHITE);
+                let onion_front = self.tl.onion.front;
+                if let (Some(id), false) = (onion_id, onion_front) {
+                    painter.image(id, s, uv, Color32::WHITE);
+                }
+                painter.image(t.handle.id(), s, uv, Color32::WHITE);
+                if let (Some(id), true) = (onion_id, onion_front) {
+                    painter.image(id, s, uv, Color32::WHITE);
+                }
+            }
             painter.image(checker.id(), screen, cuv, Color32::WHITE);
             self.draw_template(&painter.with_clip_rect(screen.intersect(area)), origin, zoom, false);
             let onion_front = self.tl.onion.front;
@@ -1133,15 +1182,22 @@ impl SpritebitApp {
         }
 
         // Gitterlinien, nur stark hineingezoomt und nur im Ausschnitt.
+        // Im Kachelmodus auch über die Kopien.
         if self.show_grid && zoom >= GRID_FROM {
             let line = Stroke::new(1.0, self.grid_color());
-            for x in x0..=x1 {
+            let range = |lo: f32, hi: f32, n: u32, tiled: bool| {
+                let (a, b) = if tiled { (-(n as f32), 2.0 * n as f32) } else { (0.0, n as f32) };
+                (lo.floor().clamp(a, b) as i64, hi.ceil().clamp(a, b) as i64)
+            };
+            let (gx0, gx1) = range(lo.x, hi.x, sw, tx);
+            let (gy0, gy1) = range(lo.y, hi.y, sh, ty);
+            for x in gx0..=gx1 {
                 let sx = origin.x + x as f32 * zoom;
-                painter.line_segment([Pos2::new(sx, origin.y + y0 as f32 * zoom), Pos2::new(sx, origin.y + y1 as f32 * zoom)], line);
+                painter.line_segment([Pos2::new(sx, origin.y + gy0 as f32 * zoom), Pos2::new(sx, origin.y + gy1 as f32 * zoom)], line);
             }
-            for y in y0..=y1 {
+            for y in gy0..=gy1 {
                 let sy = origin.y + y as f32 * zoom;
-                painter.line_segment([Pos2::new(origin.x + x0 as f32 * zoom, sy), Pos2::new(origin.x + x1 as f32 * zoom, sy)], line);
+                painter.line_segment([Pos2::new(origin.x + gx0 as f32 * zoom, sy), Pos2::new(origin.x + gx1 as f32 * zoom, sy)], line);
             }
         }
         // Symmetrie-Achsen

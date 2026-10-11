@@ -109,6 +109,20 @@ fn bild_der_oberflaeche() {
         a.selection = combine(two.as_ref(), &Selection::rect(4, 4, 6, 6), SelOp::Sub);
         h.run();
     }
+    // SPRITEBIT_SHOT_TILED=1: Kachelmodus ringsum, kleiner Sprite mit Strich über die Kante.
+    if std::env::var_os("SPRITEBIT_SHOT_TILED").is_some() {
+        let a = h.state_mut();
+        a.tiled = spritebit_core::tiled::Tiled::Both;
+        a.zoom = 4.0;
+        let img = a.project.sprite_mut().active();
+        for i in 0..20 {
+            img.set((54 + i) % 64, 20 + i / 2, 5);
+            img.set(10, (58 + i) % 64, 6);
+        }
+        a.version += 1;
+        a.pan = Vec2::new(300.0, 150.0);
+        h.run();
+    }
     // SPRITEBIT_SHOT_TOUR=n: Animations-Tour bei Schritt n (0 = Timeline).
     if let Some(n) = std::env::var("SPRITEBIT_SHOT_TOUR").ok().and_then(|v| v.parse::<usize>().ok()) {
         let ctx = h.ctx.clone();

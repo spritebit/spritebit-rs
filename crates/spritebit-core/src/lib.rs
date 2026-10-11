@@ -50,6 +50,7 @@ pub mod selection;
 pub mod shade;
 pub mod sprite;
 pub mod template;
+pub mod tiled;
 pub mod tilelib;
 pub mod tilemap;
 pub mod tools;

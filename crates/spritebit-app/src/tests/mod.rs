@@ -2288,3 +2288,23 @@ fn auswahl_mit_umschalt_dazu_und_mit_strg_abziehen() {
     let s = h.state().selection.clone().expect("Auswahl");
     assert!(s.contains(1, 8) && s.contains(1, 1) && !s.contains(2, 2));
 }
+
+#[test]
+fn kachelmodus_malt_ueber_den_rand_auf_die_andere_seite() {
+    use spritebit_core::tiled::Tiled;
+    let mut h = app();
+    h.state_mut().tool = Tool::Pencil;
+    h.state_mut().tiled = Tiled::Y;
+    h.run();
+    let hgt = h.state().sprite().height as f32;
+    // Von unten im Bild über die Kante hinaus auf die Kopie darunter.
+    drag(&mut h, (5.0, hgt - 2.0), (5.0, hgt + 1.0));
+    let n = hgt as u32;
+    assert_ne!(px(&h, 5, n - 1), 0, "unten im Bild");
+    assert_ne!(px(&h, 5, 1), 0, "auf der Kopie gemalt = oben im Bild");
+    // Ohne Kachelmodus fällt, was über den Rand ragt, weg.
+    h.state_mut().tiled = Tiled::Off;
+    drag(&mut h, (9.0, hgt - 1.0), (9.0, hgt + 2.0));
+    assert_ne!(px(&h, 9, n - 1), 0);
+    assert_eq!(px(&h, 9, 0), 0);
+}

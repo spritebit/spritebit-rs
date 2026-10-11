@@ -439,6 +439,7 @@ impl SpritebitApp {
         let in_selection = p.cell.is_some_and(|c| self.selection.as_ref().is_some_and(|s| s.contains(c.0, c.1)));
         if p.alt && p.pressed && p.over && !(self.is_select_tool() && in_selection) {
             if let Some(c) = p.cell {
+                let c = self.wrap_cell(c);
                 self.pick_color(c.0, c.1);
             }
             self.blocked = true;
@@ -568,7 +569,7 @@ impl SpritebitApp {
                 self.record();
                 // Mit Symmetrie auch an den gespiegelten Stellen füllen.
                 let (w, h) = (self.sprite().width, self.sprite().height);
-                let points = tools::mirror_spans(vec![(cell.1, cell.0, cell.0)], w, h, self.mirror_x, self.mirror_y);
+                let points = self.mirror_wrap(vec![(cell.1, cell.0, cell.0)], w, h);
                 // „Grenzen: alle Ebenen“: die sichtbare Farbe aller Ebenen bestimmt,
                 // wo die Fläche endet — gemalt wird in die aktive (wie im Web).
                 let key: Option<Vec<u32>> = (self.fill_visible && !self.sprite().editing_mask()).then(|| {
@@ -623,7 +624,8 @@ impl SpritebitApp {
                 self.stroke_last = Some(cell);
                 self.stroke_lock = Some((cell, None));
                 // Pixel-perfekt: ein Strich, ein Pfad.
-                self.pp = self.pixel_perfect_now().then(tools::PixelPerfect::new);
+                let wrap = self.tiled.axes();
+                self.pp = self.pixel_perfect_now().then(|| tools::PixelPerfect::wrapped(wrap));
                 self.stroke(cell, cell, erase);
             }
         }
@@ -681,12 +683,42 @@ impl SpritebitApp {
         self.paint(spans, value);
     }
 
-    /// Abschnitte malen — mit Symmetrie auch gespiegelt.
+    /// Abschnitte malen — mit Symmetrie auch gespiegelt, im Kachelmodus
+    /// über den Rand auf die andere Seite.
     fn paint(&mut self, spans: Vec<Span>, value: Px) {
         let (w, h) = (self.sprite().width, self.sprite().height);
-        let spans = tools::mirror_spans(spans, w, h, self.mirror_x, self.mirror_y);
+        let spans = self.mirror_wrap(spans, w, h);
         tools::fill_spans(self.project.sprite_mut().active(), spans, value);
         self.changed();
+    }
+
+    /// Symmetrie und Kachelmodus auf Abschnitte anwenden: erst die
+    /// Spiegelbilder dazu, dann alles über den Rand ins Bild holen (wie
+    /// mirrored() im Web).
+    pub(crate) fn mirror_wrap(&self, spans: Vec<Span>, w: u32, h: u32) -> Vec<Span> {
+        let spans = tools::mirror_spans(spans, w, h, self.mirror_x, self.mirror_y);
+        spritebit_core::tiled::wrap_spans(spans, w, h, self.tiled.axes())
+    }
+
+    /// Zelle im Kachelmodus ins Bild zurückholen (Pipette auf einer Kopie).
+    pub(crate) fn wrap_cell(&self, c: (i64, i64)) -> (i64, i64) {
+        let sp = self.sprite();
+        spritebit_core::tiled::wrap_point(c.0, c.1, sp.width, sp.height, self.tiled.axes())
+    }
+
+    /// Kachelmodus wählen (Menü „Ansicht“) — wird gemerkt.
+    pub(crate) fn set_tiled(&mut self, t: spritebit_core::tiled::Tiled) {
+        self.tiled = t;
+        self.save_tiled_pref();
+        self.hint = Some(
+            match t.axes() {
+                (false, false) => tr("Kachelmodus aus"),
+                (true, true) => tr("Kachelmodus: Das Bild steht ringsum noch einmal. Wer über den Rand malt, malt auf der anderen Seite weiter."),
+                (true, false) => tr("Kachelmodus: Das Bild steht links und rechts noch einmal. Wer über den Rand malt, malt auf der anderen Seite weiter."),
+                (false, true) => tr("Kachelmodus: Das Bild steht oben und unten noch einmal. Wer über den Rand malt, malt auf der anderen Seite weiter."),
+            }
+            .into(),
+        );
     }
 
     fn spray_at(&mut self, cell: (i64, i64), erase: bool) {
@@ -716,10 +748,26 @@ impl SpritebitApp {
             None => Color32::from_rgba_unmultiplied(242, 139, 130, 110),
         };
         let clip = painter.clip_rect();
-        for (y, x0, x1) in self.shape_spans(a, b) {
-            let r = egui::Rect::from_min_max(origin + Vec2::new(x0 as f32, y as f32) * zoom, origin + Vec2::new((x1 + 1) as f32, (y + 1) as f32) * zoom);
-            if r.intersects(clip) {
-                painter.rect_filled(r, 0.0, color);
+        // Kachelmodus: so, wie es nachher im Bild steht — über den Rand auf
+        // die andere Seite, und auf den Kopien ringsum gleich mit.
+        let spans = self.shape_spans(a, b);
+        let (tx, ty) = self.tiled.axes();
+        let (spans, offsets) = if tx || ty {
+            let (w, h) = (self.sprite().width, self.sprite().height);
+            let offs: Vec<Vec2> = (if ty { -1..=1 } else { 0..=0 })
+                .flat_map(|j| (if tx { -1..=1 } else { 0..=0 }).map(move |i| Vec2::new((i * w as i64) as f32, (j * h as i64) as f32)))
+                .collect();
+            (spritebit_core::tiled::wrap_spans(spans, w, h, (tx, ty)), offs)
+        } else {
+            (spans, vec![Vec2::ZERO])
+        };
+        for (y, x0, x1) in spans {
+            for off in &offsets {
+                let at = origin + *off * zoom;
+                let r = egui::Rect::from_min_max(at + Vec2::new(x0 as f32, y as f32) * zoom, at + Vec2::new((x1 + 1) as f32, (y + 1) as f32) * zoom);
+                if r.intersects(clip) {
+                    painter.rect_filled(r, 0.0, color);
+                }
             }
         }
     }

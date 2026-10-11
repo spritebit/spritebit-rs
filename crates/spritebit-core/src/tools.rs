@@ -472,11 +472,18 @@ pub struct PixelPerfect {
     path: Vec<(i64, i64)>,
     /// Wert jedes im Strich berührten Pixels vor dem Strich.
     before: std::collections::HashMap<(i64, i64), Px>,
+    /// Kachelmodus ([`crate::tiled`]): Punkte über den Rand auf die andere Seite.
+    pub wrap: (bool, bool),
 }
 
 impl PixelPerfect {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Im Kachelmodus: `wrap` = (waagerecht, senkrecht) wiederholt.
+    pub fn wrapped(wrap: (bool, bool)) -> Self {
+        PixelPerfect { wrap, ..Self::default() }
     }
 
     /// Punkt (x, y) mit `value` malen; gibt `true` zurück, wenn sich etwas
@@ -487,7 +494,7 @@ impl PixelPerfect {
         }
         let (w, h) = (img.width(), img.height());
         let mut changed = false;
-        for (py, px, _) in mirror_spans(vec![(y, x, x)], w, h, mx, my) {
+        for (py, px, _) in crate::tiled::wrap_spans(mirror_spans(vec![(y, x, x)], w, h, mx, my), w, h, self.wrap) {
             if px < 0 || py < 0 || px >= w as i64 || py >= h as i64 {
                 continue;
             }
@@ -508,7 +515,7 @@ impl PixelPerfect {
                 self.path.remove(n - 2);
                 // Liegt der Punkt noch woanders im Pfad, bleibt er gemalt.
                 if !self.path.contains(&b) {
-                    for (py, px, _) in mirror_spans(vec![(b.1, b.0, b.0)], w, h, mx, my) {
+                    for (py, px, _) in crate::tiled::wrap_spans(mirror_spans(vec![(b.1, b.0, b.0)], w, h, mx, my), w, h, self.wrap) {
                         if let Some(&old) = self.before.get(&(px, py)) {
                             if img.get(px as u32, py as u32) != old {
                                 img.set(px as u32, py as u32, old);
