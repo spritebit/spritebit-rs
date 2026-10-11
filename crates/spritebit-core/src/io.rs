@@ -561,10 +561,15 @@ pub fn export_web(p: &Project) -> String {
         "sprites": sprites,
         "customPalettes": custom,
         "paletteMaterials": materials_json(&p.materials),
-        "tilesetLib": crate::tilelib::lib_to_json(&p.tileset_lib),
         "paletteColorNames": names,
         "ui": { "curSprite": ids.get(p.current) },
     });
+    // Die Kachelsatz-Bibliothek nur, wenn sie etwas enthält — eine
+    // Sprite-Datei (.bitty) hat keine, wie im Web (tests/interop/).
+    let mut doc = doc;
+    if !p.tileset_lib.is_empty() {
+        doc["tilesetLib"] = crate::tilelib::lib_to_json(&p.tileset_lib);
+    }
     serde_json::to_string(&doc).expect("JSON aus eigenen Daten")
 }
 
