@@ -1919,3 +1919,32 @@ fn schattieren_eigene_reihenfolge_und_ordnen() {
     h.run();
     assert_eq!(h.state().shade_ramp, vec![[0xff, 0xff, 0xff], [0x99, 0x99, 0x99], [0x40, 0x40, 0x40]]);
 }
+
+#[test]
+fn schattieren_langsam_malen_wird_gleichmaessig_dunkler() {
+    // Wie eine Airbrush: wer langsam malt (hier 0,45 s je Pixel), bekommt
+    // überall mehr Stufen — gleichmäßig, nicht fleckig.
+    let mut h = app_60();
+    {
+        let a = h.state_mut();
+        a.tool = tools_ui::Tool::Shade;
+        for v in [1, 3, 9] {
+            a.pick_swatch(v);
+        }
+    }
+    h.run();
+    let (a, b) = (at(&h, 2.0, 8.0), at(&h, 6.0, 8.0));
+    h.hover_at(a);
+    h.run();
+    h.drag_at(a);
+    for k in 0..=4 {
+        h.hover_at(a + (b - a) * (k as f32 / 4.0));
+        for _ in 0..27 {
+            h.step();
+        }
+    }
+    h.drop_at(b);
+    h.run();
+    let row: Vec<u16> = (2..=6).map(|x| px(&h, x, 8)).collect();
+    assert!(row.iter().all(|&v| v == 3), "überall eine Stufe mehr: {row:?}");
+}

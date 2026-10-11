@@ -8,7 +8,7 @@
 //! braucht es darum hier nicht (im Web nur für Finger).
 
 use eframe::egui::{self, Color32, Sense, Stroke, Vec2};
-use spritebit_core::shade::{self, ramp_levels, soft_level};
+use spritebit_core::shade::{self, hold_steps, ramp_levels, soft_level};
 use spritebit_core::{selection::rgb_of, tools, Px, Rgb};
 
 use crate::i18n::{tr, trf};
@@ -121,51 +121,72 @@ impl SpritebitApp {
         }
     }
 
-    /// Ein Tupfer an (x, y): jeder Pixel unter dem Pinsel geht so viele
-    /// Stufen weiter, wie er in diesem Strich noch nicht gegangen ist — mit
-    /// Verlauf in der Mitte mehr als am Rand.
-    pub(crate) fn shade_at(&mut self, (x, y): (i64, i64)) {
-        let Some(mut s) = self.shade.take() else { return };
+    /// Pixel unter dem Pinsel bei (x, y), gespiegelt und im Bild, mit ihrer
+    /// Stufe fürs Drüberfahren: 1 — mit „Verlauf“ in der Mitte mehr, am Rand 1.
+    fn shade_cells(&self, (x, y): (i64, i64)) -> Vec<((i64, i64), u32)> {
         let size = self.size;
         let soft = self.shade_soft && size > 1;
         let levels = ramp_levels(&self.shade_ramp);
         let st = tools::stamp(x, y, size);
         let (mx, my) = ((st.x0 + st.x1) as f64 / 2.0, (st.y0 + st.y1) as f64 / 2.0);
         let (w, h) = (self.sprite().width, self.sprite().height);
-        let (mirror_x, mirror_y) = (self.mirror_x, self.mirror_y);
+        let mut out = Vec::new();
+        for py in st.y0..=st.y1 {
+            for px in st.x0..=st.x1 {
+                let level = if soft { soft_level(px as f64 - mx, py as f64 - my, size, levels) } else { 1 };
+                if level == 0 {
+                    continue;
+                }
+                for (gy, gx, _) in tools::mirror_spans(vec![(py, px, px)], w, h, self.mirror_x, self.mirror_y) {
+                    if gx >= 0 && gy >= 0 && gx < w as i64 && gy < h as i64 {
+                        out.push(((gx, gy), level));
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    /// Gedrückt halten: die Pixel unter dem Pinsel sammeln `dt` Sekunden —
+    /// mit „Verlauf“ die Mitte schneller als der Rand — und gehen weiter.
+    pub(crate) fn shade_dwell(&mut self, cell: (i64, i64), dt: f64) {
+        let soft = self.shade_soft && self.size > 1;
+        let levels = ramp_levels(&self.shade_ramp) as f64;
+        let cells = self.shade_cells(cell);
+        let Some(s) = &mut self.shade else { return };
+        for (c, level) in cells {
+            *s.dwell.entry(c).or_insert(0.0) += if soft { dt * level as f64 / levels } else { dt };
+        }
+        self.shade_at(cell);
+    }
+
+    /// Ein Tupfer an (x, y): jeder Pixel unter dem Pinsel geht so weit, wie
+    /// er soll — eine Stufe fürs Drüberfahren (mit Verlauf in der Mitte
+    /// mehr), dazu die Stufen für seine Zeit unter dem Pinsel —, soweit er
+    /// in diesem Strich nicht schon dort ist.
+    pub(crate) fn shade_at(&mut self, cell: (i64, i64)) {
+        let cells = self.shade_cells(cell);
+        let Some(mut s) = self.shade.take() else { return };
         let pal = self.project.current_palette();
         let sp = self.project.sprite_mut();
         let mut free = std::mem::take(&mut sp.free);
         let mut changed = false;
-        for py in st.y0..=st.y1 {
-            for px in st.x0..=st.x1 {
-                let mut want = if soft { soft_level(px as f64 - mx, py as f64 - my, size, levels) } else { 1 };
-                if want == 0 {
-                    continue;
-                }
-                if s.repeat {
-                    want = 1;
-                }
-                for (gy, gx, _) in tools::mirror_spans(vec![(py, px, px)], w, h, mirror_x, mirror_y) {
-                    if gx < 0 || gy < 0 || gx >= w as i64 || gy >= h as i64 {
-                        continue;
-                    }
-                    let have = s.done.get(&(gx, gy)).copied().unwrap_or(0);
-                    if have >= want {
-                        continue;
-                    }
-                    s.done.insert((gx, gy), want);
-                    let img = sp.active();
-                    let old = img.get(gx as u32, gy as u32);
-                    let mut v = old;
-                    for _ in have..want {
-                        v = s.shader.step(v, &pal, &mut free);
-                    }
-                    if v != old {
-                        img.set(gx as u32, gy as u32, v);
-                        changed = true;
-                    }
-                }
+        for ((gx, gy), level) in cells {
+            let want = level + hold_steps(s.dwell.get(&(gx, gy)).copied().unwrap_or(0.0));
+            let have = s.done.get(&(gx, gy)).copied().unwrap_or(0);
+            if have >= want {
+                continue;
+            }
+            s.done.insert((gx, gy), want);
+            let img = sp.active();
+            let old = img.get(gx as u32, gy as u32);
+            let mut v = old;
+            for _ in have..want {
+                v = s.shader.step(v, &pal, &mut free);
+            }
+            if v != old {
+                img.set(gx as u32, gy as u32, v);
+                changed = true;
             }
         }
         sp.free = free;

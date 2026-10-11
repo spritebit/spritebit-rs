@@ -92,9 +92,11 @@ pub fn ramp_levels(ramp: &[Rgb]) -> u32 {
 }
 
 // ── Gedrückt halten ─────────────────────────────────────────────────
-// Hält man still, geht es Stufe um Stufe weiter — erst langsam, dann immer
+// Wie eine Airbrush: jeder Pixel zählt, wie lange der Pinsel schon über
+// ihm war. Je länger, desto mehr Stufen — erst langsam, dann immer
 // schneller: jede Pause ist um HOLD_FACTOR kürzer als die vorige, aber nie
-// kürzer als HOLD_MIN_S. Eine Bewegung beginnt wieder bei 0 (wie im Web).
+// kürzer als HOLD_MIN_S. Schnell drüberfahren gibt eine Stufe, langsam
+// mehr, stillhalten immer weiter (wie im Web).
 
 pub const HOLD_FIRST_S: f64 = 0.35;
 pub const HOLD_FACTOR: f64 = 0.7;
@@ -104,6 +106,16 @@ pub const HOLD_MIN_S: f64 = 0.06;
 /// nach dem Ansetzen bzw. nach der letzten Bewegung).
 pub fn hold_delay(n: u32) -> f64 {
     (HOLD_FIRST_S * HOLD_FACTOR.powi(n.min(64) as i32)).max(HOLD_MIN_S)
+}
+
+/// Zusätzliche Stufen nach `t` Sekunden unter dem Pinsel.
+pub fn hold_steps(t: f64) -> u32 {
+    let (mut n, mut at) = (0, hold_delay(0));
+    while t >= at && n < 255 {
+        n += 1;
+        at += hold_delay(n);
+    }
+    n
 }
 
 // ── Abstufungen erzeugen ────────────────────────────────────────────
@@ -310,6 +322,15 @@ mod tests {
         assert!(r[4][2] as f64 / (r[4][0] as f64 + 1.0) > 0x40 as f64 / 0xc0 as f64);
         assert!(make_shades([0x80; 3], 2).iter().all(|c| c[0] == c[1] && c[1] == c[2]), "Grau bleibt grau");
         assert!(make_shades([0xff; 3], 2).len() < 5, "an Weiß fallen Stufen zusammen");
+    }
+
+    #[test]
+    fn zeit_unter_dem_pinsel_gibt_stufen() {
+        assert_eq!(hold_steps(0.0), 0);
+        assert_eq!(hold_steps(0.349), 0);
+        assert_eq!(hold_steps(0.35), 1);
+        assert_eq!(hold_steps(0.35 + 0.245), 2);
+        assert!(hold_steps(2.0) > hold_steps(1.0) + 5, "später geht es schneller");
     }
 
     #[test]
