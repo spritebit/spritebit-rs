@@ -188,29 +188,6 @@ pub fn shade_order(colors: &[Rgb]) -> Vec<usize> {
 }
 
 /// Farbe von Platz `from` auf Platz `to` (beide 1-basiert) — als Reihenfolge.
-/// Reihenfolge, in der die Nummern `group` (in dieser Abfolge) zusammen an
-/// der Stelle von `base` stehen; alles andere behält seine Reihenfolge.
-/// Steht `base` nicht in `group` oder fehlt es, kommt die Gruppe ans Ende.
-/// Für erzeugte Abstufungen (shade.rs): sie rücken neben ihre Grundfarbe.
-/// Wie im Web (js/palorder.js groupAround).
-pub fn group_around(n: usize, base: Option<usize>, group: &[usize]) -> Vec<usize> {
-    let mut g: Vec<usize> = Vec::new();
-    for &i in group {
-        if (1..=n).contains(&i) && !g.contains(&i) {
-            g.push(i);
-        }
-    }
-    let rest: Vec<usize> = (1..=n).filter(|i| !g.contains(i)).collect();
-    match base.filter(|b| g.contains(b)) {
-        None => rest.into_iter().chain(g).collect(),
-        Some(b) => {
-            // Vor der Grundfarbe stehen so viele Nicht-Gruppen-Farben wie vorher.
-            let at = rest.iter().filter(|&&i| i < b).count();
-            rest[..at].iter().copied().chain(g).chain(rest[at..].iter().copied()).collect()
-        }
-    }
-}
-
 pub fn move_color(n: usize, from: usize, to: usize) -> Vec<usize> {
     let mut order: Vec<usize> = (1..=n).collect();
     if from >= 1 && from <= n && to >= 1 && to <= n {
@@ -280,14 +257,6 @@ pub fn apply_reduce(sp: &mut Sprite, pal: &Palette, map: &HashMap<Rgb, Px>) {
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn gruppe_rueckt_an_die_grundfarbe() {
-        use super::group_around;
-        assert_eq!(group_around(6, Some(3), &[5, 3, 6]), vec![1, 2, 5, 3, 6, 4]);
-        assert_eq!(group_around(6, Some(3), &[1, 3, 6]), vec![2, 1, 3, 6, 4, 5], "vorhandener Ton kommt mit");
-        assert_eq!(group_around(5, None, &[5, 4]), vec![1, 2, 3, 5, 4], "ohne Grundfarbe ans Ende");
-        assert_eq!(group_around(4, Some(2), &[2, 3]), vec![1, 2, 3, 4], "schon zusammen");
-    }
 
     use super::*;
 

@@ -1,15 +1,15 @@
 //! Schattieren — Options-Zeile, Farbreihe wählen und der Pinsel selbst.
 //! Die Rechnung steht in `spritebit_core::shade`, wie im Web (js/shade.js).
 //!
-//! Die Farbreihe wählt man wie in Aseprite in der Palette: solange das
-//! Werkzeug aktiv ist, nimmt ein Klick auf eine Farbe sie in die Reihe auf
-//! oder wieder heraus (statt die Malfarbe zu wählen). Linksklick malt die
-//! Reihe von hell nach dunkel, Rechtsklick andersherum — einen Knopf zum
-//! Umdrehen braucht es darum hier nicht (im Web nur für Finger).
+//! Die Farbreihe stellt man in der Palette zusammen: solange das Werkzeug
+//! aktiv ist, hängt ein Klick auf eine Farbe sie hinten an die Reihe oder
+//! nimmt sie wieder heraus (statt die Malfarbe zu wählen). Linksklick malt
+//! die Reihe entlang, Rechtsklick andersherum — einen Knopf zum Umdrehen
+//! braucht es darum hier nicht (im Web nur für Finger).
 
 use eframe::egui::{self, Color32, Sense, Stroke, Vec2};
 use spritebit_core::shade::{self, ramp_levels, soft_level};
-use spritebit_core::{palops, selection::rgb_of, tools, Px, Rgb};
+use spritebit_core::{selection::rgb_of, tools, Px, Rgb};
 
 use crate::i18n::{tr, trf};
 use crate::tools_ui::Tool;
@@ -62,8 +62,8 @@ impl SpritebitApp {
             ui.weak(tr("Aktuelle Farbe — oder Farben in der Palette anklicken"));
         }
         let mut remove = None;
-        // Linksklick beginnt mit der hellsten: links steht, was ein leerer Pixel bekommt.
-        for &c in self.shade_ramp.iter().rev() {
+        // In Mal-Reihenfolge, so wie angeklickt: links steht, was ein leerer Pixel bekommt.
+        for &c in &self.shade_ramp {
             let (rect, resp) = ui.allocate_exact_size(Vec2::splat(18.0), Sense::click());
             ui.painter().rect_filled(rect, 3.0, Color32::from_rgb(c[0], c[1], c[2]));
             let edge = if resp.hovered() { ui.visuals().strong_text_color() } else { ui.visuals().weak_text_color() };
@@ -98,19 +98,18 @@ impl SpritebitApp {
             })
             .response
             .on_hover_text(tr("Wie viele Töne insgesamt"));
-        // Derselbe Knopf wie im Web in der Farbzeile: Palette nach Farbstufen.
+        // Dasselbe Icon wie „Nach Farbstufen“ — hier für die Farbreihe. Von
+        // selbst wird sie nie geordnet: wer sie anders zusammenstellt, behält sie.
         if crate::icons::button(
             ui,
             crate::icons::SHADES,
-            tr("Nach Farbstufen sortieren — gleiche Farbtöne nebeneinander, von dunkel nach hell. Die Pixel werden mit umnummeriert, das Bild bleibt gleich."),
-            true,
+            tr("Farbreihe nach Farbstufen ordnen — von hell nach dunkel. Sonst bleibt sie in der Reihenfolge, in der du die Farben angeklickt hast."),
+            self.shade_ramp.len() > 1,
         )
         .clicked()
         {
-            let pal = self.project.current_palette();
-            if !self.reorder_colors(&palops::shade_order(&pal.colors)) {
-                self.hint = Some(tr("Schon nach Farbstufen geordnet.").into());
-            }
+            self.shade_ramp = shade::sort_ramp(&self.shade_ramp);
+            self.save_view();
         }
         if ui
             .selectable_label(self.shade_soft, tr("Verlauf"))
@@ -186,12 +185,6 @@ impl SpritebitApp {
         };
         let shades = shade::make_shades(base, self.shade_gen);
         let added = self.add_colors_to_palette(&shades);
-        // Die Töne rücken gleich neben ihre Grundfarbe — dunkel davor, hell
-        // dahinter; der Rest der Palette bleibt, wie er ist.
-        let pal = self.project.current_palette();
-        let idx = |c: Rgb| pal.colors.iter().position(|&p| p == c).map(|k| k + 1);
-        let group: Vec<usize> = shades.iter().filter_map(|&c| idx(c)).collect();
-        self.reorder_colors(&palops::group_around(pal.len(), idx(base), &group));
         self.hint = Some(trf("{n} Töne erzeugt und als Farbreihe gewählt — {added} davon neu in der Palette.", &[("n", &shades.len()), ("added", &added)]));
         self.shade_ramp = shades;
         self.save_view();

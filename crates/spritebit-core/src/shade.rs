@@ -1,17 +1,18 @@
 //! Schattieren: ein Stift, der mit jedem Strich eine Stufe weitergeht —
 //! wie in der Web-Version (js/shade.js).
 //!
-//! Man wählt eine Farbreihe (Farben, sortiert von dunkel nach hell). Dann
-//! arbeitet sich das Werkzeug durch sie hindurch (Richtung „dunkler",
-//! Linksklick):
+//! Man stellt eine Farbreihe zusammen — in der Reihenfolge, in der man die
+//! Farben anklickt. Dann arbeitet sich das Werkzeug durch sie hindurch
+//! (Linksklick):
 //!
-//! * leerer Pixel → die hellste Farbe der Reihe
-//! * Farbe aus der Reihe → eine Stufe dunkler, an der dunkelsten Schluss
+//! * leerer Pixel → die erste Farbe der Reihe
+//! * Farbe aus der Reihe → die nächste, an der letzten Schluss
 //! * andere Farbe → bleibt (z. B. die Umrisslinie)
 //!
-//! Richtung „heller" (Rechtsklick) genau andersherum. Pro Strich ändert
-//! sich jeder Pixel höchstens einmal; gedrückt halten geht Stufe um Stufe
-//! weiter (das steuert die App).
+//! Rechtsklick geht die Reihe andersherum. Pro Strich ändert sich jeder
+//! Pixel höchstens einmal; gedrückt halten geht Stufe um Stufe weiter (das
+//! steuert die App). Nach Helligkeit geordnet wird die Reihe nur auf Wunsch
+//! ([`sort_ramp`]) — so lassen sich auch eigene Verläufe bauen.
 //!
 //! Ohne Reihe geht es automatisch: ein leerer Pixel bekommt die aktuelle
 //! Farbe, ein farbiger die nächsthellere bzw. -dunklere seiner Farbfamilie
@@ -38,7 +39,7 @@ fn luma(c: Rgb) -> f64 {
     0.299 * c[0] as f64 + 0.587 * c[1] as f64 + 0.114 * c[2] as f64
 }
 
-/// Reihe bereinigen: ohne Doppelte, von dunkel nach hell.
+/// Reihe bereinigen: ohne Doppelte. Die Reihenfolge bleibt.
 pub fn normalize_ramp(ramp: &[Rgb]) -> Vec<Rgb> {
     let mut out: Vec<Rgb> = Vec::with_capacity(ramp.len());
     for &c in ramp {
@@ -46,19 +47,26 @@ pub fn normalize_ramp(ramp: &[Rgb]) -> Vec<Rgb> {
             out.push(c);
         }
     }
-    out.sort_by(|a, b| luma(*a).total_cmp(&luma(*b)).then(a.cmp(b)));
     out
 }
 
-/// Farbe in die Reihe aufnehmen oder wieder herausnehmen.
+/// Reihe nach Farbstufen ordnen: von hell nach dunkel — so geht ein leerer
+/// Pixel beim Linksklick mit der hellsten los und wird dann dunkler.
+pub fn sort_ramp(ramp: &[Rgb]) -> Vec<Rgb> {
+    let mut out = normalize_ramp(ramp);
+    out.sort_by(|a, b| luma(*b).total_cmp(&luma(*a)).then(a.cmp(b)));
+    out
+}
+
+/// Farbe hinten an die Reihe hängen oder wieder herausnehmen.
 pub fn toggle_ramp(ramp: &[Rgb], c: Rgb) -> Vec<Rgb> {
-    if ramp.contains(&c) {
-        normalize_ramp(&ramp.iter().copied().filter(|&r| r != c).collect::<Vec<_>>())
+    let mut v = normalize_ramp(ramp);
+    if v.contains(&c) {
+        v.retain(|&r| r != c);
     } else {
-        let mut v = ramp.to_vec();
         v.push(c);
-        normalize_ramp(&v)
     }
+    v
 }
 
 /// Stufen für einen Pixel im Abstand (dx, dy) zur Pinselmitte, wenn
@@ -107,9 +115,9 @@ pub fn hold_delay(n: u32) -> f64 {
 /// So weit liegt ein Ton vom nächsten (Helligkeit 0..1).
 pub const GEN_STEP: f64 = 0.12;
 
-/// Grundfarbe in der Mitte, dazu `n` dunklere und `n` hellere Töne — von
-/// dunkel nach hell, ohne Doppelte (nah an Schwarz oder Weiß fallen
-/// Stufen zusammen).
+/// Grundfarbe in der Mitte, dazu `n` hellere und `n` dunklere Töne — von
+/// hell nach dunkel (Mal-Reihenfolge), ohne Doppelte (nah an Schwarz oder
+/// Weiß fallen Stufen zusammen).
 pub fn make_shades(c: Rgb, n: u32) -> Vec<Rgb> {
     let mut out = vec![c];
     let (mut dark, mut light) = (c, c);
@@ -119,14 +127,15 @@ pub fn make_shades(c: Rgb, n: u32) -> Vec<Rgb> {
         out.push(dark);
         out.push(light);
     }
-    normalize_ramp(&out)
+    sort_ramp(&out)
 }
 
 /// Rechner für einen Strich: Pixelwert → Wert eine Stufe weiter.
 pub struct Shader {
     /// Die Reihe in Mal-Reihenfolge (erste Farbe = die für leere Pixel).
     order: Vec<Rgb>,
-    dark: bool,
+    /// Die Reihe entlang (Linksklick) — ohne Reihe: dunkler.
+    along: bool,
     cur: Px,
     /// Farbe → Palettennummer (die erste mit dieser Farbe).
     index: HashMap<Rgb, Px>,
@@ -135,18 +144,19 @@ pub struct Shader {
 }
 
 impl Shader {
-    /// `ramp` sortiert (normalize_ramp); `dark` = Richtung dunkler; `cur` =
-    /// aktuelle Farbe (nur die Automatik malt damit in leere Pixel).
-    pub fn new(pal: &Palette, ramp: &[Rgb], dark: bool, cur: Px) -> Self {
+    /// `ramp` in Mal-Reihenfolge; `along` = die Reihe entlang (Linksklick),
+    /// sonst andersherum — ohne Reihe: dunkler bzw. heller. `cur` = aktuelle
+    /// Farbe (nur die Automatik malt damit in leere Pixel).
+    pub fn new(pal: &Palette, ramp: &[Rgb], along: bool, cur: Px) -> Self {
         let mut order = ramp.to_vec();
-        if dark {
+        if !along {
             order.reverse();
         }
         let mut index = HashMap::new();
         for (k, &c) in pal.colors.iter().enumerate() {
             index.entry(c).or_insert(k as Px + 1);
         }
-        Shader { order, dark, cur, index, memo: HashMap::new() }
+        Shader { order, along, cur, index, memo: HashMap::new() }
     }
 
     /// Farbe als Pixelwert: Nummer, wenn sie in der Palette steht, sonst
@@ -194,7 +204,7 @@ impl Shader {
         if let Some(&n) = self.memo.get(&v) {
             return n;
         }
-        let sign = if self.dark { -1 } else { 1 };
+        let sign = if self.along { -1 } else { 1 };
         let n = if v >= FREE_BASE {
             match Self::color_of(v, pal, free) {
                 Some(c) => self.value_of(shift(c, sign, AUTO_STEP), free),
@@ -221,21 +231,23 @@ mod tests {
         Palette::new("t", vec![LIGHT, DARK, RED, [0, 0xff, 0]])
     }
 
+    /// Eine selbst zusammengestellte Reihe in Klick-Reihenfolge: rot, hellrot, dunkelrot.
     fn ramp() -> Vec<Rgb> {
-        normalize_ramp(&[LIGHT, DARK, RED])
+        normalize_ramp(&[RED, LIGHT, DARK])
     }
 
     #[test]
-    fn reihe_von_dunkel_nach_hell_ohne_doppelte() {
-        assert_eq!(ramp(), vec![DARK, RED, LIGHT]);
+    fn reihe_in_klick_reihenfolge_ohne_doppelte() {
+        assert_eq!(ramp(), vec![RED, LIGHT, DARK]);
         assert_eq!(normalize_ramp(&[RED, RED]), vec![RED]);
-        let r = toggle_ramp(&[DARK], LIGHT);
-        assert_eq!(r, vec![DARK, LIGHT]);
+        let r = toggle_ramp(&[LIGHT], DARK);
+        assert_eq!(r, vec![LIGHT, DARK], "hinten angehängt");
         assert_eq!(toggle_ramp(&r, LIGHT), vec![DARK]);
+        assert_eq!(sort_ramp(&ramp()), vec![LIGHT, RED, DARK], "auf Wunsch: hell → dunkel");
     }
 
     #[test]
-    fn wie_ein_stift_leer_hellste_dann_dunkler() {
+    fn wie_ein_stift_leer_erste_dann_die_reihe_entlang() {
         let (p, mut free) = (pal(), Vec::new());
         let mut s = Shader::new(&p, &ramp(), true, 0);
         let mut v = 0;
@@ -244,16 +256,16 @@ mod tests {
             v = s.step(v, &p, &mut free);
             seen.push(v);
         }
-        assert_eq!(seen, vec![1, 3, 2, 2], "hellrot, rot, dunkelrot, bleibt");
+        assert_eq!(seen, vec![3, 1, 2, 2], "rot, hellrot, dunkelrot, bleibt");
     }
 
     #[test]
-    fn andersherum_leer_dunkelste_dann_heller() {
+    fn andersherum_leer_letzte_dann_zurueck() {
         let (p, mut free) = (pal(), Vec::new());
         let mut s = Shader::new(&p, &ramp(), false, 0);
         assert_eq!(s.step(0, &p, &mut free), 2);
-        assert_eq!(s.step(2, &p, &mut free), 3);
-        assert_eq!(s.step(1, &p, &mut free), 1, "am Ende geht es nicht weiter");
+        assert_eq!(s.step(2, &p, &mut free), 1);
+        assert_eq!(s.step(3, &p, &mut free), 3, "am Anfang der Reihe ist Schluss");
     }
 
     #[test]
@@ -268,10 +280,10 @@ mod tests {
     fn farbe_nicht_in_der_palette_wird_freie_farbe() {
         let (p, mut free) = (pal(), Vec::new());
         let mid = [0xc0, 0x40, 0x40];
-        let mut s = Shader::new(&p, &normalize_ramp(&[DARK, mid]), false, 0);
+        let mut s = Shader::new(&p, &[DARK, mid], true, 0);
         assert_eq!(s.step(2, &p, &mut free), FREE_BASE);
         assert_eq!(free, vec![mid]);
-        let mut back = Shader::new(&p, &normalize_ramp(&[DARK, mid]), true, 0);
+        let mut back = Shader::new(&p, &[DARK, mid], false, 0);
         assert_eq!(back.step(FREE_BASE, &p, &mut free), 2);
     }
 
@@ -293,9 +305,9 @@ mod tests {
         let r = make_shades(base, 2);
         assert_eq!(r.len(), 5);
         assert_eq!(r[2], base, "Grundfarbe in der Mitte");
-        assert_eq!(r, normalize_ramp(&r), "schon sortiert");
+        assert_eq!(r, sort_ramp(&r), "schon hell → dunkel");
         // Schatten kühler: im dunkelsten Ton ist Blau im Verhältnis stärker.
-        assert!(r[0][2] as f64 / (r[0][0] as f64 + 1.0) > 0x40 as f64 / 0xc0 as f64);
+        assert!(r[4][2] as f64 / (r[4][0] as f64 + 1.0) > 0x40 as f64 / 0xc0 as f64);
         assert!(make_shades([0x80; 3], 2).iter().all(|c| c[0] == c[1] && c[1] == c[2]), "Grau bleibt grau");
         assert!(make_shades([0xff; 3], 2).len() < 5, "an Weiß fallen Stufen zusammen");
     }

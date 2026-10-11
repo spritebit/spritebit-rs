@@ -1776,7 +1776,7 @@ fn schattieren_wie_ein_stift() {
         for v in [1, 3, 9] {
             a.pick_swatch(v);
         }
-        assert_eq!(a.shade_ramp, vec![[0x40, 0x40, 0x40], [0x99, 0x99, 0x99], [0xff, 0xff, 0xff]]);
+        assert_eq!(a.shade_ramp, vec![[0xff, 0xff, 0xff], [0x99, 0x99, 0x99], [0x40, 0x40, 0x40]], "so wie angeklickt");
         assert_eq!(a.color, color, "beim Schattieren wählt ein Klick keine Malfarbe");
     }
     h.run();
@@ -1875,7 +1875,7 @@ fn schattieren_langer_strich_bleibt_bei_einer_stufe() {
 }
 
 #[test]
-fn schattieren_abstufungen_erzeugen_und_anordnen() {
+fn schattieren_abstufungen_erzeugen() {
     let mut h = app();
     h.state_mut().tool = tools_ui::Tool::Shade;
     h.state_mut().color = 6; // #ff8080 in „graustufen“
@@ -1889,12 +1889,33 @@ fn schattieren_abstufungen_erzeugen_und_anordnen() {
     let pal = a.project.current_palette();
     assert!(pal.len() > n, "neue Töne stehen in der Palette");
     assert!(a.shade_ramp.iter().all(|c| pal.colors.contains(c)));
-    // Die Töne stehen gleich zusammen neben der Grundfarbe, dunkel → hell.
-    let at: Vec<usize> = a.shade_ramp.iter().map(|c| pal.colors.iter().position(|p| p == c).unwrap()).collect();
-    assert!(at.windows(2).all(|w| w[1] == w[0] + 1), "nebeneinander: {at:?}");
-    // Rückgängig nimmt Einsortieren und Erzeugen zurück.
-    h.state_mut().undo();
+    assert_eq!(a.shade_ramp, spritebit_core::shade::sort_ramp(&a.shade_ramp), "hell → dunkel");
     h.state_mut().undo();
     h.run();
     assert_eq!(h.state().project.current_palette().len(), n);
+}
+
+#[test]
+fn schattieren_eigene_reihenfolge_und_ordnen() {
+    let mut h = app_60();
+    {
+        let a = h.state_mut();
+        a.tool = tools_ui::Tool::Shade;
+        // Eigene Reihenfolge: #999, Weiß, #404040.
+        for v in [3, 1, 9] {
+            a.pick_swatch(v);
+        }
+    }
+    h.run();
+    let mut seen = Vec::new();
+    for _ in 0..4 {
+        shade_drag(&mut h, (6.0, 6.0), (6.0, 6.0));
+        seen.push(px(&h, 6, 6));
+    }
+    assert_eq!(seen, vec![3, 1, 9, 9], "die Reihe entlang, so wie angeklickt");
+    // Der Balken-Knopf ordnet die Reihe hell → dunkel.
+    h.get_by_label("Farbreihe nach Farbstufen ordnen — von hell nach dunkel. Sonst bleibt sie in der Reihenfolge, in der du die Farben angeklickt hast.")
+        .click();
+    h.run();
+    assert_eq!(h.state().shade_ramp, vec![[0xff, 0xff, 0xff], [0x99, 0x99, 0x99], [0x40, 0x40, 0x40]]);
 }
