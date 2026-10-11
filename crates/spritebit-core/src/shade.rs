@@ -83,6 +83,21 @@ pub fn ramp_levels(ramp: &[Rgb]) -> u32 {
     }
 }
 
+// ── Gedrückt halten ─────────────────────────────────────────────────
+// Hält man still, geht es Stufe um Stufe weiter — erst langsam, dann immer
+// schneller: jede Pause ist um HOLD_FACTOR kürzer als die vorige, aber nie
+// kürzer als HOLD_MIN_S. Eine Bewegung beginnt wieder bei 0 (wie im Web).
+
+pub const HOLD_FIRST_S: f64 = 0.35;
+pub const HOLD_FACTOR: f64 = 0.7;
+pub const HOLD_MIN_S: f64 = 0.06;
+
+/// Wartezeit in Sekunden vor dem Schritt Nummer `n` (0 = erster Schritt
+/// nach dem Ansetzen bzw. nach der letzten Bewegung).
+pub fn hold_delay(n: u32) -> f64 {
+    (HOLD_FIRST_S * HOLD_FACTOR.powi(n.min(64) as i32)).max(HOLD_MIN_S)
+}
+
 /// Rechner für einen Strich: Pixelwert → Wert eine Stufe weiter.
 pub struct Shader {
     /// Die Reihe in Mal-Reihenfolge (erste Farbe = die für leere Pixel).
@@ -246,6 +261,14 @@ mod tests {
         let mut up = Shader::new(&p, &[], false, 0);
         assert_eq!(up.step(3, &p, &mut free), 3, "heller gibt es nicht");
         assert_eq!(up.step(0, &p, &mut free), 0, "ohne Farbe bleibt leer");
+    }
+
+    #[test]
+    fn halten_wird_immer_schneller() {
+        assert_eq!(hold_delay(0), HOLD_FIRST_S);
+        assert!(hold_delay(1) < hold_delay(0) && hold_delay(2) < hold_delay(1));
+        assert!((hold_delay(1) - 0.245).abs() < 1e-9);
+        assert_eq!(hold_delay(50), HOLD_MIN_S);
     }
 
     #[test]

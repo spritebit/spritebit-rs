@@ -1832,11 +1832,17 @@ fn schattieren_gedrueckt_halten_geht_weiter() {
     h.drag_at(p);
     h.step();
     assert_eq!(px(&h, 4, 4), 1, "erster Tipp: hellste Farbe");
-    // Gut eine halbe Sekunde halten: eine Stufe weiter (alle 0,35 s).
-    for _ in 0..40 {
+    // 0,35 s halten: eine Stufe weiter.
+    for _ in 0..23 {
         h.step();
     }
     assert_eq!(px(&h, 4, 4), 3, "gehalten: eine Stufe dunkler");
+    // Die nächste Pause ist kürzer (0,245 s statt 0,35 s): nach weiteren
+    // 0,27 s ist schon die nächste Stufe da.
+    for _ in 0..16 {
+        h.step();
+    }
+    assert_eq!(px(&h, 4, 4), 9, "immer schneller: noch eine Stufe");
     h.drop_at(p);
     h.run();
 }

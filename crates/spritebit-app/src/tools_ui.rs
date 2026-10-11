@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use eframe::egui::{self, Color32, Key, Modifiers, Pos2, Vec2};
-use spritebit_core::shade::Shader;
+use spritebit_core::shade::{hold_delay, Shader, HOLD_MIN_S};
 use spritebit_core::tools::{self, Span};
 use spritebit_core::Px;
 
@@ -151,9 +151,6 @@ pub(crate) fn dragged_size(start_size: u32, dx: f32) -> u32 {
 /// (`None`, bis der Strich weit genug ist).
 pub(crate) type StrokeLock = ((i64, i64), Option<(i64, i64)>);
 
-/// Gedrückt halten beim Schattieren: alle so viele Sekunden eine Stufe weiter.
-const SHADE_HOLD_S: f64 = 0.35;
-
 /// Ein laufender Strich beim Schattieren.
 pub(crate) struct ShadeStroke {
     pub(crate) shader: Shader,
@@ -161,8 +158,10 @@ pub(crate) struct ShadeStroke {
     pub(crate) done: HashMap<(i64, i64), u32>,
     /// Hat der Strich irgendetwas geändert? Sonst sagt die Statusleiste, warum.
     pub(crate) changed: bool,
-    /// Gedrückt halten: wann die nächste Stufe fällig ist (egui-Zeit).
+    /// Gedrückt halten: wann die nächste Stufe fällig ist (egui-Zeit) und
+    /// wie viele es seit der letzten Bewegung schon gab (shade::hold_delay).
     pub(crate) next: f64,
+    pub(crate) steps: u32,
     /// Ab dem ersten Halte-Schritt geht jeder Pixel nur noch eine Stufe.
     pub(crate) repeat: bool,
 }
@@ -491,25 +490,27 @@ impl SpritebitApp {
                         self.shade_at(pt);
                     }
                 }
-                // Gedrückt halten: wie ein neuer Tipp an derselben Stelle —
-                // aber nur, solange die Maus stillsteht. Jede Bewegung
-                // startet die Wartezeit neu, sonst liefe ein langsamer Strich
-                // stellenweise bis ans Ende der Reihe.
+                // Gedrückt halten: wie ein neuer Tipp an derselben Stelle,
+                // erst langsam, dann immer schneller — aber nur, solange die
+                // Maus stillsteht. Jede Bewegung beginnt wieder langsam, sonst
+                // liefe ein langsamer Strich stellenweise bis ans Ende der Reihe.
                 let due = self.shade.as_mut().is_some_and(|s| {
                     if s.next.is_infinite() || last != cell {
-                        s.next = now + SHADE_HOLD_S;
+                        s.steps = 0;
+                        s.next = now + hold_delay(0);
                     }
                     now >= s.next
                 });
                 if due {
                     if let Some(s) = &mut self.shade {
-                        s.next = now + SHADE_HOLD_S;
+                        s.steps += 1;
+                        s.next = now + hold_delay(s.steps);
                         s.repeat = true;
                         s.done.clear();
                     }
                     self.shade_at(cell);
                 }
-                ctx.request_repaint_after(std::time::Duration::from_secs_f64(SHADE_HOLD_S / 2.0));
+                ctx.request_repaint_after(std::time::Duration::from_secs_f64(HOLD_MIN_S / 2.0));
             } else if self.tool == Tool::Spray {
                 self.spray_at(cell, p.secondary);
                 // Spray sprüht weiter, auch wenn die Maus stillsteht.
@@ -584,7 +585,7 @@ impl SpritebitApp {
                 // Linksklick dunkler (leer → hellste Farbe), Rechtsklick andersherum.
                 let pal = self.project.current_palette();
                 let shader = Shader::new(&pal, &self.shade_ramp, !erase, self.color);
-                self.shade = Some(ShadeStroke { shader, done: HashMap::new(), changed: false, next: f64::INFINITY, repeat: false });
+                self.shade = Some(ShadeStroke { shader, done: HashMap::new(), changed: false, next: f64::INFINITY, steps: 0, repeat: false });
                 self.stroke_last = Some(cell);
                 self.stroke_lock = Some((cell, None));
                 self.shade_at(cell);
