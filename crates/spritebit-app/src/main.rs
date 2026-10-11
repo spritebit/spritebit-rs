@@ -213,6 +213,8 @@ struct SpritebitApp {
     /// Timeline-Einstellungen (für alle Sprites), ihr Fenster und Zwischenspeicher.
     tl: tlmenu_ui::TlOpts,
     tl_persist: bool,
+    /// Doppelklick auf den Rand der Timeline: im nächsten Bild auf TL_HEIGHT.
+    tl_reset: bool,
     tl_menu_open: bool,
     tl_cache: tlmenu_ui::TlCache,
     /// Projektname, zuletzt geöffnet, Startfenster (projects_ui.rs).
@@ -322,6 +324,7 @@ impl SpritebitApp {
             out: export_ui::OutState::default(),
             tl: tlmenu_ui::TlOpts::default(),
             tl_persist: false,
+            tl_reset: false,
             tl_menu_open: false,
             tl_cache: tlmenu_ui::TlCache::default(),
             projects: projects_ui::ProjectsUi::default(),
@@ -1259,10 +1262,13 @@ impl eframe::App for SpritebitApp {
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
         // Die Timeline dockt dort an, wo man sie im ⚙-Menü hinstellt.
         match self.tl.zone {
-            tlmenu_ui::Zone::Bottom => egui::Panel::bottom("timeline").resizable(true).default_size(190.0).show(ui, |ui| self.timeline(ui)),
-            tlmenu_ui::Zone::Top => egui::Panel::top("timeline-top").resizable(true).default_size(190.0).show(ui, |ui| self.timeline(ui)),
-            tlmenu_ui::Zone::Left => egui::Panel::left("timeline-left").resizable(true).default_size(360.0).show(ui, |ui| self.timeline(ui)),
-            tlmenu_ui::Zone::Right => egui::Panel::right("timeline-right").resizable(true).default_size(360.0).show(ui, |ui| self.timeline(ui)),
+            tlmenu_ui::Zone::Bottom | tlmenu_ui::Zone::Top => self.timeline_panel_across(ui),
+            tlmenu_ui::Zone::Left => {
+                egui::Panel::left("timeline-left").resizable(true).default_size(360.0).show(ui, |ui| self.timeline(ui));
+            }
+            tlmenu_ui::Zone::Right => {
+                egui::Panel::right("timeline-right").resizable(true).default_size(360.0).show(ui, |ui| self.timeline(ui));
+            }
         };
         // Seitenleisten (dock_ui.rs): außen die Icons gelöster Panels, innen
         // die Spalten mit den angepinnten.

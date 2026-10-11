@@ -79,6 +79,39 @@ impl SpritebitApp {
         (cell - 8.0).clamp(tlmenu_ui::THUMB_FIT_MIN, tlmenu_ui::THUMB_FIT_MAX)
     }
 
+    /// Timeline oben oder unten: am Rand zur Zeichenfläche höher oder
+    /// niedriger ziehen (TlOpts::height, wie im Web tlOpts.rows). Die
+    /// Vorschaubilder richten sich nur nach der Breite — mehr Höhe heißt
+    /// mehr Ebenen. Doppelklick auf den Rand: wieder TL_HEIGHT.
+    pub(crate) fn timeline_panel_across(&mut self, ui: &mut egui::Ui) {
+        use tlmenu_ui::{Zone, TL_HEIGHT, TL_HEIGHT_MIN, TL_HEIGHT_SHARE};
+        let bottom = self.tl.zone == Zone::Bottom;
+        let max = (ui.ctx().content_rect().height() * TL_HEIGHT_SHARE).max(TL_HEIGHT_MIN);
+        let want = if self.tl.height > 0.0 { self.tl.height } else { TL_HEIGHT };
+        let panel = if bottom { egui::Panel::bottom("timeline") } else { egui::Panel::top("timeline-top") };
+        let mut panel = panel.resizable(true).default_size(want.min(max)).min_size(TL_HEIGHT_MIN).max_size(max);
+        if std::mem::take(&mut self.tl_reset) {
+            panel = panel.exact_size(TL_HEIGHT.min(max));
+        }
+        let rect = panel.show(ui, |ui| self.timeline(ui)).response.rect;
+        // Rand zur Zeichenfläche: dort sitzt eguis Griff.
+        let edge = if bottom { rect.top() } else { rect.bottom() };
+        let (released, dbl, at) =
+            ui.input(|i| (i.pointer.any_released(), i.pointer.button_double_clicked(egui::PointerButton::Primary), i.pointer.interact_pos()));
+        let on_edge = at.is_some_and(|p| (p.y - edge).abs() <= 5.0 && p.x >= rect.left() && p.x <= rect.right());
+        if dbl && on_edge {
+            self.tl.height = 0.0;
+            self.tl_reset = true;
+            self.save_tl_opts();
+            ui.ctx().request_repaint();
+        } else if released && (rect.height() - want).abs() > 0.5 && rect.height() < max - 0.5 {
+            // Gezogen: merken. (Nur beim Loslassen — schrumpft das Fenster und
+            // drückt die Timeline auf das Maximum, bleibt die gemerkte Höhe.)
+            self.tl.height = rect.height().round();
+            self.save_tl_opts();
+        }
+    }
+
     pub(crate) fn timeline(&mut self, ui: &mut egui::Ui) {
         self.timeline_buttons(ui);
         ui.add_space(4.0);

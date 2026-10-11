@@ -216,6 +216,53 @@ fn trennlinie_unter_den_vorschaubildern_zieht_die_groesse() {
 }
 
 #[test]
+fn timeline_am_oberen_rand_hoeher_ziehen_vorschaubilder_bleiben() {
+    let mut h = app();
+    for k in 2..12 {
+        h.state_mut().project.sprite_mut().add_layer(k, "x");
+    }
+    h.state_mut().tl.thumb_size = 0.0;
+    h.state_mut().tl.height = 0.0;
+    h.run();
+    let panel =
+        |h: &Harness<'_, SpritebitApp>| egui::containers::panel::PanelState::load(&h.ctx, egui::Id::new("timeline")).expect("Timeline unten").outer_rect;
+    let tip = "Ziehen: Vorschaubilder größer oder kleiner · Doppelklick: wieder passend zur Breite";
+    let r0 = panel(&h);
+    // Ein Klick irgendwo merkt sich keine Höhe — nur Ziehen am Rand.
+    let mid = h.ctx.content_rect().center();
+    h.event(egui::Event::PointerButton { pos: mid, button: egui::PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE });
+    h.event(egui::Event::PointerButton { pos: mid, button: egui::PointerButton::Primary, pressed: false, modifiers: Modifiers::NONE });
+    h.run();
+    assert_eq!(h.state().tl.height, 0.0, "ohne Ziehen bleibt die Vorgabe");
+    let line0 = h.get_by_label(tip).rect().center().y - r0.top();
+    // Oberkante 60 px nach oben ziehen
+    let at = egui::pos2(r0.center().x, r0.top());
+    let btn = egui::PointerButton::Primary;
+    h.hover_at(at);
+    h.step();
+    h.event(egui::Event::PointerButton { pos: at, button: btn, pressed: true, modifiers: Modifiers::NONE });
+    h.step();
+    for k in 1..=6 {
+        h.event(egui::Event::PointerMoved(at - Vec2::new(0.0, 10.0 * k as f32)));
+        h.step();
+    }
+    h.event(egui::Event::PointerButton { pos: at - Vec2::new(0.0, 60.0), button: btn, pressed: false, modifiers: Modifiers::NONE });
+    h.run();
+    let r1 = panel(&h);
+    assert!((r1.height() - r0.height() - 60.0).abs() < 2.0, "60 px höher: {} → {}", r0.height(), r1.height());
+    assert!((h.state().tl.height - r1.height()).abs() < 1.0, "Höhe gemerkt: {}", h.state().tl.height);
+    // Die Vorschaubilder bleiben gleich groß: die Linie darunter steht gleich weit unter der Oberkante.
+    let line1 = h.get_by_label(tip).rect().center().y - r1.top();
+    assert!((line1 - line0).abs() < 0.5, "Vorschaubilder unverändert: {line0} → {line1}");
+    // Doppelklick auf den Rand (timeline_panel_across) — egui_kittest erkennt
+    // simulierte Doppelklicks nicht, darum direkt: zurück auf die Vorgabe.
+    h.state_mut().tl.height = 0.0;
+    h.state_mut().tl_reset = true;
+    h.run();
+    assert!((panel(&h).height() - crate::tlmenu_ui::TL_HEIGHT).abs() < 1.0, "wieder Standardhöhe");
+}
+
+#[test]
 fn grosser_pinsel_malt_die_ganze_flaeche() {
     let mut h = app();
     {

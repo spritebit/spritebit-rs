@@ -32,13 +32,17 @@ pub(crate) struct TlOpts {
     /// Kantenlänge der Vorschaubilder — die Trennlinie darunter ziehen.
     /// 0 = passend zur Breite (wie im Web, js/frames.js fitThumbs).
     pub thumb_size: f32,
+    /// Höhe der Timeline oben/unten — am Rand zur Zeichenfläche gezogen
+    /// (main.rs). Die Vorschaubilder bleiben dabei gleich groß, mehr Höhe
+    /// heißt mehr Ebenen. 0 = TL_HEIGHT.
+    pub height: f32,
     pub zone: Zone,
     pub onion: OnionOpts,
 }
 
 impl Default for TlOpts {
     fn default() -> Self {
-        TlOpts { first_frame: 1, thumbs: true, thumb_size: THUMB_DEFAULT, zone: Zone::Bottom, onion: OnionOpts::default() }
+        TlOpts { first_frame: 1, thumbs: true, thumb_size: THUMB_DEFAULT, height: 0.0, zone: Zone::Bottom, onion: OnionOpts::default() }
     }
 }
 
@@ -51,7 +55,7 @@ impl TlOpts {
     fn to_json(self) -> serde_json::Value {
         let o = self.onion;
         serde_json::json!({
-            "firstFrame": self.first_frame, "thumbs": self.thumbs, "thumbSize": self.thumb_size,
+            "firstFrame": self.first_frame, "thumbs": self.thumbs, "thumbSize": self.thumb_size, "height": self.height,
             "zone": match self.zone { Zone::Top => "top", Zone::Bottom => "bottom", Zone::Left => "left", Zone::Right => "right" },
             "onion": {
                 "mode": if o.real_colors { "color" } else { "tint" }, "opacity": o.opacity, "step": o.step,
@@ -70,6 +74,10 @@ impl TlOpts {
             thumb_size: match f(&v["thumbSize"], THUMB_DEFAULT) {
                 s if s <= 0.0 => 0.0,
                 s => s.clamp(THUMB_MIN, THUMB_MAX),
+            },
+            height: match f(&v["height"], 0.0) {
+                h if h <= 0.0 => 0.0,
+                h => h.clamp(TL_HEIGHT_MIN, TL_HEIGHT_MAX),
             },
             zone: match v["zone"].as_str() {
                 Some("top") => Zone::Top,
@@ -111,6 +119,12 @@ pub(crate) const THUMB_FIT_MAX: f32 = 40.0;
 pub(crate) const THUMB_FIT_FRAMES: usize = 20;
 pub(crate) const THUMB_MIN: f32 = 20.0;
 pub(crate) const THUMB_MAX: f32 = 128.0;
+/// Höhe der Timeline oben/unten (TlOpts::height): Vorgabe und Grenzen.
+/// Nach oben begrenzt zusätzlich TL_HEIGHT_SHARE des Fensters.
+pub(crate) const TL_HEIGHT: f32 = 190.0;
+pub(crate) const TL_HEIGHT_MIN: f32 = 80.0;
+pub(crate) const TL_HEIGHT_MAX: f32 = 4000.0;
+pub(crate) const TL_HEIGHT_SHARE: f32 = 0.7;
 
 impl SpritebitApp {
     /// Beim Start: gemerkte Einstellungen laden; ab dann auch speichern.
