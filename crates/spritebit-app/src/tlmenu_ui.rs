@@ -136,6 +136,24 @@ impl SpritebitApp {
         }
     }
 
+    /// „Pixelraster anzeigen“ (Menü „Ansicht“): Datei „grid“ mit 0 oder 1.
+    pub(crate) fn load_grid_pref(&mut self) {
+        if let Some(s) = crate::i18n::settings_dir().and_then(|d| std::fs::read_to_string(d.join("grid")).ok()) {
+            self.show_grid = s.trim() != "0";
+        }
+    }
+
+    pub(crate) fn save_grid_pref(&self) {
+        // Wie die Timeline-Einstellungen: erst nach dem Laden beim Start (nicht in Tests).
+        if !self.tl_persist {
+            return;
+        }
+        if let Some(dir) = crate::i18n::settings_dir() {
+            let _ = std::fs::create_dir_all(&dir);
+            let _ = std::fs::write(dir.join("grid"), if self.show_grid { "1" } else { "0" });
+        }
+    }
+
     pub(crate) fn save_tl_opts(&self) {
         if !self.tl_persist {
             return;

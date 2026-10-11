@@ -66,6 +66,7 @@ fn main() -> eframe::Result {
             // Wie im Browser: die zuletzt geladene Schablone ist wieder da.
             app.restore_template(&cc.egui_ctx);
             app.load_tl_opts();
+            app.load_grid_pref();
             app.load_view();
             app.load_guide_layouts();
             app.load_recent();
@@ -884,7 +885,11 @@ impl SpritebitApp {
                 }
                 // Die Linien erscheinen erst ab GRID_FROM — darunter wären
                 // sie dichter als die Pixel. Ohne Hinweis wirkte das wie kaputt.
-                ui.checkbox(&mut self.show_grid, tr("Gitter")).on_hover_text(tr("Linien zwischen den Pixeln — sichtbar ab 800 % Zoom, darunter wären sie dichter als das Bild."));
+                // Ohne Häkchen ein sauberes Bild — wird gemerkt (Einstellungsordner „grid“).
+                let r = ui.checkbox(&mut self.show_grid, tr("Pixelraster anzeigen"));
+                if r.on_hover_text(tr("Die feinen Linien zwischen den Pixeln — ohne Häkchen siehst du das Bild sauber. Sichtbar ab 800 % Zoom, darunter wären sie dichter als das Bild.")).changed() {
+                    self.save_grid_pref();
+                }
                 ui.separator();
                 self.view_menu(ui);
                 ui.separator();
