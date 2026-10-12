@@ -46,6 +46,7 @@ pub mod onion;
 pub mod palette;
 pub mod palops;
 pub mod project;
+pub mod recolor;
 pub mod selection;
 pub mod shade;
 pub mod sprite;

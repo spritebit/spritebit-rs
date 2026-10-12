@@ -2308,3 +2308,39 @@ fn kachelmodus_malt_ueber_den_rand_auf_die_andere_seite() {
     assert_ne!(px(&h, 9, n - 1), 0);
     assert_eq!(px(&h, 9, 0), 0);
 }
+
+#[test]
+fn farbe_ersetzen_und_fuellen_ohne_zusammenhang() {
+    use spritebit_core::recolor::Scope;
+    let mut h = app();
+    // Zwei getrennte Punkte Farbe 3, dazu ein zweiter Frame mit Farbe 3.
+    {
+        let sp = h.state_mut().project.sprite_mut();
+        sp.active().set(2, 2, 3);
+        sp.active().set(20, 20, 3);
+        let k = sp.add_frame(0, false);
+        sp.cel_mut(k, 0).set(4, 4, 3);
+        sp.frame = 0;
+    }
+    // Füll-Eimer ohne Zusammenhang erreicht beide Punkte.
+    h.state_mut().tool = Tool::Fill;
+    h.state_mut().fill_contig = false;
+    drag(&mut h, (2.0, 2.0), (2.0, 2.0));
+    assert_eq!((px(&h, 2, 2), px(&h, 20, 20), px(&h, 3, 3)), (5, 5, 0));
+    h.state_mut().undo();
+    h.run();
+    assert_eq!(px(&h, 20, 20), 3);
+    // Farbe ersetzen: erst nur dieses Bild, dann die Ebene in allen Frames.
+    let a = h.state_mut();
+    a.image.recolor_from = Some(3);
+    a.image.recolor_to = Some(7);
+    a.apply_recolor();
+    assert_eq!(a.sprite().cel(0, 0).get(20, 20), 7);
+    assert_eq!(a.sprite().cel(1, 0).get(4, 4), 3, "anderer Frame bleibt");
+    a.undo();
+    a.image.recolor_scope = Scope::Layer;
+    a.apply_recolor();
+    assert_eq!((a.sprite().cel(0, 0).get(2, 2), a.sprite().cel(1, 0).get(4, 4)), (7, 7));
+    a.undo();
+    assert_eq!(a.sprite().cel(1, 0).get(4, 4), 3, "ein Undo holt alle Frames zurück");
+}

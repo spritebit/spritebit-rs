@@ -174,6 +174,9 @@ struct SpritebitApp {
     pixel_perfect: bool,
     /// Füllen: Grenzen von allen sichtbaren Ebenen (wie im Web).
     fill_visible: bool,
+    /// Füllen: nur die zusammenhängende Fläche (aus = jede Stelle der Farbe,
+    /// spritebit_core::recolor::fill_all).
+    fill_contig: bool,
     /// Schattieren (spritebit_core::shade): Farbreihe dunkel → hell, Verlauf
     /// an/aus und der laufende Strich.
     /// Pinselform für Pinsel, Radierer und Schattieren: rund statt eckig
@@ -320,6 +323,7 @@ impl SpritebitApp {
             size_drag: None,
             pixel_perfect: false,
             fill_visible: false,
+            fill_contig: true,
             brush_round: false,
             shade_ramp: Vec::new(),
             shade_soft: false,

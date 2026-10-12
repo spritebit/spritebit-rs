@@ -102,7 +102,7 @@ pub(crate) struct PalState {
     pub delete: Option<String>,
 }
 
-fn swatch(ui: &mut egui::Ui, rgb: Option<Rgb>, size: f32, active: bool, sense: Sense) -> egui::Response {
+pub(crate) fn swatch(ui: &mut egui::Ui, rgb: Option<Rgb>, size: f32, active: bool, sense: Sense) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(Vec2::splat(size), sense);
     let p = ui.painter();
     match rgb {

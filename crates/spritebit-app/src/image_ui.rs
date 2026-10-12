@@ -13,6 +13,7 @@
 use eframe::egui;
 use spritebit_core::cleanup::{self, OutlineMode};
 use spritebit_core::light::{self, FxColor, FxKind, LayerFx, LightDir, LightOpts};
+use spritebit_core::recolor;
 use spritebit_core::selection::{Clip, Selection};
 use spritebit_core::transform::{self as tf, TransformResult};
 use spritebit_core::{Image, Rgb};
@@ -85,6 +86,10 @@ pub(crate) struct ImagePanel {
     pub outline_color: Rgb,
     pub outline_thickness: u32,
     pub outline_mode: OutlineMode,
+    /// Farbe ersetzen: alte und neue Farbe (None = noch nicht gewählt) und wo.
+    pub recolor_from: Option<spritebit_core::image::Px>,
+    pub recolor_to: Option<spritebit_core::image::Px>,
+    pub recolor_scope: recolor::Scope,
     /// Woher das Licht kommt.
     pub light_dir: LightDir,
     pub light: LightOpts,
@@ -117,6 +122,9 @@ impl Default for ImagePanel {
             outline_color: [0x1a, 0x1a, 0x1a],
             outline_thickness: 1,
             outline_mode: OutlineMode::Outside,
+            recolor_from: None,
+            recolor_to: None,
+            recolor_scope: recolor::Scope::Cel,
             light_dir: (-1, -1),
             light: LightOpts::default(),
             cast_color: [0x1a, 0x1a, 0x1a],
@@ -492,6 +500,118 @@ impl SpritebitApp {
                 }
             }
         });
+        ui.horizontal_wrapped(|ui| {
+            ui.label(tr("Farbe ersetzen"));
+            self.recolor_pick(ui, true);
+            self.recolor_pick(ui, false);
+            let labels = [(recolor::Scope::Cel, "dieses Bild"), (recolor::Scope::Layer, "Ebene, alle Frames"), (recolor::Scope::All, "ganzer Sprite")];
+            let current = labels.iter().find(|l| l.0 == self.image.recolor_scope).map_or("dieses Bild", |l| l.1);
+            let before = self.image.recolor_scope;
+            egui::ComboBox::from_id_salt("recolor-scope")
+                .selected_text(tr(current))
+                .show_ui(ui, |ui| {
+                    for (s, label) in labels {
+                        ui.selectable_value(&mut self.image.recolor_scope, s, tr(label));
+                    }
+                })
+                .response
+                .on_hover_text(tr("Wo ersetzt wird — gesperrte Ebenen bleiben unverändert"));
+            if self.image.recolor_scope != before {
+                self.save_view();
+            }
+            let r = ui
+                .button(tr("Ersetzen"))
+                .on_hover_text(tr("Jede Stelle mit der alten Farbe bekommt die neue — mit Auswahl nur darin. Strg+Z holt alles zurück."));
+            self.mark("recolor", r.rect);
+            if r.clicked() {
+                self.apply_recolor();
+            }
+        });
+    }
+
+    /// Knopf „Von“ bzw. „Nach“ mit Farbfeld; ein Klick öffnet die Farben der Palette.
+    fn recolor_pick(&mut self, ui: &mut egui::Ui, from: bool) {
+        let pal = self.project.current_palette();
+        let free = self.sprite().free.clone();
+        let cur = if from { self.image.recolor_from } else { self.image.recolor_to };
+        let label = if from { tr("Von") } else { tr("Nach") };
+        let r = ui
+            .horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                match cur {
+                    Some(v) => crate::palette_ui::swatch(ui, spritebit_core::selection::rgb_of(v, &pal, &free), 14.0, false, egui::Sense::hover()),
+                    None => ui.allocate_exact_size(egui::Vec2::splat(14.0), egui::Sense::hover()).1,
+                };
+                ui.button(label)
+            })
+            .inner
+            .on_hover_text(if from {
+                tr("Die alte Farbe — Klick öffnet die Farben der Palette")
+            } else {
+                tr("Die neue Farbe — Klick öffnet die Farben der Palette")
+            });
+        egui::Popup::menu(&r).show(|ui| {
+            // Leer, alle Palettenfarben und — falls frei (Pipette) — die aktuelle Farbe.
+            let mut values: Vec<spritebit_core::image::Px> = (0..=pal.len() as u16).collect();
+            if self.color >= spritebit_core::image::FREE_BASE {
+                values.push(self.color);
+            }
+            for row in values.chunks(8) {
+                ui.horizontal(|ui| {
+                    for &v in row {
+                        let rgb = spritebit_core::selection::rgb_of(v, &pal, &free);
+                        let tip = if v == 0 { tr("leer").to_string() } else { rgb.map(crate::palette_ui::hex).unwrap_or_default() };
+                        if crate::palette_ui::swatch(ui, rgb, 20.0, cur == Some(v), egui::Sense::click()).on_hover_text(tip).clicked() {
+                            if from {
+                                self.image.recolor_from = Some(v);
+                            } else {
+                                self.image.recolor_to = Some(v);
+                            }
+                            ui.close();
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    /// „Ersetzen“: alte Farbe → neue im gewählten Bereich, ein Undo-Schritt.
+    pub(crate) fn apply_recolor(&mut self) {
+        let (Some(from), Some(to)) = (self.image.recolor_from, self.image.recolor_to) else {
+            self.hint = Some(tr("Erst „Von“ und „Nach“ wählen.").into());
+            return;
+        };
+        let pal = self.project.current_palette();
+        let free = self.sprite().free.clone();
+        let rgb = |v| spritebit_core::selection::rgb_of(v, &pal, &free);
+        if from == to || (from != 0 && to != 0 && rgb(from) == rgb(to)) {
+            self.hint = Some(tr("„Von“ und „Nach“ sind dieselbe Farbe.").into());
+            return;
+        }
+        self.finish_rotate();
+        self.commit_float();
+        let scope = self.image.recolor_scope;
+        // Nur im aktuellen Bild zählt die Sperre der aktiven Ebene; sonst
+        // überspringt recolor::targets gesperrte Ebenen selbst.
+        if scope != recolor::Scope::All && !self.layer_ok() {
+            return;
+        }
+        self.step();
+        let sel = self.selection.clone();
+        let keep = |x: u32, y: u32| sel.as_ref().is_none_or(|s| s.contains(x as i64, y as i64));
+        let sp = self.project.sprite_mut();
+        let mut n = 0;
+        for id in recolor::targets(sp, scope) {
+            n += recolor::replace_color(&mut sp.images[id], from, to, &pal, &free, Some(&keep));
+        }
+        if n > 0 {
+            self.changed();
+            self.hint = Some(trf("Farbe ersetzt — {n} Pixel.", &[("n", &n)]));
+        } else {
+            let cur = self.project.current;
+            self.histories[cur].drop_last();
+            self.hint = Some(tr("Die alte Farbe kommt hier nicht vor.").into());
+        }
     }
 
     /// Ebene, auf die das Licht wirkt: die aktive — oder, wenn die aktive

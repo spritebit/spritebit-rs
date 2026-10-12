@@ -123,6 +123,20 @@ fn bild_der_oberflaeche() {
         a.pan = Vec2::new(300.0, 150.0);
         h.run();
     }
+    // SPRITEBIT_SHOT_RECOLOR=1: Panel „Feinschliff“ mit „Farbe ersetzen“, Füll-Eimer aktiv.
+    if std::env::var_os("SPRITEBIT_SHOT_RECOLOR").is_some() {
+        let a = h.state_mut();
+        a.tool = crate::tools_ui::Tool::Fill;
+        a.image.recolor_from = Some(5);
+        a.image.recolor_to = Some(3);
+        a.image.recolor_scope = spritebit_core::recolor::Scope::Layer;
+        a.dock.focus = Some(crate::dock_ui::PanelId::Cleanup);
+        h.run();
+        h.run();
+        h.get_by_label("Von").click();
+        h.run();
+        h.run();
+    }
     // SPRITEBIT_SHOT_TOUR=n: Animations-Tour bei Schritt n (0 = Timeline).
     if let Some(n) = std::env::var("SPRITEBIT_SHOT_TOUR").ok().and_then(|v| v.parse::<usize>().ok()) {
         let ctx = h.ctx.clone();

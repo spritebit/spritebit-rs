@@ -283,6 +283,12 @@ impl SpritebitApp {
                 if r.changed() {
                     self.save_view();
                 }
+                let r = ui
+                    .checkbox(&mut self.fill_contig, tr("Zusammenhängend"))
+                    .on_hover_text(tr("An: nur die zusammenhängende Fläche. Aus: jede Stelle mit dieser Farbe im Bild, auch getrennte — so färbst du eine Farbe mit einem Klick überall um."));
+                if r.changed() {
+                    self.save_view();
+                }
             }
             if matches!(self.tool, Tool::Pencil | Tool::Eraser) {
                 let r = ui
@@ -577,14 +583,20 @@ impl SpritebitApp {
                     let sp = self.sprite();
                     spritebit_core::export::frame_rgba(sp, &pal, sp.frame).as_chunks::<4>().0.iter().map(|c| u32::from_le_bytes(*c)).collect()
                 });
+                let contig = self.fill_contig;
                 let img = self.project.sprite_mut().active();
-                let n: usize = points
-                    .iter()
-                    .map(|&(y, x, _)| match &key {
-                        Some(k) => tools::flood_fill_ref(img, k, x, y, value),
-                        None => tools::flood_fill(img, x, y, value),
-                    })
-                    .sum();
+                // „Zusammenhängend“ aus: jede Stelle mit dieser Farbe, auch getrennte Flächen.
+                let n: usize = if !contig {
+                    points.first().map_or(0, |&(y, x, _)| spritebit_core::recolor::fill_all(img, key.as_deref(), x, y, value))
+                } else {
+                    points
+                        .iter()
+                        .map(|&(y, x, _)| match &key {
+                            Some(k) => tools::flood_fill_ref(img, k, x, y, value),
+                            None => tools::flood_fill(img, x, y, value),
+                        })
+                        .sum()
+                };
                 if n > 0 {
                     self.changed();
                 }

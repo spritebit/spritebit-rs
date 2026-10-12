@@ -76,6 +76,8 @@ impl SpritebitApp {
         self.view.light = v["bg"].as_str() == Some("light");
         self.pixel_perfect = v["pixelPerfect"].as_bool().unwrap_or(false);
         self.fill_visible = v["fillVisible"].as_bool().unwrap_or(false);
+        self.fill_contig = v["fillContig"].as_bool().unwrap_or(true);
+        self.image.recolor_scope = v["recolorScope"].as_str().and_then(spritebit_core::recolor::Scope::from_key).unwrap_or_default();
         self.shade_soft = v["shadeSoft"].as_bool().unwrap_or(false);
         self.brush_round = v["brushRound"].as_bool().unwrap_or(false);
         let ramp: Vec<_> = v["shadeRamp"].as_array().into_iter().flatten().filter_map(|c| c.as_str().and_then(spritebit_core::palette::parse_hex)).collect();
@@ -90,6 +92,8 @@ impl SpritebitApp {
                 "bg": if self.view.light { "light" } else { "dark" },
                 "pixelPerfect": self.pixel_perfect,
                 "fillVisible": self.fill_visible,
+                "fillContig": self.fill_contig,
+                "recolorScope": self.image.recolor_scope.key(),
                 "shadeRamp": ramp,
                 "shadeSoft": self.shade_soft,
                 "brushRound": self.brush_round,
