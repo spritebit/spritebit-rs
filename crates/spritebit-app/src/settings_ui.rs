@@ -100,11 +100,18 @@ impl SpritebitApp {
     fn settings_view(&mut self, ui: &mut egui::Ui) {
         ui.heading(tr("Ansicht"));
         ui.add_space(6.0);
-        if ui.checkbox(&mut self.show_grid, tr("Pixelraster anzeigen")).changed() {
+        // Die Linien erscheinen erst ab GRID_FROM — darunter wären sie dichter als die Pixel.
+        let r = ui.checkbox(&mut self.show_grid, tr("Pixelraster anzeigen"));
+        if r.on_hover_text(tr(
+            "Die feinen Linien zwischen den Pixeln — ohne Häkchen siehst du das Bild sauber. Sichtbar ab 800 % Zoom, darunter wären sie dichter als das Bild.",
+        ))
+        .changed()
+        {
             self.save_grid_pref();
         }
         ui.add_space(6.0);
-        ui.label(tr("Kachelmodus"));
+        ui.label(tr("Kachelmodus"))
+            .on_hover_text(tr("Das Bild wiederholt daneben zeigen — wer über den Rand malt, malt auf der anderen Seite weiter. Für nahtlose Muster."));
         ui.horizontal_wrapped(|ui| {
             for (t, label) in [(Tiled::Off, tr("Aus")), (Tiled::Both, tr("Ringsum")), (Tiled::X, tr("Nur nebeneinander")), (Tiled::Y, tr("Nur übereinander"))]
             {

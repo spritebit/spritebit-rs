@@ -40,7 +40,6 @@ use std::path::{Path, PathBuf};
 
 use crate::i18n::{keys, tr, trf};
 use eframe::egui::{self, Color32, Key, Modifiers, Pos2, Sense, Stroke, Vec2};
-use spritebit_core::tiled::Tiled;
 use spritebit_core::{export_web, import_web, load_native, render_rgba_step, save_native, selection, History, Project, Px, Rect, Selection, Sprite};
 use tools_ui::{Pointer, Tool};
 
@@ -927,34 +926,9 @@ impl SpritebitApp {
                 if ui.button("100 %").clicked() {
                     self.zoom = 1.0;
                 }
-                // Die Linien erscheinen erst ab GRID_FROM — darunter wären
-                // sie dichter als die Pixel. Ohne Hinweis wirkte das wie kaputt.
-                // Ohne Häkchen ein sauberes Bild — wird gemerkt (Einstellungsordner „grid“).
-                let r = ui.checkbox(&mut self.show_grid, tr("Pixelraster anzeigen"));
-                if r.on_hover_text(tr("Die feinen Linien zwischen den Pixeln — ohne Häkchen siehst du das Bild sauber. Sichtbar ab 800 % Zoom, darunter wären sie dichter als das Bild.")).changed() {
-                    self.save_grid_pref();
-                }
-                ui.separator();
-                // Kachelmodus (wie im Web): Bild ringsum wiederholt, Malen läuft über den Rand.
-                ui.label(tr("Kachelmodus")).on_hover_text(tr(
-                    "Das Bild wiederholt daneben zeigen — wer über den Rand malt, malt auf der anderen Seite weiter. Für nahtlose Muster.",
-                ));
-                for (t, label) in [(Tiled::Off, tr("Aus")), (Tiled::Both, tr("Ringsum")), (Tiled::X, tr("Nur nebeneinander")), (Tiled::Y, tr("Nur übereinander"))] {
-                    if ui.radio(self.tiled == t, label).clicked() {
-                        self.set_tiled(t);
-                    }
-                }
                 ui.separator();
                 self.view_menu(ui);
-                ui.separator();
-                ui.menu_button(tr("Sprache"), |ui| {
-                    for l in i18n::Lang::ALL {
-                        if ui.radio(i18n::lang() == l, l.name()).clicked() {
-                            i18n::choose(l);
-                            ui.close();
-                        }
-                    }
-                });
+                // Pixelraster, Kachelmodus und Sprache stehen in den Einstellungen (settings_ui.rs).
             });
             ui.menu_button(tr("Hilfe"), |ui| {
                 self.help_menu(ui);

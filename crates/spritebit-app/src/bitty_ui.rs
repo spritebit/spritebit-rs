@@ -174,13 +174,17 @@ pub(crate) enum Cmd {
     Guides,
     Fit,
     Fullscreen,
-    /// Kachelmodus (Menü „Ansicht“).
+    /// Kachelmodus (in den Einstellungen).
     Tiled(spritebit_core::tiled::Tiled),
+    /// Einstellungen öffnen, gleich beim Thema (settings_ui.rs).
+    Settings(crate::settings_ui::SettingsTab),
+    /// Pixelraster an/aus (in den Einstellungen).
+    Grid,
     Help,
 }
 
 impl Cmd {
-    const ALL: [Cmd; 27] = [
+    const ALL: [Cmd; 31] = [
         Cmd::Save,
         Cmd::SaveAs,
         Cmd::Export,
@@ -207,6 +211,10 @@ impl Cmd {
         Cmd::Tiled(spritebit_core::tiled::Tiled::X),
         Cmd::Tiled(spritebit_core::tiled::Tiled::Y),
         Cmd::Tiled(spritebit_core::tiled::Tiled::Off),
+        Cmd::Grid,
+        Cmd::Settings(crate::settings_ui::SettingsTab::Lang),
+        Cmd::Settings(crate::settings_ui::SettingsTab::View),
+        Cmd::Settings(crate::settings_ui::SettingsTab::Brush),
         Cmd::Help,
     ];
 
@@ -242,7 +250,16 @@ impl Cmd {
                     spritebit_core::tiled::Tiled::X => tr("Kachelmodus nur nebeneinander"),
                     spritebit_core::tiled::Tiled::Y => tr("Kachelmodus nur übereinander"),
                 },
-                tr("Ansicht"),
+                tr("Einstellungen"),
+            ),
+            Cmd::Grid => (tr("Pixelraster anzeigen"), tr("Einstellungen")),
+            Cmd::Settings(t) => (
+                match t {
+                    crate::settings_ui::SettingsTab::Lang => tr("Sprache"),
+                    crate::settings_ui::SettingsTab::View => tr("Einstellungen …"),
+                    crate::settings_ui::SettingsTab::Brush => tr("Pinselform"),
+                },
+                tr("Einstellungen"),
             ),
             Cmd::Help => (tr("Hilfe und Tastenkürzel"), tr("Hilfe")),
         }
@@ -1112,6 +1129,14 @@ impl crate::SpritebitApp {
             Cmd::Fit => self.fit_pending = true,
             Cmd::Fullscreen => self.toggle_fullscreen(ctx),
             Cmd::Tiled(t) => self.set_tiled(t),
+            Cmd::Grid => {
+                self.show_grid = !self.show_grid;
+                self.save_grid_pref();
+            }
+            Cmd::Settings(t) => {
+                self.settings_open = true;
+                self.settings_tab = t;
+            }
             Cmd::Help => self.view.help_open = true,
         }
     }
