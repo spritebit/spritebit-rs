@@ -596,6 +596,13 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Wieder der normale Pinsel.", "Back to the normal brush.", ""),
     ("In der Auswahl ist nichts gemalt — daraus wird kein Pinsel.", "Nothing is painted in the selection — no brush from that.", ""),
     ("Erst etwas auswählen — Strg+B macht daraus einen Pinsel.", "Select something first — Ctrl+B turns it into a brush.", ""),
+    ("Diesen Pinsel speichern — er steht dann unter „Gespeicherte Pinsel“ bereit, in jedem Projekt", "Save this brush — it is then ready under “Saved brushes”, in every project", ""),
+    ("Gespeicherte Pinsel", "Saved brushes", "Gspeicherte Pinsl"),
+    ("Gespeicherte eigene Pinsel — Klick nimmt einen, × löscht ihn", "Saved custom brushes — click takes one, × deletes it", ""),
+    ("Diesen Pinsel löschen", "Delete this brush", ""),
+    ("Pinsel gespeichert — unter „Gespeicherte Pinsel“ in jedem Projekt.", "Brush saved — under “Saved brushes” in every project.", ""),
+    ("Den Pinsel gibt es schon — er steht jetzt vorne.", "That brush is already there — it is now at the front.", ""),
+    ("Pinsel konnten nicht gespeichert werden.", "Brushes could not be saved.", ""),
     // ── Farbe ersetzen (image_ui.rs) ──
     ("Farbe ersetzen", "Replace colour", "Farb austauschn"),
     ("Von", "From", ""),

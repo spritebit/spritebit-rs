@@ -70,6 +70,7 @@ fn main() -> eframe::Result {
             app.load_grid_pref();
             app.load_view();
             app.load_guide_layouts();
+            app.load_brushes();
             app.load_recent();
             // Die abgelöste Datei vom letzten Update wegräumen (selfupdate.rs).
             selfupdate::cleanup_old();
@@ -219,6 +220,10 @@ struct SpritebitApp {
     stamp: Option<selection_ui::ClipSrc>,
     stamp_mono: bool,
     stamp_live: Option<spritebit_core::selection::Clip>,
+    /// Gespeicherte eigene Pinsel — für alle Projekte, Datei brushes.json im
+    /// Einstellungsordner (nur in der echten App, `brushes_persist`).
+    brushes: Vec<spritebit_core::stamp::SavedBrush>,
+    brushes_persist: bool,
     /// Text für die Zwischenablage des Systems, sobald kopiert wurde
     /// (selection_ui.rs) — damit Strg+V dort ankommt.
     clip_text: Option<String>,
@@ -352,6 +357,8 @@ impl SpritebitApp {
             stamp: None,
             stamp_mono: false,
             stamp_live: None,
+            brushes: Vec::new(),
+            brushes_persist: false,
             clip_text: None,
             tolerance: 0.25,
             mirror_x: false,

@@ -244,6 +244,9 @@ impl SpritebitApp {
                 self.mirror_y = !self.mirror_y;
             }
             ui.separator();
+            if matches!(self.tool, Tool::Pencil | Tool::Brush | Tool::Eraser) && !self.brushes.is_empty() {
+                self.brush_lib_button(ui);
+            }
             if self.stamp_active() {
                 self.stamp_bar(ui);
             } else if self.tool.sized() {
@@ -500,9 +503,111 @@ impl SpritebitApp {
         }
         ui.label(format!("{w}×{h}"));
         ui.checkbox(&mut self.stamp_mono, tr("Aktuelle Farbe")).on_hover_text(tr("Die Form in der aktuellen Farbe malen statt in ihren eigenen Farben"));
+        if ui
+            .button(tr("Speichern"))
+            .on_hover_text(tr("Diesen Pinsel speichern — er steht dann unter „Gespeicherte Pinsel“ bereit, in jedem Projekt"))
+            .clicked()
+        {
+            self.save_stamp();
+        }
         let c = ui.visuals().text_color();
         if ui.add(egui::Button::image(icons::image(icons::CLOSE, c))).on_hover_text(tr("Zurück zum normalen Pinsel (Strg+B ohne Auswahl)")).clicked() {
             self.drop_stamp();
+        }
+    }
+
+    /// Den eigenen Pinsel in die gespeicherten aufnehmen (vorne, ohne Doppelte).
+    pub(crate) fn save_stamp(&mut self) {
+        let Some(src) = &self.stamp else { return };
+        let b = spritebit_core::stamp::SavedBrush::from_clip(&src.clip, &src.pal, &src.free);
+        let had = self.brushes.len();
+        spritebit_core::stamp::add_brush(&mut self.brushes, b);
+        self.store_brushes();
+        self.hint = Some(
+            if self.brushes.len() > had {
+                tr("Pinsel gespeichert — unter „Gespeicherte Pinsel“ in jedem Projekt.")
+            } else {
+                tr("Den Pinsel gibt es schon — er steht jetzt vorne.")
+            }
+            .into(),
+        );
+    }
+
+    /// Gespeicherte Pinsel laden (beim Start).
+    pub(crate) fn load_brushes(&mut self) {
+        self.brushes_persist = true;
+        let path = crate::i18n::settings_dir().map(|d| d.join("brushes.json"));
+        if let Some(v) = path.and_then(|p| std::fs::read_to_string(p).ok()).and_then(|s| serde_json::from_str(&s).ok()) {
+            self.brushes = spritebit_core::stamp::parse_brushes(&v);
+        }
+    }
+
+    fn store_brushes(&mut self) {
+        if !self.brushes_persist {
+            return;
+        }
+        let Some(d) = crate::i18n::settings_dir() else { return };
+        let _ = std::fs::create_dir_all(&d);
+        if std::fs::write(d.join("brushes.json"), spritebit_core::stamp::brushes_json(&self.brushes).to_string()).is_err() {
+            self.hint = Some(tr("Pinsel konnten nicht gespeichert werden.").into());
+        }
+    }
+
+    /// Knopf „Gespeicherte Pinsel“: kleine Bilder, Klick nimmt einen, × löscht ihn.
+    fn brush_lib_button(&mut self, ui: &mut egui::Ui) {
+        let c = ui.visuals().text_color();
+        let r = ui
+            .add(egui::Button::image_and_text(icons::image(icons::BRUSH, c), tr("Gespeicherte Pinsel")))
+            .on_hover_text(tr("Gespeicherte eigene Pinsel — Klick nimmt einen, × löscht ihn"));
+        let mut pick = None;
+        let mut delete = None;
+        egui::Popup::menu(&r).show(|ui| {
+            for (row, chunk) in self.brushes.chunks(4).enumerate() {
+                ui.horizontal(|ui| {
+                    for (k, b) in chunk.iter().enumerate() {
+                        let i = row * 4 + k;
+                        ui.vertical(|ui| {
+                            let (rect, resp) = ui.allocate_exact_size(Vec2::splat(48.0), egui::Sense::click());
+                            let p = ui.painter();
+                            p.rect_filled(rect, 3.0, ui.visuals().extreme_bg_color);
+                            if resp.hovered() {
+                                p.rect_stroke(rect, 3.0, egui::Stroke::new(2.0, ui.visuals().selection.bg_fill), egui::StrokeKind::Inside);
+                            }
+                            let cell = 44.0 / b.w.max(b.h) as f32;
+                            let o = rect.center() - Vec2::new(b.w as f32, b.h as f32) * cell / 2.0;
+                            for (n, px) in b.px.iter().enumerate() {
+                                if let Some([r, g, bl]) = px {
+                                    let (x, y) = ((n as u32 % b.w) as f32, (n as u32 / b.w) as f32);
+                                    let min = o + Vec2::new(x, y) * cell;
+                                    p.rect_filled(egui::Rect::from_min_size(min, Vec2::splat(cell)), 0.0, Color32::from_rgb(*r, *g, *bl));
+                                }
+                            }
+                            if resp.on_hover_text(format!("{}×{}", b.w, b.h)).clicked() {
+                                pick = Some(i);
+                            }
+                            if ui.small_button("×").on_hover_text(tr("Diesen Pinsel löschen")).clicked() {
+                                delete = Some(i);
+                            }
+                        });
+                    }
+                });
+            }
+        });
+        if let Some(i) = pick {
+            let b = &self.brushes[i];
+            let (w, h) = (b.w, b.h);
+            let (clip, pal, free) = b.to_clip();
+            self.stamp = Some(crate::selection_ui::ClipSrc { clip, pal, free });
+            self.stamp_live = None;
+            self.hint = Some(trf(
+                "Eigener Pinsel: {w}×{h} — Stift, Pinsel und Radierer setzen jetzt diese Form. Strg+B ohne Auswahl: zurück.",
+                &[("w", &w), ("h", &h)],
+            ));
+            ui.close();
+        }
+        if let Some(i) = delete {
+            self.brushes.remove(i);
+            self.store_brushes();
         }
     }
 

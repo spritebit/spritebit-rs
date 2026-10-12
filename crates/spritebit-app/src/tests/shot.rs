@@ -150,6 +150,16 @@ fn bild_der_oberflaeche() {
         a.hover = Some((30, 30));
         h.run();
         h.run();
+        // SPRITEBIT_SHOT_BRUSHLIB=1: gespeichert, abgelegt, Liste offen.
+        if std::env::var_os("SPRITEBIT_SHOT_BRUSHLIB").is_some() {
+            let a = h.state_mut();
+            a.save_stamp();
+            a.drop_stamp();
+            h.run();
+            h.get_by_label("Gespeicherte Pinsel").click();
+            h.run();
+            h.run();
+        }
     }
     // SPRITEBIT_SHOT_TOUR=n: Animations-Tour bei Schritt n (0 = Timeline).
     if let Some(n) = std::env::var("SPRITEBIT_SHOT_TOUR").ok().and_then(|v| v.parse::<usize>().ok()) {

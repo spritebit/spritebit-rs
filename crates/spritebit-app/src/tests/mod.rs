@@ -2383,3 +2383,29 @@ fn eigener_pinsel_aus_der_auswahl() {
     h.run();
     assert!(h.state().stamp.is_none());
 }
+
+#[test]
+fn eigenen_pinsel_speichern_und_wieder_nehmen() {
+    use spritebit_core::selection::Selection;
+    let mut h = app();
+    h.state_mut().project.sprite_mut().active().set(2, 2, 3);
+    h.state_mut().selection = Some(Selection::rect(0, 0, 4, 4));
+    h.state_mut().make_stamp();
+    h.state_mut().save_stamp();
+    h.state_mut().save_stamp();
+    assert_eq!(h.state().brushes.len(), 1, "derselbe Pinsel nur einmal");
+    // Zurück zum normalen Pinsel: „Gespeicherte Pinsel“ ist in der Leiste.
+    h.state_mut().drop_stamp();
+    h.run();
+    h.get_by_label("Gespeicherte Pinsel").click();
+    h.run();
+    h.run();
+    // Gespeichert wird nach Farbe — zurück kommt eine freie Farbe, die beim
+    // Malen wieder Palettenfarbe 3 wird.
+    let rgb = h.state().project.current_palette().get(3);
+    assert_eq!(h.state().brushes[0].px, vec![rgb]);
+    let (clip, pal, free) = h.state().brushes[0].to_clip();
+    h.state_mut().stamp = Some(selection_ui::ClipSrc { clip, pal, free });
+    drag(&mut h, (10.0, 10.0), (10.0, 10.0));
+    assert_eq!(px(&h, 10, 10), 3);
+}
