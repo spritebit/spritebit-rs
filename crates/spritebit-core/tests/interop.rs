@@ -15,7 +15,7 @@
 use std::path::PathBuf;
 
 use serde_json::Value;
-use spritebit_core::{export_sprite, import_web, Direction, Palette, Project, Sprite, Tag, FREE_BASE};
+use spritebit_core::{export_sprite, import_web, load_native, save_native, Direction, Palette, Project, Sprite, Tag, FREE_BASE};
 
 fn dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/interop")
@@ -115,4 +115,24 @@ fn desktop_liest_die_eigene_beispieldatei_wieder() {
 #[test]
 fn desktop_liest_die_sprite_datei_der_web_version() {
     expect_sample(&import_web(&read("web-sprite.bitty")).expect("Web-Datei lesbar"));
+}
+
+// ── Projektdateien (.sb) ─────────────────────────────────────────────
+// desktop-project.sb schreibt diese App, web-project.sb die Web-Version
+// (js/sbfile.js). Gepackt wird mit zlib — die Bytes können sich je nach
+// Packer unterscheiden, darum wird nur gelesen und der Inhalt geprüft.
+
+#[test]
+fn desktop_liest_die_eigene_sb_beispieldatei_wieder() {
+    if std::env::var_os("UPDATE_INTEROP").is_some() {
+        std::fs::write(dir().join("desktop-project.sb"), save_native(&sample())).unwrap();
+    }
+    let bytes = std::fs::read(dir().join("desktop-project.sb")).expect("tests/interop/desktop-project.sb");
+    expect_sample(&load_native(&bytes).expect("lesbar"));
+}
+
+#[test]
+fn desktop_liest_die_sb_projektdatei_der_web_version() {
+    let bytes = std::fs::read(dir().join("web-project.sb")).expect("tests/interop/web-project.sb");
+    expect_sample(&load_native(&bytes).expect("Web-Datei lesbar"));
 }

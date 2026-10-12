@@ -2,6 +2,9 @@
 # core.autocrlf auf dem jeweiligen Rechner. Git erkennt Binärdateien selbst.
 * text=auto eol=lf
 
+# Projektdateien (.sb) sind binär — nie Zeilenenden anfassen.
+*.sb binary
+
 # Windows-Skripte brauchen CRLF.
 *.bat text eol=crlf
 *.cmd text eol=crlf
