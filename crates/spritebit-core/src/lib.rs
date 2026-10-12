@@ -44,6 +44,7 @@ pub mod light;
 pub mod mask;
 pub mod onion;
 pub mod palette;
+pub mod palfile;
 pub mod palops;
 pub mod project;
 pub mod recolor;

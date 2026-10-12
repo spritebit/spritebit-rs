@@ -2409,3 +2409,32 @@ fn eigenen_pinsel_speichern_und_wieder_nehmen() {
     drag(&mut h, (10.0, 10.0), (10.0, 10.0));
     assert_eq!(px(&h, 10, 10), 3);
 }
+
+#[test]
+fn palette_als_datei_laden_und_speichern() {
+    let mut h = app();
+    let dir = std::env::temp_dir().join(format!("spritebit-palfile-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let gpl = dir.join("lospec-test.gpl");
+    std::fs::write(&gpl, "GIMP Palette\nName: Lospec Test\n#\n 26  28  44\tNacht\n 93  39  93\n167 240 112\n").unwrap();
+    let before = h.state().project.sprite().palette.clone();
+    let name = h.state_mut().load_palette_path(&gpl).expect("geladen");
+    let a = h.state();
+    assert_eq!(name, "lospec_test");
+    let p = a.project.palette(&name);
+    assert_eq!(p.colors, vec![[26, 28, 44], [93, 39, 93], [167, 240, 112]]);
+    assert_eq!(p.name_of(1), Some("Nacht"));
+    assert_eq!(a.project.sprite().palette, before, "der Sprite behält seine Palette");
+    // Speichern und wieder laden — als PNG und als .hex.
+    for ext in ["png", "hex"] {
+        let out = dir.join(format!("out.{ext}"));
+        h.state_mut().save_palette_path(&name, &out);
+        let again = h.state_mut().load_palette_path(&out).expect("wieder geladen");
+        assert_eq!(h.state().project.palette(&again).colors, p.colors, "{ext}");
+    }
+    // Undo nimmt die geladene Palette wieder heraus.
+    let n = h.state().project.palettes.len();
+    h.state_mut().undo();
+    assert_eq!(h.state().project.palettes.len(), n - 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}

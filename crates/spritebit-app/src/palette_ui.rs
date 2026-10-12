@@ -931,6 +931,97 @@ impl SpritebitApp {
                 self.open_reduce();
             }
         });
+        // Palettendateien (spritebit_core::palfile).
+        ui.horizontal_wrapped(|ui| {
+            if ui
+                .button(tr("Laden …"))
+                .on_hover_text(tr(
+                    "Palette aus einer Datei laden — .gpl (GIMP, Aseprite), .hex (Lospec), .pal, .txt (Paint.NET) oder ein Bild wie das PNG von Lospec",
+                ))
+                .clicked()
+            {
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_title(tr("Palette laden"))
+                    .add_filter(tr("Paletten"), &["gpl", "hex", "pal", "txt", "png", "gif", "bmp"])
+                    .pick_file()
+                {
+                    self.load_palette_path(&path);
+                }
+            }
+            ui.menu_button(tr("Speichern …"), |ui| {
+                for (ext, label) in [
+                    ("gpl", tr(".gpl — GIMP, Aseprite, Krita")),
+                    ("hex", tr(".hex — Lospec")),
+                    ("pal", tr(".pal — JASC (Paint Shop Pro)")),
+                    ("png", tr(".png — Bild, 1 Pixel je Farbe")),
+                ] {
+                    if ui.button(label).clicked() {
+                        ui.close();
+                        if let Some(path) = rfd::FileDialog::new()
+                            .set_title(tr("Palette speichern"))
+                            .add_filter(ext.to_uppercase(), &[ext])
+                            .set_file_name(format!("{shown}.{ext}"))
+                            .save_file()
+                        {
+                            self.save_palette_path(&shown, &path);
+                        }
+                    }
+                }
+            })
+            .response
+            .on_hover_text(tr("Die angezeigte Palette als Datei speichern"));
+        });
+    }
+
+    /// Palettendatei laden: wird eine eigene Palette und im Panel gezeigt —
+    /// der Sprite behält seine, bis man „Für Sprite nutzen“ drückt. Ein
+    /// Undo-Schritt. Gibt den Namen der neuen Palette zurück.
+    pub(crate) fn load_palette_path(&mut self, path: &std::path::Path) -> Option<String> {
+        use spritebit_core::palfile;
+        let file = path.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+        let pf = if palfile::is_image_file(&file) {
+            image::open(path).ok().and_then(|img| palfile::colors_from_rgba(img.to_rgba8().as_raw()))
+        } else {
+            std::fs::read(path).ok().and_then(|b| palfile::parse(&file, &b))
+        };
+        let Some(pf) = pf else {
+            self.hint = Some(trf("In „{file}“ habe ich keine Farben gefunden.", &[("file", &file)]));
+            return None;
+        };
+        // Name wie im Web: klein, nur a–z, 0–9, _ und -.
+        let stem = path.file_stem().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+        let base: String =
+            pf.name.clone().unwrap_or(stem).to_lowercase().chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' }).collect();
+        let name = self.project.unique_palette_name(if base.is_empty() { "palette" } else { &base });
+        self.pal_step();
+        let mut p = Palette::new(name.clone(), pf.colors.clone());
+        for (i, n) in pf.names.iter().enumerate() {
+            if let Some(n) = n {
+                p.names.insert(i as u16 + 1, n.clone());
+            }
+        }
+        self.project.palettes.push(p);
+        self.pal.preview = Some(name.clone());
+        self.changed();
+        self.hint = Some(trf("Palette „{name}“ geladen — {n} Farben. „Für Sprite nutzen“ übernimmt sie.", &[("name", &name), ("n", &pf.colors.len())]));
+        Some(name)
+    }
+
+    /// Palette `name` als Datei speichern — das Format kommt von der Endung.
+    pub(crate) fn save_palette_path(&mut self, name: &str, path: &std::path::Path) {
+        use spritebit_core::palfile;
+        let pal = self.project.palette(name);
+        let names: Vec<Option<String>> = (1..=pal.colors.len() as u16).map(|i| pal.name_of(i).map(str::to_string)).collect();
+        let ext = palfile::ext_of(&path.to_string_lossy());
+        let ok = match ext.as_str() {
+            "png" => image::RgbaImage::from_raw(pal.colors.len() as u32, 1, palfile::rgba_strip(&pal.colors)).is_some_and(|img| img.save(path).is_ok()),
+            "hex" => std::fs::write(path, palfile::write_hex(&pal.colors)).is_ok(),
+            "pal" => std::fs::write(path, palfile::write_jasc(&pal.colors)).is_ok(),
+            _ => std::fs::write(path, palfile::write_gpl(name, &pal.colors, &names)).is_ok(),
+        };
+        if !ok {
+            self.hint = Some(tr("Die Palette konnte nicht gespeichert werden.").into());
+        }
     }
 
     // ── Dialoge ─────────────────────────────────────────────────────
