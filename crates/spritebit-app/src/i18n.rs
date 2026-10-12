@@ -584,6 +584,13 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Grenzen: alle Ebenen", "Edges: all layers", ""),
     ("Zusammenhängend", "Contiguous", "Zsammhängend"),
     ("An: nur die zusammenhängende Fläche. Aus: jede Stelle mit dieser Farbe im Bild, auch getrennte — so färbst du eine Farbe mit einem Klick überall um.", "On: only the connected area. Off: every spot with this colour in the picture, even separate ones — recolour a colour everywhere with one click.", ""),
+    // ── Einstellungen (settings_ui.rs) ──
+    ("Einstellungen …", "Settings …", "Einstöllungen …"),
+    ("Einstellungen", "Settings", "Einstöllungen"),
+    ("Pinselform", "Brush shape", ""),
+    ("Eckig", "Square", ""),
+    ("Rund", "Round", ""),
+    ("Noch keine. Wähle etwas aus, drück Strg+B und dann „Speichern“ in der Pinsel-Zeile.", "None yet. Select something, press Ctrl+B and then “Save” in the brush bar.", ""),
     // ── Richtung des Verlaufs beim Schattieren (shade_ui.rs) ──
     ("Verlauf von der Mitte nach außen", "Gradient from the middle outwards", ""),
     ("Oben am stärksten, nach unten auslaufend", "Strongest at the top, fading downwards", ""),

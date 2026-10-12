@@ -542,7 +542,7 @@ impl SpritebitApp {
         }
     }
 
-    fn store_brushes(&mut self) {
+    pub(crate) fn store_brushes(&mut self) {
         if !self.brushes_persist {
             return;
         }
@@ -567,22 +567,7 @@ impl SpritebitApp {
                     for (k, b) in chunk.iter().enumerate() {
                         let i = row * 4 + k;
                         ui.vertical(|ui| {
-                            let (rect, resp) = ui.allocate_exact_size(Vec2::splat(48.0), egui::Sense::click());
-                            let p = ui.painter();
-                            p.rect_filled(rect, 3.0, ui.visuals().extreme_bg_color);
-                            if resp.hovered() {
-                                p.rect_stroke(rect, 3.0, egui::Stroke::new(2.0, ui.visuals().selection.bg_fill), egui::StrokeKind::Inside);
-                            }
-                            let cell = 44.0 / b.w.max(b.h) as f32;
-                            let o = rect.center() - Vec2::new(b.w as f32, b.h as f32) * cell / 2.0;
-                            for (n, px) in b.px.iter().enumerate() {
-                                if let Some([r, g, bl]) = px {
-                                    let (x, y) = ((n as u32 % b.w) as f32, (n as u32 / b.w) as f32);
-                                    let min = o + Vec2::new(x, y) * cell;
-                                    p.rect_filled(egui::Rect::from_min_size(min, Vec2::splat(cell)), 0.0, Color32::from_rgb(*r, *g, *bl));
-                                }
-                            }
-                            if resp.on_hover_text(format!("{}×{}", b.w, b.h)).clicked() {
+                            if crate::settings_ui::brush_thumb(ui, b, 48.0, egui::Sense::click()).clicked() {
                                 pick = Some(i);
                             }
                             if ui.small_button("×").on_hover_text(tr("Diesen Pinsel löschen")).clicked() {

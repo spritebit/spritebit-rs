@@ -22,6 +22,7 @@ mod preview_ui;
 mod projects_ui;
 mod selection_ui;
 mod selfupdate;
+mod settings_ui;
 mod shade_ui;
 mod sprites_ui;
 mod tabs;
@@ -226,6 +227,8 @@ struct SpritebitApp {
     /// Einstellungsordner (nur in der echten App, `brushes_persist`).
     brushes: Vec<spritebit_core::stamp::SavedBrush>,
     brushes_persist: bool,
+    /// Einstellungsfenster offen (settings_ui.rs).
+    settings_open: bool,
     /// Text für die Zwischenablage des Systems, sobald kopiert wurde
     /// (selection_ui.rs) — damit Strg+V dort ankommt.
     clip_text: Option<String>,
@@ -362,6 +365,7 @@ impl SpritebitApp {
             stamp_live: None,
             brushes: Vec::new(),
             brushes_persist: false,
+            settings_open: false,
             clip_text: None,
             tolerance: 0.25,
             mirror_x: false,
@@ -908,6 +912,10 @@ impl SpritebitApp {
                 if ui.add_enabled(has, egui::Button::new(tr("Auswahl leeren")).shortcut_text(keys("Entf"))).clicked() {
                     self.delete_selection();
                 }
+                ui.separator();
+                if ui.add(egui::Button::new(tr("Einstellungen …")).shortcut_text(keys("Strg+,"))).clicked() {
+                    self.settings_open = true;
+                }
             });
             ui.menu_button(tr("Ansicht"), |ui| {
                 if ui.button(tr("Einpassen")).clicked() {
@@ -1270,6 +1278,7 @@ impl SpritebitApp {
     fn dialogs(&mut self, ctx: &egui::Context) {
         self.sprite_dialogs(ctx);
         self.palette_dialogs(ctx);
+        self.settings_window(ctx);
         if self.about_open {
             egui::Window::new(tr("Über spritebit")).collapsible(false).resizable(false).open(&mut self.about_open).show(ctx, |ui| {
                 ui.label(tr("spritebit — Pixel-Art-Editor"));

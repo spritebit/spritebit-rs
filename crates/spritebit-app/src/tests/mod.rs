@@ -2458,3 +2458,21 @@ fn schattieren_mit_verlauf_nach_oben() {
     assert_eq!(px(&h, 8, 11), 1, "unten: eine Stufe");
     assert_eq!(px(&h, 5, 8), px(&h, 11, 8), "links und rechts gleich");
 }
+
+#[test]
+fn einstellungen_mit_strg_komma() {
+    let mut h = app();
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Comma);
+    h.run();
+    assert!(h.state().settings_open);
+    h.get_by_label("Rund").click();
+    h.run();
+    h.get_by_label("Ringsum").click();
+    h.run();
+    let a = h.state();
+    assert!(a.brush_round, "Pinselform rund");
+    assert_eq!(a.tiled, spritebit_core::tiled::Tiled::Both);
+    h.key_press_modifiers(Modifiers::COMMAND, Key::Comma);
+    h.run();
+    assert!(!h.state().settings_open, "Strg+, schließt es wieder");
+}

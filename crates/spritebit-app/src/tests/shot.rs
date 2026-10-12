@@ -161,6 +161,19 @@ fn bild_der_oberflaeche() {
             h.run();
         }
     }
+    // SPRITEBIT_SHOT_SETTINGS=1: Einstellungsfenster mit zwei gespeicherten Pinseln.
+    if std::env::var_os("SPRITEBIT_SHOT_SETTINGS").is_some() {
+        use spritebit_core::stamp::SavedBrush;
+        let a = h.state_mut();
+        let (r, k) = (Some([230, 60, 60]), Some([20, 20, 30]));
+        a.brushes = vec![
+            SavedBrush { w: 3, h: 3, px: vec![r, None, r, None, k, None, r, None, r] },
+            SavedBrush { w: 2, h: 1, px: vec![Some([0, 170, 255]), Some([0, 85, 170])] },
+        ];
+        a.settings_open = true;
+        h.run();
+        h.run();
+    }
     // SPRITEBIT_SHOT_TOUR=n: Animations-Tour bei Schritt n (0 = Timeline).
     if let Some(n) = std::env::var("SPRITEBIT_SHOT_TOUR").ok().and_then(|v| v.parse::<usize>().ok()) {
         let ctx = h.ctx.clone();
