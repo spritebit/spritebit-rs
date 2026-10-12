@@ -29,6 +29,15 @@ pub(crate) fn brush_thumb(ui: &mut egui::Ui, b: &SavedBrush, size: f32, sense: e
     resp.on_hover_text(format!("{}×{}", b.w, b.h))
 }
 
+/// Thema links im Einstellungsfenster.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub(crate) enum SettingsTab {
+    #[default]
+    Lang,
+    View,
+    Brush,
+}
+
 impl SpritebitApp {
     /// Einstellungsfenster zeichnen; Strg+, schaltet es um.
     pub(crate) fn settings_window(&mut self, ctx: &egui::Context) {
@@ -46,65 +55,99 @@ impl SpritebitApp {
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
+            .fixed_size(Vec2::new(540.0, 280.0))
             .show(ctx, |ui| {
-                ui.strong(tr("Sprache"));
-                ui.horizontal(|ui| {
-                    for l in i18n::Lang::ALL {
-                        if ui.selectable_label(i18n::lang() == l, l.name()).clicked() {
-                            i18n::choose(l);
-                        }
-                    }
-                });
-                ui.separator();
-                ui.strong(tr("Ansicht"));
-                if ui.checkbox(&mut self.show_grid, tr("Pixelraster anzeigen")).changed() {
-                    self.save_grid_pref();
-                }
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(tr("Kachelmodus"));
-                    for (t, label) in
-                        [(Tiled::Off, tr("Aus")), (Tiled::Both, tr("Ringsum")), (Tiled::X, tr("Nur nebeneinander")), (Tiled::Y, tr("Nur übereinander"))]
-                    {
-                        if ui.selectable_label(self.tiled == t, label).clicked() && self.tiled != t {
-                            self.set_tiled(t);
-                        }
-                    }
-                });
-                ui.separator();
-                ui.strong(tr("Pinsel"));
-                ui.horizontal(|ui| {
-                    ui.label(tr("Pinselform"));
-                    let c = ui.visuals().text_color();
-                    for (round, icon, label) in [(false, icons::SQUARE, tr("Eckig")), (true, icons::CIRCLE, tr("Rund"))] {
-                        let b = egui::Button::selectable(self.brush_round == round, (icons::image(icon, c), label));
-                        if ui.add(b).clicked() && self.brush_round != round {
-                            self.brush_round = round;
-                            self.save_view();
-                        }
-                    }
-                });
-                ui.label(tr("Gespeicherte Pinsel"));
-                if self.brushes.is_empty() {
-                    ui.weak(tr("Noch keine. Wähle etwas aus, drück Strg+B und dann „Speichern“ in der Pinsel-Zeile."));
-                }
-                let mut delete = None;
-                ui.horizontal_wrapped(|ui| {
-                    for (i, b) in self.brushes.iter().enumerate() {
-                        ui.vertical(|ui| {
-                            brush_thumb(ui, b, 44.0, egui::Sense::hover());
-                            if ui.small_button("×").on_hover_text(tr("Diesen Pinsel löschen")).clicked() {
-                                delete = Some(i);
+                // Wie in Photoshop: links die Themen, ein Trennstrich, rechts
+                // die Einstellungen des gewählten Themas.
+                ui.horizontal_top(|ui| {
+                    ui.vertical(|ui| {
+                        ui.set_width(140.0);
+                        for (tab, label) in [(SettingsTab::Lang, tr("Sprache")), (SettingsTab::View, tr("Ansicht")), (SettingsTab::Brush, tr("Pinsel"))] {
+                            let b = egui::Button::selectable(self.settings_tab == tab, label).min_size(Vec2::new(140.0, 28.0));
+                            if ui.add(b).clicked() {
+                                self.settings_tab = tab;
                             }
-                        });
-                    }
+                        }
+                    });
+                    ui.separator();
+                    ui.vertical(|ui| {
+                        ui.set_min_width(360.0);
+                        match self.settings_tab {
+                            SettingsTab::Lang => self.settings_lang(ui),
+                            SettingsTab::View => self.settings_view(ui),
+                            SettingsTab::Brush => self.settings_brush(ui),
+                        }
+                    });
                 });
-                if let Some(i) = delete {
-                    self.brushes.remove(i);
-                    self.store_brushes();
-                }
             });
         if !open {
             self.settings_open = false;
+        }
+    }
+
+    fn settings_lang(&mut self, ui: &mut egui::Ui) {
+        ui.heading(tr("Sprache"));
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            for l in i18n::Lang::ALL {
+                if ui.selectable_label(i18n::lang() == l, l.name()).clicked() {
+                    i18n::choose(l);
+                }
+            }
+        });
+    }
+
+    fn settings_view(&mut self, ui: &mut egui::Ui) {
+        ui.heading(tr("Ansicht"));
+        ui.add_space(6.0);
+        if ui.checkbox(&mut self.show_grid, tr("Pixelraster anzeigen")).changed() {
+            self.save_grid_pref();
+        }
+        ui.add_space(6.0);
+        ui.label(tr("Kachelmodus"));
+        ui.horizontal_wrapped(|ui| {
+            for (t, label) in [(Tiled::Off, tr("Aus")), (Tiled::Both, tr("Ringsum")), (Tiled::X, tr("Nur nebeneinander")), (Tiled::Y, tr("Nur übereinander"))]
+            {
+                if ui.selectable_label(self.tiled == t, label).clicked() && self.tiled != t {
+                    self.set_tiled(t);
+                }
+            }
+        });
+    }
+
+    fn settings_brush(&mut self, ui: &mut egui::Ui) {
+        ui.heading(tr("Pinsel"));
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            ui.label(tr("Pinselform"));
+            let c = ui.visuals().text_color();
+            for (round, icon, label) in [(false, icons::SQUARE, tr("Eckig")), (true, icons::CIRCLE, tr("Rund"))] {
+                let b = egui::Button::selectable(self.brush_round == round, (icons::image(icon, c), label));
+                if ui.add(b).clicked() && self.brush_round != round {
+                    self.brush_round = round;
+                    self.save_view();
+                }
+            }
+        });
+        ui.add_space(6.0);
+        ui.label(tr("Gespeicherte Pinsel"));
+        if self.brushes.is_empty() {
+            ui.weak(tr("Noch keine. Wähle etwas aus, drück Strg+B und dann „Speichern“ in der Pinsel-Zeile."));
+        }
+        let mut delete = None;
+        ui.horizontal_wrapped(|ui| {
+            for (i, b) in self.brushes.iter().enumerate() {
+                ui.vertical(|ui| {
+                    brush_thumb(ui, b, 44.0, egui::Sense::hover());
+                    if ui.small_button("×").on_hover_text(tr("Diesen Pinsel löschen")).clicked() {
+                        delete = Some(i);
+                    }
+                });
+            }
+        });
+        if let Some(i) = delete {
+            self.brushes.remove(i);
+            self.store_brushes();
         }
     }
 }

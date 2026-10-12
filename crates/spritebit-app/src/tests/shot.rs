@@ -171,6 +171,7 @@ fn bild_der_oberflaeche() {
             SavedBrush { w: 2, h: 1, px: vec![Some([0, 170, 255]), Some([0, 85, 170])] },
         ];
         a.settings_open = true;
+        a.settings_tab = crate::settings_ui::SettingsTab::Brush;
         h.run();
         h.run();
     }

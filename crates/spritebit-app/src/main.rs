@@ -229,6 +229,8 @@ struct SpritebitApp {
     brushes_persist: bool,
     /// Einstellungsfenster offen (settings_ui.rs).
     settings_open: bool,
+    /// Gewähltes Thema links im Einstellungsfenster.
+    settings_tab: settings_ui::SettingsTab,
     /// Text für die Zwischenablage des Systems, sobald kopiert wurde
     /// (selection_ui.rs) — damit Strg+V dort ankommt.
     clip_text: Option<String>,
@@ -366,6 +368,7 @@ impl SpritebitApp {
             brushes: Vec::new(),
             brushes_persist: false,
             settings_open: false,
+            settings_tab: Default::default(),
             clip_text: None,
             tolerance: 0.25,
             mirror_x: false,

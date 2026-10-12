@@ -2465,7 +2465,12 @@ fn einstellungen_mit_strg_komma() {
     h.key_press_modifiers(Modifiers::COMMAND, Key::Comma);
     h.run();
     assert!(h.state().settings_open);
+    // Links das Thema, rechts seine Einstellungen.
+    h.state_mut().settings_tab = settings_ui::SettingsTab::Brush;
+    h.run();
     h.get_by_label("Rund").click();
+    h.run();
+    h.state_mut().settings_tab = settings_ui::SettingsTab::View;
     h.run();
     h.get_by_label("Ringsum").click();
     h.run();
