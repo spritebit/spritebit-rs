@@ -2438,3 +2438,23 @@ fn palette_als_datei_laden_und_speichern() {
     assert_eq!(h.state().project.palettes.len(), n - 1);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn schattieren_mit_verlauf_nach_oben() {
+    let mut h = app_60();
+    {
+        let a = h.state_mut();
+        a.tool = tools_ui::Tool::Shade;
+        a.size = 7;
+        a.shade_soft = true;
+        a.shade_dir = spritebit_core::shade::SoftDir::Up;
+        for v in [1, 3, 4, 9] {
+            a.pick_swatch(v);
+        }
+    }
+    h.run();
+    shade_drag(&mut h, (8.0, 8.0), (8.0, 8.0));
+    assert_eq!(px(&h, 8, 5), 9, "oben: alle Stufen bis zur dunkelsten");
+    assert_eq!(px(&h, 8, 11), 1, "unten: eine Stufe");
+    assert_eq!(px(&h, 5, 8), px(&h, 11, 8), "links und rechts gleich");
+}

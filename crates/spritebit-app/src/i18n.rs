@@ -584,6 +584,12 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Grenzen: alle Ebenen", "Edges: all layers", ""),
     ("Zusammenhängend", "Contiguous", "Zsammhängend"),
     ("An: nur die zusammenhängende Fläche. Aus: jede Stelle mit dieser Farbe im Bild, auch getrennte — so färbst du eine Farbe mit einem Klick überall um.", "On: only the connected area. Off: every spot with this colour in the picture, even separate ones — recolour a colour everywhere with one click.", ""),
+    // ── Richtung des Verlaufs beim Schattieren (shade_ui.rs) ──
+    ("Verlauf von der Mitte nach außen", "Gradient from the middle outwards", ""),
+    ("Oben am stärksten, nach unten auslaufend", "Strongest at the top, fading downwards", ""),
+    ("Unten am stärksten, nach oben auslaufend", "Strongest at the bottom, fading upwards", ""),
+    ("Links am stärksten, nach rechts auslaufend", "Strongest on the left, fading to the right", ""),
+    ("Rechts am stärksten, nach links auslaufend", "Strongest on the right, fading to the left", ""),
     // ── Palettendateien (palette_ui.rs, spritebit_core::palfile) ──
     ("Laden …", "Load …", "Lodn …"),
     ("Palette aus einer Datei laden — .gpl (GIMP, Aseprite), .hex (Lospec), .pal, .txt (Paint.NET) oder ein Bild wie das PNG von Lospec", "Load a palette from a file — .gpl (GIMP, Aseprite), .hex (Lospec), .pal, .txt (Paint.NET) or an image like the Lospec PNG", ""),

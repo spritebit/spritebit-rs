@@ -79,6 +79,7 @@ impl SpritebitApp {
         self.fill_contig = v["fillContig"].as_bool().unwrap_or(true);
         self.image.recolor_scope = v["recolorScope"].as_str().and_then(spritebit_core::recolor::Scope::from_key).unwrap_or_default();
         self.shade_soft = v["shadeSoft"].as_bool().unwrap_or(false);
+        self.shade_dir = v["shadeDir"].as_str().and_then(spritebit_core::shade::SoftDir::from_key).unwrap_or_default();
         self.brush_round = v["brushRound"].as_bool().unwrap_or(false);
         let ramp: Vec<_> = v["shadeRamp"].as_array().into_iter().flatten().filter_map(|c| c.as_str().and_then(spritebit_core::palette::parse_hex)).collect();
         self.shade_ramp = spritebit_core::shade::normalize_ramp(&ramp);
@@ -96,6 +97,7 @@ impl SpritebitApp {
                 "recolorScope": self.image.recolor_scope.key(),
                 "shadeRamp": ramp,
                 "shadeSoft": self.shade_soft,
+                "shadeDir": self.shade_dir.key(),
                 "brushRound": self.brush_round,
             });
             let _ = std::fs::write(d.join("view.json"), v.to_string());

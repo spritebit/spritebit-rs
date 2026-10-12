@@ -185,6 +185,8 @@ struct SpritebitApp {
     brush_round: bool,
     shade_ramp: Vec<spritebit_core::Rgb>,
     shade_soft: bool,
+    /// Richtung des Verlaufs (spritebit_core::shade::SoftDir).
+    shade_dir: spritebit_core::shade::SoftDir,
     /// „Abstufungen“: so viele Töne je Seite (1–4, also 3–9 insgesamt).
     shade_gen: u32,
     shade: Option<tools_ui::ShadeStroke>,
@@ -338,6 +340,7 @@ impl SpritebitApp {
             brush_round: false,
             shade_ramp: Vec::new(),
             shade_soft: false,
+            shade_dir: Default::default(),
             shade_gen: 2,
             shade: None,
             stroke_lock: None,

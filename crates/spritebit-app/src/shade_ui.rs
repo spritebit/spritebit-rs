@@ -8,7 +8,7 @@
 //! braucht es darum hier nicht (im Web nur für Finger).
 
 use eframe::egui::{self, Color32, Sense, Stroke, Vec2};
-use spritebit_core::shade::{self, hold_steps, ramp_levels, soft_level};
+use spritebit_core::shade::{self, hold_steps, ramp_levels, soft_level, SoftDir};
 use spritebit_core::{selection::rgb_of, tools, Px, Rgb};
 
 use crate::i18n::{tr, trf};
@@ -119,6 +119,23 @@ impl SpritebitApp {
             self.shade_soft = !self.shade_soft;
             self.save_view();
         }
+        // Richtung des Verlaufs — nur, wenn „Verlauf“ an ist.
+        if self.shade_soft {
+            let c = ui.visuals().text_color();
+            for (dir, icon, tip) in [
+                (SoftDir::Center, crate::icons::CIRCLE, tr("Verlauf von der Mitte nach außen")),
+                (SoftDir::Up, crate::icons::UP, tr("Oben am stärksten, nach unten auslaufend")),
+                (SoftDir::Down, crate::icons::DOWN, tr("Unten am stärksten, nach oben auslaufend")),
+                (SoftDir::Left, crate::icons::LEFT, tr("Links am stärksten, nach rechts auslaufend")),
+                (SoftDir::Right, crate::icons::RIGHT, tr("Rechts am stärksten, nach links auslaufend")),
+            ] {
+                let b = egui::Button::selectable(self.shade_dir == dir, crate::icons::image(icon, c));
+                if ui.add(b).on_hover_text(tip).clicked() && self.shade_dir != dir {
+                    self.shade_dir = dir;
+                    self.save_view();
+                }
+            }
+        }
     }
 
     /// Pixel unter dem Pinsel bei (x, y), gespiegelt und im Bild, mit ihrer
@@ -133,7 +150,7 @@ impl SpritebitApp {
         let mut out = Vec::new();
         for py in st.y0..=st.y1 {
             for px in st.x0..=st.x1 {
-                let level = if soft { soft_level(px as f64 - mx, py as f64 - my, size, levels) } else { 1 };
+                let level = if soft { soft_level(px as f64 - mx, py as f64 - my, size, levels, self.shade_dir) } else { 1 };
                 // Runder Pinsel ohne Verlauf: die Ecken fallen weg.
                 if level == 0 || (!soft && self.brush_round && size > 2 && !tools::in_round(px - x, py - y, size)) {
                     continue;

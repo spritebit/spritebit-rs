@@ -70,16 +70,56 @@ pub fn toggle_ramp(ramp: &[Rgb], c: Rgb) -> Vec<Rgb> {
     v
 }
 
+/// Richtung des Verlaufs: Mitte am stärksten, zum Rand hin weniger — oder
+/// die genannte Seite am stärksten, zur Gegenseite auslaufend (wie im Web,
+/// shade.js `softLevel`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum SoftDir {
+    #[default]
+    Center,
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+impl SoftDir {
+    pub const ALL: [SoftDir; 5] = [SoftDir::Center, SoftDir::Up, SoftDir::Down, SoftDir::Left, SoftDir::Right];
+
+    /// Schlüssel wie im Web (`state.shadeDir`).
+    pub fn key(self) -> &'static str {
+        match self {
+            SoftDir::Center => "center",
+            SoftDir::Up => "up",
+            SoftDir::Down => "down",
+            SoftDir::Left => "left",
+            SoftDir::Right => "right",
+        }
+    }
+
+    pub fn from_key(k: &str) -> Option<SoftDir> {
+        SoftDir::ALL.into_iter().find(|d| d.key() == k)
+    }
+}
+
 /// Stufen für einen Pixel im Abstand (dx, dy) zur Pinselmitte, wenn
-/// „Verlauf" an ist: in der Mitte `levels`, zum Rand weniger, ganz außen 1.
-/// 0 = liegt außerhalb des runden Pinsels.
-pub fn soft_level(dx: f64, dy: f64, size: u32, levels: u32) -> u32 {
+/// „Verlauf" an ist: an der stärksten Stelle `levels`, von dort weniger,
+/// ganz außen 1. 0 = liegt außerhalb des runden Pinsels.
+pub fn soft_level(dx: f64, dy: f64, size: u32, levels: u32, dir: SoftDir) -> u32 {
     let r = (size.max(1) as f64 - 1.0) / 2.0;
     let d = dx.hypot(dy);
     if d > r + 0.5 {
         return 0;
     }
-    ((levels as f64 * (1.0 - d / (r + 1.0))).ceil() as u32).max(1)
+    let t = match dir {
+        SoftDir::Center => 1.0 - d / (r + 1.0),
+        // Abstand zur Gegenseite, 1 … 2r+1, geteilt durch die ganze Breite.
+        SoftDir::Up => (r - dy + 1.0) / (2.0 * r + 2.0),
+        SoftDir::Down => (r + dy + 1.0) / (2.0 * r + 2.0),
+        SoftDir::Left => (r - dx + 1.0) / (2.0 * r + 2.0),
+        SoftDir::Right => (r + dx + 1.0) / (2.0 * r + 2.0),
+    };
+    ((levels as f64 * t).ceil() as u32).max(1)
 }
 
 /// Stufen in der Mitte: so viele, wie die Reihe von leer bis zur letzten
@@ -344,11 +384,25 @@ mod tests {
 
     #[test]
     fn verlauf_mitte_mehr_als_der_rand() {
-        assert_eq!(soft_level(0.0, 0.0, 7, 4), 4);
-        let near = soft_level(1.0, 0.0, 7, 4);
+        assert_eq!(soft_level(0.0, 0.0, 7, 4, SoftDir::Center), 4);
+        let near = soft_level(1.0, 0.0, 7, 4, SoftDir::Center);
         assert!((1..=4).contains(&near));
-        assert_eq!(soft_level(3.0, 0.0, 7, 4), 1);
-        assert_eq!(soft_level(3.0, 3.0, 7, 4), 0, "Ecke liegt außerhalb des Kreises");
+        assert_eq!(soft_level(3.0, 0.0, 7, 4, SoftDir::Center), 1);
+        assert_eq!(soft_level(3.0, 3.0, 7, 4, SoftDir::Center), 0, "Ecke liegt außerhalb des Kreises");
+    }
+
+    #[test]
+    fn verlauf_nach_einer_seite() {
+        // Größe 5 (r = 2), 3 Stufen — dieselben Zahlen wie im Web (tests/shade.test.js).
+        assert_eq!(soft_level(0.0, -2.0, 5, 3, SoftDir::Up), 3, "oben am meisten");
+        assert_eq!(soft_level(0.0, 2.0, 5, 3, SoftDir::Up), 1, "unten 1");
+        assert_eq!(soft_level(0.0, 0.0, 5, 3, SoftDir::Up), 2);
+        assert_eq!(soft_level(0.0, 2.0, 5, 3, SoftDir::Down), 3);
+        assert_eq!(soft_level(-2.0, 0.0, 5, 3, SoftDir::Left), 3);
+        assert_eq!(soft_level(2.0, 0.0, 5, 3, SoftDir::Right), 3);
+        assert_eq!(soft_level(2.0, 0.0, 5, 3, SoftDir::Left), 1);
+        assert_eq!(soft_level(2.0, 2.0, 5, 3, SoftDir::Up), 0);
+        assert_eq!(SoftDir::from_key("left"), Some(SoftDir::Left));
         assert_eq!(ramp_levels(&[]), AUTO_LEVELS);
         assert_eq!(ramp_levels(&[DARK, RED]), 2);
     }
