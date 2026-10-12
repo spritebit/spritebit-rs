@@ -213,6 +213,12 @@ struct SpritebitApp {
     /// Zwischenablage: das Stück und woher seine Farben stammen (Palette und
     /// freie Farben des Quell-Sprites) — siehe selection_ui.rs `paste_clipboard`.
     clipboard: Option<selection_ui::ClipSrc>,
+    /// Eigener Pinsel aus der Auswahl (Strg+B, spritebit_core::stamp) samt
+    /// Palette, aus der er stammt; einfarbig malen; und die Pixel passend zur
+    /// Palette des Sprites für den laufenden Strich.
+    stamp: Option<selection_ui::ClipSrc>,
+    stamp_mono: bool,
+    stamp_live: Option<spritebit_core::selection::Clip>,
     /// Text für die Zwischenablage des Systems, sobald kopiert wurde
     /// (selection_ui.rs) — damit Strg+V dort ankommt.
     clip_text: Option<String>,
@@ -343,6 +349,9 @@ impl SpritebitApp {
             sel_drag: None,
             sel_op: Default::default(),
             clipboard: None,
+            stamp: None,
+            stamp_mono: false,
+            stamp_live: None,
             clip_text: None,
             tolerance: 0.25,
             mirror_x: false,
@@ -882,6 +891,9 @@ impl SpritebitApp {
                 }
                 if ui.add_enabled(has, egui::Button::new(tr("Auswahl aufheben")).shortcut_text(keys("Strg+D"))).clicked() {
                     self.deselect();
+                }
+                if ui.add_enabled(has, egui::Button::new(tr("Auswahl als Pinsel")).shortcut_text(keys("Strg+B"))).clicked() {
+                    self.make_stamp();
                 }
                 if ui.add_enabled(has, egui::Button::new(tr("Auswahl leeren")).shortcut_text(keys("Entf"))).clicked() {
                     self.delete_selection();

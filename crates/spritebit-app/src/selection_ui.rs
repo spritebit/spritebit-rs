@@ -408,6 +408,10 @@ impl SpritebitApp {
         if ctx.input_mut(|i| i.consume_key(cmd, Key::D)) {
             self.deselect();
         }
+        // Strg+B: Auswahl wird zum Pinsel — ohne Auswahl zurück zum normalen.
+        if ctx.input_mut(|i| i.consume_key(cmd, Key::B)) && !self.make_stamp() && !self.drop_stamp() {
+            self.hint = Some(tr("Erst etwas auswählen — Strg+B macht daraus einen Pinsel.").into());
+        }
         let (all, copy, cut, paste_raw, paste) = ctx.input_mut(|i| {
             // Im Fenster kommen Strg+C/X/V als Copy/Cut/Paste an, nicht als
             // Tasten (egui-winit). Die Tasten bleiben für Tests und andere Wege.
@@ -519,6 +523,13 @@ impl SpritebitApp {
             }
             if ui.add_enabled(has, egui::Button::new(tr("Füllen"))).on_hover_text(tr("Auswahl mit der aktuellen Farbe füllen")).clicked() {
                 self.fill_selection();
+            }
+            if ui
+                .add_enabled(has, egui::Button::new(tr("Als Pinsel")))
+                .on_hover_text(tr("Auswahl als Pinsel nehmen — Stift, Pinsel und Radierer setzen dann diese Form (Strg+B)"))
+                .clicked()
+            {
+                self.make_stamp();
             }
             if ui.add_enabled(has, egui::Button::new(tr("Leeren"))).on_hover_text(keys("Entf")).clicked() {
                 self.delete_selection();

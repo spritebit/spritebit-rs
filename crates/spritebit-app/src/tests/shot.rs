@@ -137,6 +137,20 @@ fn bild_der_oberflaeche() {
         h.run();
         h.run();
     }
+    // SPRITEBIT_SHOT_STAMP=1: eigener Pinsel aus einer kleinen Figur, Zeiger auf der Fläche.
+    if std::env::var_os("SPRITEBIT_SHOT_STAMP").is_some() {
+        let a = h.state_mut();
+        let img = a.project.sprite_mut().active();
+        for (x, y, v) in [(2, 2, 7), (3, 2, 7), (2, 3, 6), (3, 3, 4), (4, 3, 6), (3, 4, 9)] {
+            img.set(x, y, v);
+        }
+        a.version += 1;
+        a.selection = Some(spritebit_core::selection::Selection::rect(0, 0, 6, 6));
+        a.make_stamp();
+        a.hover = Some((30, 30));
+        h.run();
+        h.run();
+    }
     // SPRITEBIT_SHOT_TOUR=n: Animations-Tour bei Schritt n (0 = Timeline).
     if let Some(n) = std::env::var("SPRITEBIT_SHOT_TOUR").ok().and_then(|v| v.parse::<usize>().ok()) {
         let ctx = h.ctx.clone();

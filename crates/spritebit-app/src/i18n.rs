@@ -584,6 +584,18 @@ const TEXTS: &[(&str, &str, &str)] = &[
     ("Grenzen: alle Ebenen", "Edges: all layers", ""),
     ("Zusammenhängend", "Contiguous", "Zsammhängend"),
     ("An: nur die zusammenhängende Fläche. Aus: jede Stelle mit dieser Farbe im Bild, auch getrennte — so färbst du eine Farbe mit einem Klick überall um.", "On: only the connected area. Off: every spot with this colour in the picture, even separate ones — recolour a colour everywhere with one click.", ""),
+    // ── Eigener Pinsel (tools_ui.rs, spritebit_core::stamp) ──
+    ("Eigener Pinsel", "Custom brush", "Eigena Pinsl"),
+    ("Aktuelle Farbe", "Current colour", ""),
+    ("Die Form in der aktuellen Farbe malen statt in ihren eigenen Farben", "Paint the shape in the current colour instead of its own colours", ""),
+    ("Zurück zum normalen Pinsel (Strg+B ohne Auswahl)", "Back to the normal brush (Ctrl+B without a selection)", ""),
+    ("Als Pinsel", "As brush", "Ois Pinsl"),
+    ("Auswahl als Pinsel nehmen — Stift, Pinsel und Radierer setzen dann diese Form (Strg+B)", "Use the selection as a brush — pencil, brush and eraser then place this shape (Ctrl+B)", ""),
+    ("Auswahl als Pinsel", "Selection as brush", ""),
+    ("Eigener Pinsel: {w}×{h} — Stift, Pinsel und Radierer setzen jetzt diese Form. Strg+B ohne Auswahl: zurück.", "Custom brush: {w}×{h} — pencil, brush and eraser now place this shape. Ctrl+B without a selection: back.", ""),
+    ("Wieder der normale Pinsel.", "Back to the normal brush.", ""),
+    ("In der Auswahl ist nichts gemalt — daraus wird kein Pinsel.", "Nothing is painted in the selection — no brush from that.", ""),
+    ("Erst etwas auswählen — Strg+B macht daraus einen Pinsel.", "Select something first — Ctrl+B turns it into a brush.", ""),
     // ── Farbe ersetzen (image_ui.rs) ──
     ("Farbe ersetzen", "Replace colour", "Farb austauschn"),
     ("Von", "From", ""),

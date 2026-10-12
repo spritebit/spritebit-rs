@@ -2344,3 +2344,42 @@ fn farbe_ersetzen_und_fuellen_ohne_zusammenhang() {
     a.undo();
     assert_eq!(a.sprite().cel(1, 0).get(4, 4), 3, "ein Undo holt alle Frames zurück");
 }
+
+#[test]
+fn eigener_pinsel_aus_der_auswahl() {
+    use spritebit_core::selection::Selection;
+    let mut h = app();
+    // Form: zwei Pixel nebeneinander (3 und 4), darunter rechts eine 6.
+    {
+        let img = h.state_mut().project.sprite_mut().active();
+        img.set(2, 2, 3);
+        img.set(3, 2, 4);
+        img.set(3, 3, 6);
+    }
+    h.state_mut().tool = Tool::Select;
+    h.state_mut().selection = Some(Selection::rect(0, 0, 5, 5));
+    h.run();
+    h.key_press_modifiers(Modifiers::COMMAND, Key::B);
+    h.run();
+    let a = h.state();
+    assert!(a.selection.is_none(), "die Auswahl ist danach weg");
+    assert_eq!(a.tool, Tool::Pencil);
+    let s = a.stamp.as_ref().expect("Pinsel");
+    assert_eq!((s.clip.w, s.clip.h), (2, 2), "leere Ränder abgeschnitten");
+    // Ein Klick setzt die Form in ihren Farben; der Zeiger liegt links oben (2×2).
+    drag(&mut h, (20.0, 20.0), (20.0, 20.0));
+    assert_eq!((px(&h, 20, 20), px(&h, 21, 20), px(&h, 20, 21), px(&h, 21, 21)), (3, 4, 0, 6));
+    // Einfarbig in der aktuellen Farbe.
+    h.state_mut().stamp_mono = true;
+    let c = h.state().color;
+    drag(&mut h, (30.0, 30.0), (30.0, 30.0));
+    assert_eq!((px(&h, 30, 30), px(&h, 31, 31), px(&h, 30, 31)), (c, c, 0));
+    // Der Radierer löscht genau die Form.
+    h.state_mut().tool = Tool::Eraser;
+    drag(&mut h, (20.0, 20.0), (20.0, 20.0));
+    assert_eq!((px(&h, 20, 20), px(&h, 21, 21)), (0, 0));
+    // Strg+B ohne Auswahl: zurück zum normalen Pinsel.
+    h.key_press_modifiers(Modifiers::COMMAND, Key::B);
+    h.run();
+    assert!(h.state().stamp.is_none());
+}

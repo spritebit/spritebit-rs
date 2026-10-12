@@ -50,6 +50,7 @@ pub mod recolor;
 pub mod selection;
 pub mod shade;
 pub mod sprite;
+pub mod stamp;
 pub mod template;
 pub mod tiled;
 pub mod tilelib;

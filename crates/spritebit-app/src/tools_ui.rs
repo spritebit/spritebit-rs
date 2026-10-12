@@ -244,7 +244,9 @@ impl SpritebitApp {
                 self.mirror_y = !self.mirror_y;
             }
             ui.separator();
-            if self.tool.sized() {
+            if self.stamp_active() {
+                self.stamp_bar(ui);
+            } else if self.tool.sized() {
                 ui.label(tr("Größe"));
                 // 1–1000: Regler logarithmisch (kleine Größen bleiben treffbar),
                 // Zahlenfeld schneller, je größer (auch Alt + Rechts ziehen).
@@ -269,7 +271,7 @@ impl SpritebitApp {
             if self.tool == Tool::Shade {
                 self.shade_bar(ui);
             }
-            if matches!(self.tool, Tool::Brush | Tool::Spray | Tool::Eraser) {
+            if matches!(self.tool, Tool::Brush | Tool::Spray | Tool::Eraser) && !self.stamp_active() {
                 ui.label(tr("Stärke")).on_hover_text(tr("Pinsel und Radierer: Dichte — Spray: Menge je Schritt"));
                 ui.add(egui::Slider::new(&mut self.strength, 1..=100).suffix(" %"));
             }
@@ -290,7 +292,7 @@ impl SpritebitApp {
                     self.save_view();
                 }
             }
-            if matches!(self.tool, Tool::Pencil | Tool::Eraser) {
+            if matches!(self.tool, Tool::Pencil | Tool::Eraser) && !self.stamp_active() {
                 let r = ui
                     .checkbox(&mut self.pixel_perfect, tr("Clean Stroke"))
                     .on_hover_text(tr("Wie in bekannten Pixel-Art-Programmen: entfernt beim Zeichnen die doppelten Eckpixel an Treppenstufen — saubere 1-Pixel-Linien (Stift, Radierer mit Größe 1)"));
@@ -393,6 +395,149 @@ impl SpritebitApp {
         false
     }
 
+    /// Malt das Werkzeug gerade mit dem eigenen Pinsel (Stift, Pinsel, Radierer)?
+    pub(crate) fn stamp_active(&self) -> bool {
+        self.stamp.is_some() && matches!(self.tool, Tool::Pencil | Tool::Brush | Tool::Eraser)
+    }
+
+    /// Strg+B: der Inhalt der Auswahl wird zum Pinsel. Ohne Auswahl `false`.
+    pub(crate) fn make_stamp(&mut self) -> bool {
+        let Some(sel) = &self.selection else { return false };
+        let clip = match &self.float {
+            Some(f) => f.clip.clone(),
+            None => spritebit_core::selection::copy(self.sprite().target(), sel),
+        };
+        match spritebit_core::stamp::trim(&clip) {
+            None => self.hint = Some(tr("In der Auswahl ist nichts gemalt — daraus wird kein Pinsel.").into()),
+            Some(c) => {
+                let (w, h) = (c.w, c.h);
+                let (pal, free) = (self.project.current_palette(), self.sprite().free.clone());
+                self.stamp = Some(crate::selection_ui::ClipSrc { clip: c, pal, free });
+                self.deselect();
+                if !matches!(self.tool, Tool::Pencil | Tool::Brush | Tool::Eraser) {
+                    self.tool = Tool::Pencil;
+                }
+                self.hint = Some(trf(
+                    "Eigener Pinsel: {w}×{h} — Stift, Pinsel und Radierer setzen jetzt diese Form. Strg+B ohne Auswahl: zurück.",
+                    &[("w", &w), ("h", &h)],
+                ));
+            }
+        }
+        true
+    }
+
+    /// Zurück zum normalen Pinsel. `false`, wenn es keinen eigenen gab.
+    pub(crate) fn drop_stamp(&mut self) -> bool {
+        if self.stamp.take().is_none() {
+            return false;
+        }
+        self.stamp_live = None;
+        self.hint = Some(tr("Wieder der normale Pinsel.").into());
+        true
+    }
+
+    /// Pinsel mit Pixeln passend zur Palette des aktuellen Sprites — aus
+    /// einem Sprite mit anderer Palette nach der Farbe übertragen.
+    fn stamp_for_sprite(&mut self) -> Option<spritebit_core::selection::Clip> {
+        let src = self.stamp.clone()?;
+        let to_pal = self.project.current_palette();
+        if src.pal.colors == to_pal.colors && src.free == self.sprite().free {
+            return Some(src.clip);
+        }
+        let mut r = spritebit_core::selection::Remap::new(&src.pal, &src.free, &to_pal, false);
+        let sp = self.project.sprite_mut();
+        Some(r.clip(&src.clip, &mut |c| sp.free_color(c)))
+    }
+
+    /// Strich mit dem eigenen Pinsel: an jedem Punkt der Linie seine Form.
+    fn stamp_stroke(&mut self, a: (i64, i64), b: (i64, i64), erase: bool) {
+        if self.stamp_live.is_none() {
+            self.stamp_live = self.stamp_for_sprite();
+        }
+        let Some(clip) = self.stamp_live.clone() else { return };
+        let color = if erase || self.tool == Tool::Eraser {
+            Some(0)
+        } else if self.stamp_mono {
+            Some(self.color)
+        } else {
+            None
+        };
+        let mut by: std::collections::BTreeMap<Px, Vec<Span>> = std::collections::BTreeMap::new();
+        for (x, y) in tools::line(a.0, a.1, b.0, b.1) {
+            for (v, s) in spritebit_core::stamp::spans(&clip, x, y, color) {
+                by.entry(v).or_default().extend(s);
+            }
+        }
+        for (v, s) in by {
+            self.paint(s, v);
+        }
+    }
+
+    /// Options-Zeile für den eigenen Pinsel: Vorschau, Größe, einfarbig, ×.
+    fn stamp_bar(&mut self, ui: &mut egui::Ui) {
+        let Some(src) = &self.stamp else { return };
+        ui.label(tr("Eigener Pinsel"));
+        let (w, h) = (src.clip.w, src.clip.h);
+        let k = (32.0 / w.max(h) as f32).clamp(1.0, 8.0).floor();
+        let size = Vec2::new((w as f32 * k).min(96.0), (h as f32 * k).min(32.0));
+        let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+        let (cw, ch) = (rect.width() / w as f32, rect.height() / h as f32);
+        let mono = self.stamp_mono.then(|| spritebit_core::selection::rgb_of(self.color, &self.project.current_palette(), &self.sprite().free));
+        let p = ui.painter();
+        p.rect_filled(rect, 2.0, ui.visuals().extreme_bg_color);
+        for yy in 0..h {
+            for xx in 0..w {
+                let v = src.clip.data[(yy * w + xx) as usize];
+                if v == 0 {
+                    continue;
+                }
+                let rgb = mono.unwrap_or_else(|| spritebit_core::selection::rgb_of(v, &src.pal, &src.free));
+                if let Some([r, g, b]) = rgb {
+                    let min = rect.min + Vec2::new(xx as f32 * cw, yy as f32 * ch);
+                    p.rect_filled(egui::Rect::from_min_size(min, Vec2::new(cw, ch)), 0.0, Color32::from_rgb(r, g, b));
+                }
+            }
+        }
+        ui.label(format!("{w}×{h}"));
+        ui.checkbox(&mut self.stamp_mono, tr("Aktuelle Farbe")).on_hover_text(tr("Die Form in der aktuellen Farbe malen statt in ihren eigenen Farben"));
+        let c = ui.visuals().text_color();
+        if ui.add(egui::Button::image(icons::image(icons::CLOSE, c))).on_hover_text(tr("Zurück zum normalen Pinsel (Strg+B ohne Auswahl)")).clicked() {
+            self.drop_stamp();
+        }
+    }
+
+    /// Vorschau des eigenen Pinsels am Zeiger: die Form halb durchsichtig,
+    /// darum ein Rahmen. Große Pinsel nur als Rahmen.
+    fn stamp_preview(&self, painter: &egui::Painter, origin: Pos2, zoom: f32, (x, y): (i64, i64), dark: egui::Stroke, light: egui::Stroke) {
+        let Some(src) = &self.stamp else { return };
+        let (ox, oy) = spritebit_core::stamp::origin(&src.clip, x, y);
+        let (w, h) = (src.clip.w, src.clip.h);
+        if w * h <= 128 * 128 {
+            let mono = if self.tool == Tool::Eraser {
+                Some(None)
+            } else {
+                self.stamp_mono.then(|| spritebit_core::selection::rgb_of(self.color, &self.project.current_palette(), &self.sprite().free))
+            };
+            for yy in 0..h {
+                for xx in 0..w {
+                    let v = src.clip.data[(yy * w + xx) as usize];
+                    if v == 0 {
+                        continue;
+                    }
+                    let color = match mono.unwrap_or_else(|| spritebit_core::selection::rgb_of(v, &src.pal, &src.free)) {
+                        Some([r, g, b]) => Color32::from_rgba_unmultiplied(r, g, b, 170),
+                        None => Color32::from_rgba_unmultiplied(242, 139, 130, 110),
+                    };
+                    let min = origin + Vec2::new((ox + xx as i64) as f32, (oy + yy as i64) as f32) * zoom;
+                    painter.rect_filled(egui::Rect::from_min_size(min, Vec2::splat(zoom)), 0.0, color);
+                }
+            }
+        }
+        let rect = egui::Rect::from_min_size(origin + Vec2::new(ox as f32, oy as f32) * zoom, Vec2::new(w as f32, h as f32) * zoom);
+        painter.rect_stroke(rect, 0.0, dark, egui::StrokeKind::Middle);
+        painter.rect_stroke(rect, 0.0, light, egui::StrokeKind::Middle);
+    }
+
     /// Umriss dessen, was das Werkzeug gleich trifft: ein Quadrat bei Stift,
     /// Pinsel und Radierer, ein Kreis beim Spray. Zwei Striche (dunkel, hell),
     /// damit er auf jedem Untergrund zu sehen ist.
@@ -412,7 +557,9 @@ impl SpritebitApp {
         let Some((x, y)) = cell else { return };
         let dark = egui::Stroke::new(3.0, Color32::from_black_alpha(150));
         let light = egui::Stroke::new(1.0, Color32::from_white_alpha(230));
-        if self.tool == Tool::Spray {
+        if self.stamp_active() {
+            self.stamp_preview(painter, origin, zoom, (x, y), dark, light);
+        } else if self.tool == Tool::Spray {
             let c = origin + Vec2::new(x as f32 + 0.5, y as f32 + 0.5) * zoom;
             let r = (size as f32 + 0.5) * zoom;
             painter.circle_stroke(c, r, dark);
@@ -635,6 +782,8 @@ impl SpritebitApp {
                 self.record();
                 self.stroke_last = Some(cell);
                 self.stroke_lock = Some((cell, None));
+                // Eigener Pinsel: Pixel passend zur Palette dieses Sprites.
+                self.stamp_live = if self.stamp_active() { self.stamp_for_sprite() } else { None };
                 // Pixel-perfekt: ein Strich, ein Pfad.
                 let wrap = self.tiled.axes();
                 self.pp = self.pixel_perfect_now().then(|| tools::PixelPerfect::wrapped(wrap));
@@ -647,10 +796,14 @@ impl SpritebitApp {
     /// Gilt Pixel-perfekt gerade? Wie in gängigen Pixel-Art-Programmen: beim Stift und beim
     /// Radierer mit Größe 1.
     pub(crate) fn pixel_perfect_now(&self) -> bool {
-        self.pixel_perfect && (self.tool == Tool::Pencil || (self.tool == Tool::Eraser && self.size == 1))
+        !self.stamp_active() && self.pixel_perfect && (self.tool == Tool::Pencil || (self.tool == Tool::Eraser && self.size == 1))
     }
 
     fn stroke(&mut self, a: (i64, i64), b: (i64, i64), erase: bool) {
+        if self.stamp_active() {
+            self.stamp_stroke(a, b, erase);
+            return;
+        }
         let value = self.value(erase);
         if let Some(mut pp) = self.pp.take() {
             let (mx, my) = (self.mirror_x, self.mirror_y);
