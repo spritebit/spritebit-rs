@@ -3371,7 +3371,7 @@ dependencies = [
 
 [[package]]
 name = "spritebit-app"
-version = "1.7.1"
+version = "1.8.0"
 dependencies = [
  "eframe",
  "egui_extras",
@@ -3387,7 +3387,7 @@ dependencies = [
 
 [[package]]
 name = "spritebit-core"
-version = "1.7.1"
+version = "1.8.0"
 dependencies = [
  "ab_glyph",
  "epaint_default_fonts",
