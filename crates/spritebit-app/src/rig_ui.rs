@@ -16,7 +16,7 @@
 
 use eframe::egui::{self, Color32, Pos2, Stroke, Vec2};
 use spritebit_core::rig::{self, Part, Role, Template};
-use spritebit_core::sprite::{Direction, Tag};
+use spritebit_core::sprite::{Direction, Layer, Tag};
 
 use crate::i18n::{tr, trf};
 use crate::{icons, SpritebitApp};
@@ -32,6 +32,12 @@ pub(crate) struct RigDialog {
     pub strength: u32,
     /// Welcher Frame der Vorschau gerade dran ist.
     pub at: usize,
+    /// Läuft die Vorschau, oder steht sie still, damit man ein Bild genau
+    /// ansehen kann?
+    pub running: bool,
+    /// Nur dieses Teil bewegen (Ebenen-Nummer) — oder `None` für alle. Sitzt
+    /// ein Gelenk falsch, sieht man das an der ganzen Figur kaum.
+    pub only: Option<usize>,
     /// Zeitpunkt (egui-Zeit), seit dem er steht.
     pub since: f64,
     /// Die Textur der Vorschau. Sie MUSS hier liegen bleiben: egui gibt eine
@@ -45,11 +51,11 @@ impl RigDialog {
     /// Für den Bild-Test (tests/shot.rs): ein fester Stand ohne Zufall.
     #[cfg(test)]
     pub(crate) fn for_shot() -> Self {
-        RigDialog { template: Template::Walk, count: 8, strength: 120, at: 2, since: f64::INFINITY, tex: None }
+        RigDialog { template: Template::Walk, count: 8, strength: 120, at: 2, since: f64::INFINITY, running: false, only: None, tex: None }
     }
 
     fn new() -> Self {
-        RigDialog { template: Template::Walk, count: Template::Walk.frames(), strength: 100, at: 0, since: 0.0, tex: None }
+        RigDialog { template: Template::Walk, count: Template::Walk.frames(), strength: 100, at: 0, since: 0.0, running: true, only: None, tex: None }
     }
 }
 
@@ -360,6 +366,27 @@ impl SpritebitApp {
                             ui.weak(tr("Stärke"));
                             ui.add(egui::Slider::new(&mut d.strength, 25..=200).suffix(" %"));
                         });
+                        ui.horizontal(|ui| {
+                            ui.weak(tr("Prüfen"));
+                            let name = match d.only.and_then(|i| self.project.sprite().layers.get(i)) {
+                                Some(l) => format!("{} — {}", l.part.map_or("", |p| role_name(p.role)), l.name),
+                                None => tr("alle Teile").to_string(),
+                            };
+                            egui::ComboBox::from_id_salt("rig-only")
+                                .selected_text(name)
+                                .width(190.0)
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(&mut d.only, None, tr("alle Teile"));
+                                    for (i, part) in rig::rig_parts(self.project.sprite()) {
+                                        let label = format!("{} — {}", role_name(part.role), self.project.sprite().layers[i].name);
+                                        ui.selectable_value(&mut d.only, Some(i), label);
+                                    }
+                                })
+                                .response
+                                .on_hover_text(tr(
+                                    "Ein einzelnes Teil prüfen: nur dieses bewegt sich, der Rest steht still. So siehst du, ob sein Gelenk richtig sitzt. Erzeugt werden immer alle Teile.",
+                                ));
+                        });
                     });
                     ui.add_space(10.0);
                     self.rig_preview(ui, &mut d);
@@ -392,15 +419,21 @@ impl SpritebitApp {
     fn rig_preview(&mut self, ui: &mut egui::Ui, d: &mut RigDialog) {
         let now = ui.input(|i| i.time);
         let fps = self.sprite().fps.max(1) as f64;
-        if now - d.since > 1.0 / fps {
-            d.at += 1;
-            d.since = now;
+        if d.running {
+            if now - d.since > 1.0 / fps {
+                d.at += 1;
+                d.since = now;
+            }
+            ui.ctx().request_repaint_after(std::time::Duration::from_millis((1000.0 / fps) as u64));
         }
-        ui.ctx().request_repaint_after(std::time::Duration::from_millis((1000.0 / fps) as u64));
 
         let sp = self.project.sprite();
         let base: Vec<_> = (0..sp.layers.len()).map(|l| sp.cel(sp.frame, l).clone()).collect();
-        let frames = rig::build_frames(&base, &sp.layers, d.template, d.count, d.strength as f64 / 100.0);
+        // „Prüfen“ nimmt allen anderen Ebenen ihre Rolle — nur für diese
+        // Rechnung, nicht am Sprite. Sie stehen dann still.
+        let layers: Vec<_> =
+            sp.layers.iter().enumerate().map(|(i, l)| if d.only.is_none_or(|k| k == i) { l.clone() } else { Layer { part: None, ..l.clone() } }).collect();
+        let frames = rig::build_frames(&base, &layers, d.template, d.count, d.strength as f64 / 100.0);
         if frames.is_empty() {
             return;
         }
@@ -437,6 +470,26 @@ impl SpritebitApp {
                 }
             }
             painter.image(tex.id(), rect, egui::Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)), Color32::WHITE);
+            // Anhalten und Bild für Bild: eine laufende Vorschau taugt nicht,
+            // um eine einzelne Stellung zu beurteilen.
+            ui.horizontal(|ui| {
+                let (icon, tip) = if d.running {
+                    (icons::PAUSE, tr("Anhalten — dann kannst du mit dem Regler Bild für Bild durchgehen"))
+                } else {
+                    (icons::PLAY, tr("Laufen lassen"))
+                };
+                if icons::button(ui, icon, tip, true).clicked() {
+                    d.running = !d.running;
+                    d.since = now;
+                }
+                let mut at = i;
+                let last = frames.len().saturating_sub(1);
+                if ui.add(egui::Slider::new(&mut at, 0..=last).show_value(false)).on_hover_text(tr("Bild für Bild durchgehen")).changed() {
+                    // Von Hand durchgehen heißt anhalten — sonst liefe es einem davon.
+                    d.running = false;
+                    d.at = at;
+                }
+            });
             ui.weak(trf("Bild {i} von {n}", &[("i", &(i + 1)), ("n", &frames.len())]));
         });
     }
