@@ -63,6 +63,7 @@ pub(crate) fn role_name(r: Role) -> &'static str {
         Role::LegBack => "Bein hinten",
         Role::LegFront => "Bein vorne",
         Role::Weapon => "Waffe",
+        Role::Free => "Frei",
     })
 }
 
@@ -185,6 +186,36 @@ impl SpritebitApp {
         self.deselect();
     }
 
+    /// Ausschlag und Takt — nur beim freien Teil (Schwanz, Ohr, Umhang):
+    /// dort bringt die Ebene ihre Bewegung selbst mit. Eine eigene Zeile,
+    /// damit die Regler breit genug bleiben, um sie zu treffen.
+    pub(crate) fn free_swing_row(&mut self, ui: &mut egui::Ui) {
+        let l = self.project.sprite().layer;
+        let Some(part) = self.project.sprite().layers[l].part.filter(|p| p.role == Role::Free) else { return };
+        let (mut amp, mut phase) = (part.amp, part.phase);
+        // Nicht umbrechen: im schmalen Panel stünde sonst „Im“ in der einen
+        // und „Takt“ in der nächsten Zeile.
+        let label = |ui: &mut egui::Ui, t: &str| ui.add(egui::Label::new(egui::RichText::new(t).weak()).wrap_mode(egui::TextWrapMode::Extend));
+        label(ui, tr("Ausschlag"));
+        let a = ui.add(egui::Slider::new(&mut amp, 0.0..=rig::FREE_AMP_MAX).suffix("°").max_decimals(0));
+        ui.add_space(8.0);
+        label(ui, tr("Im Takt"));
+        let b = ui
+            .add(egui::Slider::new(&mut phase, 0.0..=345.0).step_by(15.0).suffix("°").max_decimals(0))
+            .on_hover_text(tr("Wann im Takt: 0° mit den vorderen Beinen, 180° dagegen, 90° dazwischen. Bei Sprung, Schlag, Treffer und Tod ohne Bedeutung — dort gibt es keinen Takt."));
+        // Ein Zug am Regler ist EIN Undo-Schritt, nicht einer je Zwischenwert.
+        if a.drag_started() || b.drag_started() || ((a.changed() || b.changed()) && !a.dragged() && !b.dragged()) {
+            self.edit_sprite(|_| {});
+        }
+        if a.changed() || b.changed() {
+            if let Some(p) = self.project.sprite_mut().layers[l].part.as_mut() {
+                p.amp = amp;
+                p.phase = phase;
+            }
+            self.changed();
+        }
+    }
+
     /// Rolle vergeben oder wegnehmen. Eine frische Rolle bekommt gleich ein
     /// geratenes Gelenk (oben bei Armen und Beinen, unten bei Kopf, Rumpf und
     /// Waffe) — das stimmt bei den meisten gezeichneten Figuren.
@@ -198,7 +229,7 @@ impl SpritebitApp {
                     .map(|p| p.pivot)
                     .or_else(|| rig::auto_pivot(s.cel(s.frame, l), r))
                     .unwrap_or((s.width as f64 / 2.0, s.height as f64 / 2.0));
-                s.layers[l].part = Some(Part { role: r, pivot });
+                s.layers[l].part = Some(Part { role: r, pivot, ..s.layers[l].part.unwrap_or(Part::new(r, pivot)) }.clamped(s.width, s.height));
             }
         });
     }
@@ -228,7 +259,7 @@ impl SpritebitApp {
             // aktuellen die dunkle Kopie. Die Ebene darüber (das vordere
             // Glied) rutscht dabei auf l + 1.
             s.add_layer(0, name);
-            s.layers[0].part = Some(Part { role: back, pivot: src.pivot });
+            s.layers[0].part = Some(Part::new(back, src.pivot));
             let f = s.frame;
             *s.cel_mut(f, 0) = dark;
             s.layer = 0;

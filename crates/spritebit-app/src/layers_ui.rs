@@ -83,6 +83,7 @@ impl SpritebitApp {
             })
             .response;
         self.mark("ly-part", r.rect);
+        ui.horizontal_wrapped(|ui| self.free_swing_row(ui));
         let r = ui
             .horizontal(|ui| {
                 ui.weak(tr("Deckkraft"));

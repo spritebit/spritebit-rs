@@ -113,8 +113,14 @@ fn bild_der_oberflaeche() {
         }
         *sp.cel_mut(0, 0) = spritebit_core::image::Image::new(sp.width, sp.height);
         // Rumpf auf die unterste Ebene, darüber je eine Ebene pro Teil.
-        let parts: [(Role, u32, u32, u32, u32, u16); 4] =
-            [(Role::Torso, 24, 18, 39, 40, 5), (Role::Head, 26, 6, 37, 17, 3), (Role::ArmFront, 40, 20, 44, 36, 7), (Role::LegFront, 28, 41, 34, 56, 9)];
+        let parts: [(Role, u32, u32, u32, u32, u16); 5] = [
+            (Role::Torso, 24, 18, 39, 40, 5),
+            (Role::Head, 26, 6, 37, 17, 3),
+            (Role::ArmFront, 40, 20, 44, 36, 7),
+            (Role::LegFront, 28, 41, 34, 56, 9),
+            // Ein freies Teil (Schwanz) — nur dort gibt es Ausschlag und Takt.
+            (Role::Free, 16, 14, 23, 20, 7),
+        ];
         for (k, &(role, x0, y0, x1, y1, col)) in parts.iter().enumerate() {
             if k == 0 {
                 sp.layers[0].name = "Rumpf".into();
@@ -129,9 +135,9 @@ fn bild_der_oberflaeche() {
                 }
             }
             let pivot = spritebit_core::rig::auto_pivot(sp.cel(sp.frame, k), role).unwrap_or((0.0, 0.0));
-            sp.layers[k].part = Some(Part { role, pivot });
+            sp.layers[k].part = Some(Part::new(role, pivot));
         }
-        sp.layer = 1;
+        sp.layer = 4;
         // Zeichenfläche und Vorschaubilder hängen am Zähler `version` — ohne
         // ihn bliebe das alte Bild stehen.
         a.changed();

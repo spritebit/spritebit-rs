@@ -148,8 +148,8 @@ fn desktop_liest_die_sb_projektdatei_der_web_version() {
 fn rigged() -> Project {
     let mut p = sample();
     let sp = &mut p.sprites[0];
-    sp.layers[0].part = Some(Part { role: Role::Torso, pivot: (3.0, 2.5) });
-    sp.layers[1].part = Some(Part { role: Role::ArmFront, pivot: (0.0, 2.0) });
+    sp.layers[0].part = Some(Part::new(Role::Torso, (3.0, 2.5)));
+    sp.layers[1].part = Some(Part::new(Role::ArmFront, (0.0, 2.0)));
     p
 }
 
@@ -184,5 +184,22 @@ fn eine_unbekannte_rolle_macht_aus_der_ebene_einfach_eine_gewoehnliche() {
     v["sprites"][&id]["layers"][1]["part"]["pivot"]["y"] = serde_json::json!(999);
     let got = parts_of(&import_web(&v.to_string()).expect("lesbar"));
     assert_eq!(got[0], None);
-    assert_eq!(got[1], Some(Part { role: Role::ArmFront, pivot: (0.0, 4.0) }));
+    assert_eq!(got[1], Some(Part::new(Role::ArmFront, (0.0, 4.0))));
+}
+
+#[test]
+fn ausschlag_und_takt_eines_freien_teils_ueberleben_die_datei() {
+    let mut p = rigged();
+    p.sprites[0].layers[1].part = Some(Part { amp: 40.0, phase: 210.0, ..Part::new(Role::Free, (1.0, 2.0)) });
+    let want = parts_of(&p);
+    let text = export_sprite(&p, 0);
+    assert_eq!(parts_of(&import_web(&text).expect("lesbar")), want, ".bitty");
+    assert_eq!(parts_of(&load_native(&save_native(&p)).expect("lesbar")), want, ".sb");
+
+    // Nur beim freien Teil stehen sie in der Datei — sonst stünde bei jeder
+    // Ebene etwas, das für sie keine Bedeutung hat.
+    let v: Value = serde_json::from_str(&text).unwrap();
+    let layers = v["sprites"].as_object().unwrap().values().next().unwrap()["layers"].as_array().unwrap();
+    assert_eq!(layers[1]["part"]["amp"], 40.0);
+    assert!(layers[0]["part"].get("amp").is_none(), "eine feste Rolle trägt keinen Ausschlag");
 }

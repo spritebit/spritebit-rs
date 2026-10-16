@@ -93,6 +93,12 @@ fn layer_json(l: &Layer, px: &dyn Fn(Px) -> Value) -> Value {
     // ohne Figur bleiben so Zeichen für Zeichen die alten.
     if let Some(p) = &l.part {
         v["part"] = json!({ "role": p.role.key(), "pivot": { "x": p.pivot.0, "y": p.pivot.1 } });
+        // Ausschlag und Takt nur beim freien Teil — sonst stünde bei jeder
+        // Ebene etwas, das für sie keine Bedeutung hat.
+        if p.role == crate::rig::Role::Free {
+            v["part"]["amp"] = json!(p.amp);
+            v["part"]["phase"] = json!(p.phase);
+        }
     }
     v
 }
@@ -136,7 +142,17 @@ fn parse_part(v: &Value) -> Option<crate::rig::Part> {
     let role = crate::rig::Role::from_key(v.get("role")?.as_str()?)?;
     let pivot = v.get("pivot")?;
     let (x, y) = (pivot.get("x")?.as_f64()?, pivot.get("y")?.as_f64()?);
-    (x.is_finite() && y.is_finite()).then_some(crate::rig::Part { role, pivot: (x, y) })
+    if !x.is_finite() || !y.is_finite() {
+        return None;
+    }
+    let mut part = crate::rig::Part::new(role, (x, y));
+    // Ausschlag und Takt gibt es nur beim freien Teil; fehlen sie, bleiben
+    // die Vorgaben stehen (clamp_parts stutzt sie später zurecht).
+    if role == crate::rig::Role::Free {
+        part.amp = v.get("amp").and_then(Value::as_f64).unwrap_or(crate::rig::FREE_AMP);
+        part.phase = v.get("phase").and_then(Value::as_f64).unwrap_or(crate::rig::FREE_PHASE);
+    }
+    Some(part)
 }
 
 /// Gelenke auf die Zeichenfläche begrenzen — braucht die Größe, darum

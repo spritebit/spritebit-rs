@@ -45,9 +45,13 @@ pub enum Role {
     LegBack,
     LegFront,
     Weapon,
+    /// Freies Teil: Schwanz, Ohr, Umhang, Fühler, Flügel. Es passt in keine
+    /// feste Rolle und bringt seine Bewegung selbst mit ([`Part::amp`],
+    /// [`Part::phase`]).
+    Free,
 }
 
-pub const ROLES: [Role; 7] = [Role::Head, Role::Torso, Role::ArmBack, Role::ArmFront, Role::LegBack, Role::LegFront, Role::Weapon];
+pub const ROLES: [Role; 8] = [Role::Head, Role::Torso, Role::ArmBack, Role::ArmFront, Role::LegBack, Role::LegFront, Role::Weapon, Role::Free];
 
 impl Role {
     /// Der Name im Speicherstand — derselbe wie in der Web-Version.
@@ -60,6 +64,7 @@ impl Role {
             Role::LegBack => "legBack",
             Role::LegFront => "legFront",
             Role::Weapon => "weapon",
+            Role::Free => "free",
         }
     }
 
@@ -82,20 +87,46 @@ impl Role {
     }
 }
 
+/// Vorgabe für den Ausschlag eines freien Teils, in Grad.
+pub const FREE_AMP: f64 = 25.0;
+/// Vorgabe für „im Takt“, in Grad.
+pub const FREE_PHASE: f64 = 90.0;
+/// Weiter als das schwingt kein Anhängsel.
+pub const FREE_AMP_MAX: f64 = 90.0;
+
 /// Rolle und Gelenk einer Ebene.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Part {
     pub role: Role,
     /// In Gitterkanten, darf auf halben Zellen liegen.
     pub pivot: (f64, f64),
+    /// Nur bei [`Role::Free`]: wie weit das Teil ausschwingt, in Grad.
+    pub amp: f64,
+    /// Nur bei [`Role::Free`]: wann im Takt, in Grad. 0 = mit den vorderen
+    /// Beinen, 180 = dagegen, 90 = dazwischen.
+    pub phase: f64,
 }
 
 impl Part {
-    /// Auf die Zeichenfläche begrenzen. Die Kanten selbst sind erlaubt:
-    /// 0 und `w`/`h` sind Gitterlinien, keine Zellen.
+    /// Ein Teil mit den Vorgaben für ein freies.
+    pub fn new(role: Role, pivot: (f64, f64)) -> Part {
+        Part { role, pivot, amp: FREE_AMP, phase: FREE_PHASE }
+    }
+
+    /// Auf die Zeichenfläche begrenzen und die Werte eines freien Teils
+    /// zurechtstutzen. Die Kanten selbst sind erlaubt: 0 und `w`/`h` sind
+    /// Gitterlinien, keine Zellen. Der Takt läuft rund: -90 und 270 sind
+    /// dieselbe Stelle.
     pub fn clamped(mut self, w: u32, h: u32) -> Part {
         self.pivot.0 = self.pivot.0.clamp(0.0, w as f64);
         self.pivot.1 = self.pivot.1.clamp(0.0, h as f64);
+        if self.role == Role::Free {
+            self.amp = if self.amp.is_finite() { self.amp.clamp(0.0, FREE_AMP_MAX) } else { FREE_AMP };
+            self.phase = if self.phase.is_finite() { self.phase.rem_euclid(360.0) } else { FREE_PHASE };
+        } else {
+            self.amp = FREE_AMP;
+            self.phase = FREE_PHASE;
+        }
         self
     }
 }
@@ -124,6 +155,13 @@ pub fn content_box(img: &Image) -> Option<(u32, u32, u32, u32)> {
 /// Hüfte), Kopf, Rumpf und Waffe unten (Hals, Hüftlinie, Griff).
 pub fn auto_pivot(img: &Image, role: Role) -> Option<(f64, f64)> {
     let (x0, y0, x1, y1) = content_box(img)?;
+    // Ein freies Teil kann überall sitzen — Schwanz hinten, Ohr oben, Umhang
+    // am Rücken. Darum keine feste Kante, sondern die Stelle des Teils, die
+    // der Mitte des Bildes am nächsten liegt: dort hängt es am Körper.
+    if role == Role::Free {
+        let (cx, cy) = (img.width() as f64 / 2.0, img.height() as f64 / 2.0);
+        return Some((cx.clamp(x0 as f64, x1 as f64 + 1.0), cy.clamp(y0 as f64, y1 as f64 + 1.0)));
+    }
     let x = (x0 as f64 + x1 as f64 + 1.0) / 2.0;
     Some((x, if role.hangs_at_top() { y0 as f64 } else { y1 as f64 + 1.0 }))
 }
@@ -154,7 +192,7 @@ pub struct Pose {
 pub const REST: Pose = Pose { dx: 0, dy: 0, rot: 0.0 };
 
 /// Die Stellungen aller Rollen in einem Augenblick.
-pub type Frame = [Pose; 7];
+pub type Frame = [Pose; 8];
 
 fn idx(role: Role) -> usize {
     ROLES.iter().position(|r| *r == role).unwrap()
@@ -213,6 +251,24 @@ impl Template {
     pub fn loops(self) -> bool {
         matches!(self, Template::Idle | Template::Walk | Template::WalkQuad | Template::Run)
     }
+
+    /// Das Signal für freie Teile (Schwanz, Ohr, Umhang …) an der Stelle `p`,
+    /// zwischen -1 und 1. Wie weit ein Teil damit dreht, sagt sein eigener
+    /// Ausschlag ([`Part::amp`]).
+    pub fn swing(self, p: f64) -> f64 {
+        match self {
+            // Atmen und Schritte: der Schwanz wiegt im Takt mit.
+            Template::Idle | Template::Walk | Template::WalkQuad | Template::Run => (std::f64::consts::TAU * p).sin(),
+            // Hoch beim Abstoßen, danach schleppt es hinterher.
+            Template::Jump => seg(p, &[0.0, 1.0, -1.0, -1.0, -0.5, 0.0]),
+            // Mit dem Ausholen zurück, mit dem Schlag nach vorn.
+            Template::Attack => seg(p, &[0.0, -1.0, 1.0, 1.0, 0.2]),
+            // Fliegt mit dem Rückstoß hoch und federt zurück.
+            Template::Hit => seg(p, &[0.0, 1.0, 0.6, 0.0]),
+            // Sinkt in eine Richtung und bleibt liegen.
+            Template::Death => seg(p, &[0.0, 0.3, 0.6, 0.85, 1.0, 1.0]),
+        }
+    }
 }
 
 /// Lineare Fahrt durch Stützwerte: `seg(0.5, &[0.0, 10.0, 0.0]) == 10.0`.
@@ -257,7 +313,7 @@ const BODY: [Role; 5] = [Role::Head, Role::Torso, Role::ArmBack, Role::ArmFront,
 /// Die Stellungen aller Teile an der Stelle `p` (0..1) der Bewegung.
 /// `s` ist die Stärke, 1 = normal.
 pub fn pose_at(tpl: Template, p: f64, s: f64) -> Frame {
-    let mut f: Frame = [REST; 7];
+    let mut f: Frame = [REST; 8];
     let tau = std::f64::consts::TAU;
     let pi = std::f64::consts::PI;
     match tpl {
@@ -385,9 +441,25 @@ pub fn pose_at(tpl: Template, p: f64, s: f64) -> Frame {
 /// wäre wieder 0 und ergäbe einen doppelten Frame. Einmalige Bewegungen
 /// laufen dagegen von 0 bis 1 durch, damit auch das Ende dabei ist.
 pub fn build_poses(tpl: Template, n: usize, strength: f64) -> Vec<Frame> {
+    phases(tpl, n).into_iter().map(|p| pose_at(tpl, p, strength)).collect()
+}
+
+/// Die Stellen in der Bewegung, an denen die `n` Frames abgefragt werden.
+pub fn phases(tpl: Template, n: usize) -> Vec<f64> {
     let count = if n == 0 { tpl.frames() } else { n.clamp(2, 64) };
     let last = if tpl.loops() { count } else { count - 1 };
-    (0..count).map(|i| pose_at(tpl, i as f64 / last as f64, strength)).collect()
+    (0..count).map(|i| i as f64 / last as f64).collect()
+}
+
+/// Die Stellung eines freien Teils an der Stelle `p`. Es dreht um seinen
+/// eigenen Ausschlag und wandert im Übrigen mit dem Körper — ein eigener
+/// Versatz würde es vom Rumpf lösen.
+///
+/// „Im Takt“ verschiebt die Stelle in der Bewegung, bei einer rundlaufenden
+/// umlaufend. Bei einer einmaligen gäbe es nichts zu verschieben.
+pub fn free_pose(tpl: Template, p: f64, strength: f64, part: &Part, body: Pose) -> Pose {
+    let at = if tpl.loops() { (p + part.phase / 360.0).rem_euclid(1.0) } else { p };
+    Pose { dx: body.dx, dy: body.dy, rot: deg(part.amp * strength * tpl.swing(at)) }
 }
 
 /// Ein Teil verschieben und um sein Gelenk drehen — auf einer Fläche
@@ -427,10 +499,13 @@ pub fn transform_part(img: &Image, pivot: (f64, f64), pose: Pose) -> Image {
 
 /// Einen Frame bauen: jede Ebene des Grundframes in ihre Stellung bringen.
 /// Ebenen ohne Rolle (Hintergrund, Schatten) kommen unverändert zurück.
-pub fn build_frame(base: &[Image], layers: &[Layer], frame: &Frame) -> Vec<Image> {
+pub fn build_frame(base: &[Image], layers: &[Layer], frame: &Frame, free: Option<&dyn Fn(&Part) -> Pose>) -> Vec<Image> {
     base.iter()
         .zip(layers)
         .map(|(img, l)| match l.part {
+            // Freie Teile bringen ihre Bewegung selbst mit (siehe free_pose) —
+            // die Vorlage kennt nur die festen Rollen.
+            Some(p) if p.role == Role::Free => transform_part(img, p.pivot, free.map_or(REST, |f| f(&p))),
             Some(p) => transform_part(img, p.pivot, pose_of(frame, p.role)),
             None => img.clone(),
         })
@@ -439,7 +514,14 @@ pub fn build_frame(base: &[Image], layers: &[Layer], frame: &Frame) -> Vec<Image
 
 /// Die ganze Bewegung: aus einem Grundframe `n` fertige Frames.
 pub fn build_frames(base: &[Image], layers: &[Layer], tpl: Template, n: usize, strength: f64) -> Vec<Vec<Image>> {
-    build_poses(tpl, n, strength).iter().map(|f| build_frame(base, layers, f)).collect()
+    phases(tpl, n)
+        .into_iter()
+        .map(|p| {
+            let frame = pose_at(tpl, p, strength);
+            let body = pose_of(&frame, Role::Torso);
+            build_frame(base, layers, &frame, Some(&|part: &Part| free_pose(tpl, p, strength, part, body)))
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -613,10 +695,10 @@ mod tests {
         let mut back = Layer::new("Hintergrund");
         back.part = None;
         let mut head = Layer::new("Kopf");
-        head.part = Some(Part { role: Role::Head, pivot: (2.0, 2.0) });
-        let mut f: Frame = [REST; 7];
+        head.part = Some(Part::new(Role::Head, (2.0, 2.0)));
+        let mut f: Frame = [REST; 8];
         put(&mut f, Role::Head, Pose { dx: 1, dy: 0, rot: 0.0 });
-        let out = build_frame(&base, &[back, head], &f);
+        let out = build_frame(&base, &[back, head], &f, None);
         assert_eq!(rows(&out[0]), rows(&bar()));
         assert_eq!(out[1].get(3, 2), 7);
     }
@@ -630,13 +712,84 @@ mod tests {
                 sp.cel_mut(0, 1).set(x, y, 3);
             }
         }
-        sp.layers[1].part = Some(Part { role: Role::Head, pivot: (7.5, 6.0) });
+        sp.layers[1].part = Some(Part::new(Role::Head, (7.5, 6.0)));
         let base: Vec<_> = (0..sp.layers.len()).map(|l| sp.cel(0, l).clone()).collect();
         let frames = build_frames(&base, &sp.layers, Template::Walk, 8, 1.2);
         assert_eq!(frames.len(), 8);
         for (i, cels) in frames.iter().enumerate() {
             assert!(!cels[1].is_empty(), "Frame {i} ist leer");
         }
+    }
+
+    #[test]
+    fn ein_freies_teil_bekommt_die_vorgaben_und_wird_zurechtgestutzt() {
+        let p = Part::new(Role::Free, (2.0, 3.0));
+        assert_eq!((p.amp, p.phase), (FREE_AMP, FREE_PHASE));
+        let wide = Part { amp: 999.0, phase: -90.0, ..Part::new(Role::Free, (2.0, 3.0)) }.clamped(16, 16);
+        assert_eq!(wide.amp, FREE_AMP_MAX);
+        assert_eq!(wide.phase, 270.0, "minus 90 ist dieselbe Stelle wie 270");
+        // Feste Rollen tragen keinen Ausschlag mit sich herum.
+        let head = Part { amp: 40.0, phase: 10.0, ..Part::new(Role::Head, (1.0, 1.0)) }.clamped(16, 16);
+        assert_eq!((head.amp, head.phase), (FREE_AMP, FREE_PHASE));
+    }
+
+    #[test]
+    fn der_ausschlag_bestimmt_wie_weit_ein_freies_teil_dreht() {
+        let part = Part { amp: 30.0, phase: 0.0, ..Part::new(Role::Free, (0.0, 0.0)) };
+        let rots: Vec<f64> = phases(Template::Walk, 8).into_iter().map(|p| free_pose(Template::Walk, p, 1.0, &part, REST).rot).collect();
+        assert!(rots.iter().cloned().fold(0.0, f64::max) <= 30.0);
+        assert!(rots.iter().any(|r| *r != 0.0));
+        let wide = Part { amp: 60.0, ..part };
+        for (i, p) in phases(Template::Walk, 8).into_iter().enumerate() {
+            let r = free_pose(Template::Walk, p, 1.0, &wide, REST).rot;
+            assert!((r - 2.0 * rots[i]).abs() < 0.2, "Bild {}", i + 1);
+        }
+    }
+
+    #[test]
+    fn im_takt_verschiebt_die_bewegung_umlaufend() {
+        let part = Part { amp: 30.0, phase: 0.0, ..Part::new(Role::Free, (0.0, 0.0)) };
+        for p in phases(Template::Walk, 8) {
+            let plain = free_pose(Template::Walk, p, 1.0, &part, REST).rot;
+            let half = free_pose(Template::Walk, p, 1.0, &Part { phase: 180.0, ..part }, REST).rot;
+            let full = free_pose(Template::Walk, p, 1.0, &Part { phase: 360.0, ..part }, REST).rot;
+            assert!((half + plain).abs() < 0.2, "eine halbe Runde später ist es die Gegenbewegung");
+            assert_eq!(full, plain, "eine ganze Runde später ist es dasselbe");
+        }
+    }
+
+    #[test]
+    fn ein_freies_teil_wandert_mit_dem_koerper_statt_abzureissen() {
+        let part = Part { amp: 30.0, phase: 0.0, ..Part::new(Role::Free, (0.0, 0.0)) };
+        for t in TEMPLATES {
+            for p in phases(t, 8) {
+                let body = pose_of(&pose_at(t, p, 1.0), Role::Torso);
+                let free = free_pose(t, p, 1.0, &part, body);
+                assert_eq!((free.dx, free.dy), (body.dx, body.dy), "{}", t.key());
+            }
+            // und jede Vorlage bewegt es überhaupt
+            assert!(phases(t, 8).into_iter().any(|p| free_pose(t, p, 1.0, &part, REST).rot != 0.0), "{}", t.key());
+        }
+    }
+
+    #[test]
+    fn ein_freies_teil_haengt_an_der_seite_die_zur_bildmitte_zeigt() {
+        // 20 × 20, Mitte bei (10, 10). Schwanz links oben (2..5, 5..9).
+        let mut g = Image::new(20, 20);
+        for y in 5..=9 {
+            for x in 2..=5 {
+                g.set(x, y, 1);
+            }
+        }
+        assert_eq!(auto_pivot(&g, Role::Free), Some((6.0, 10.0)), "die untere rechte Ecke");
+        // Ohr oben mittig (9..11, 1..3): Unterkante.
+        let mut e = Image::new(20, 20);
+        for y in 1..=3 {
+            for x in 9..=11 {
+                e.set(x, y, 1);
+            }
+        }
+        assert_eq!(auto_pivot(&e, Role::Free), Some((10.0, 4.0)));
     }
 
     #[test]
