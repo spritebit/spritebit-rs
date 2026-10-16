@@ -206,6 +206,10 @@ impl SpritebitApp {
             let name = trf("{name} Kopie", &[("name", &self.project.sprite().layers[l].name)]);
             self.edit_sprite(|s| s.duplicate_layer(name));
         }
+        let tip = tr("Auswahl in eine eigene Ebene — nimmt den ausgewählten Teil aus der aktiven Ebene heraus und legt ihn in eine neue darüber, in diesem Frame. So zerlegst du eine Figur in Körperteile.");
+        if icons::button(ui, icons::PART_OUT, tip, self.selection.is_some()).clicked() {
+            self.layer_from_selection();
+        }
         if icons::button(ui, icons::MERGE_DOWN, tr("Nach unten zusammenlegen — in jedem Frame"), l > 0).clicked() {
             let pal = self.project.current_palette();
             self.edit_sprite(|s| {

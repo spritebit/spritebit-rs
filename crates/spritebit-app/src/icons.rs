@@ -66,6 +66,7 @@ pub const PENCIL: ImageSource<'static> = include_image!("../assets/icons/pencil.
 pub const PICKER: ImageSource<'static> = include_image!("../assets/icons/picker.svg");
 pub const PIN: ImageSource<'static> = include_image!("../assets/icons/pin.svg");
 pub const PLAY: ImageSource<'static> = include_image!("../assets/icons/play.svg");
+pub const PART_OUT: ImageSource<'static> = include_image!("../assets/icons/partOut.svg");
 pub const PIVOT: ImageSource<'static> = include_image!("../assets/icons/pivot.svg");
 pub const PLUS: ImageSource<'static> = include_image!("../assets/icons/plus.svg");
 pub const RUN: ImageSource<'static> = include_image!("../assets/icons/run.svg");

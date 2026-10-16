@@ -142,6 +142,49 @@ impl SpritebitApp {
         }
     }
 
+    /// Auswahl in eine eigene Ebene: der gewählte Teil wird aus der aktiven
+    /// Ebene HERAUSGENOMMEN und sitzt danach allein in einer neuen Ebene
+    /// darüber, an genau derselben Stelle. Damit zerlegt man eine fertig
+    /// gezeichnete Figur in Kopf, Rumpf, Arme und Beine.
+    ///
+    /// Nur im aktuellen Frame: man zerlegt ein Bild, nicht eine Animation.
+    /// Teilt die Quellzelle ihr Bild mit anderen Frames (verknüpft), wird sie
+    /// für diesen Frame zuerst gelöst — sonst fehlte das Teil überall.
+    pub(crate) fn layer_from_selection(&mut self) {
+        let Some(sel) = self.selection.clone() else {
+            self.hint = Some(tr("Erst einen Teil auswählen — mit Lasso, Rechteck oder Zauberstab.").into());
+            return;
+        };
+        // Schwebendes zuerst absetzen: der Inhalt gehört ins Raster, aus dem
+        // er kam, bevor er herausgenommen wird.
+        self.commit_float();
+        let (from, f) = {
+            let sp = self.project.sprite();
+            (sp.layer, sp.frame)
+        };
+        let empty = {
+            let sp = self.project.sprite();
+            spritebit_core::selection::copy(sp.cel(f, from), &sel).data.iter().all(|&v| v == 0)
+        };
+        if empty {
+            self.hint = Some(tr("In der Auswahl ist nichts — dort sind alle Pixel leer.").into());
+            return;
+        }
+        let name = trf("Teil {n}", &[("n", &(self.project.sprite().layers.len() + 1))]);
+        self.edit_sprite(|s| {
+            if s.is_linked(f, from) {
+                s.unlink(f, from);
+            }
+            let clip = spritebit_core::selection::copy(s.cel(f, from), &sel);
+            spritebit_core::selection::clear(s.cel_mut(f, from), &sel);
+            let at = from + 1;
+            s.add_layer(at, name);
+            spritebit_core::selection::paste(s.cel_mut(f, at), &clip, sel.x, sel.y);
+            s.layer = at;
+        });
+        self.deselect();
+    }
+
     /// Rolle vergeben oder wegnehmen. Eine frische Rolle bekommt gleich ein
     /// geratenes Gelenk (oben bei Armen und Beinen, unten bei Kopf, Rumpf und
     /// Waffe) — das stimmt bei den meisten gezeichneten Figuren.
