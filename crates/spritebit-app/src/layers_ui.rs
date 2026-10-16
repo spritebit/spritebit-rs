@@ -74,6 +74,15 @@ impl SpritebitApp {
             })
             .response;
         self.mark("ly-mask", r.rect);
+        // Körperteil der aktiven Ebene (rig_ui.rs): Rolle, Gelenk, hinteres
+        // Glied und „Bewegung erzeugen“.
+        let r = ui
+            .horizontal_wrapped(|ui| {
+                ui.weak(tr("Körperteil"));
+                self.part_row(ui);
+            })
+            .response;
+        self.mark("ly-part", r.rect);
         let r = ui
             .horizontal(|ui| {
                 ui.weak(tr("Deckkraft"));

@@ -99,6 +99,54 @@ fn bild_der_oberflaeche() {
         }
         h.run();
     }
+    // SPRITEBIT_SHOT_RIG=1: eine Figur aus Körperteilen, Gelenke auf der
+    // Fläche; mit _RIGWIN=1 zusätzlich „Bewegung erzeugen“ offen.
+    if std::env::var_os("SPRITEBIT_SHOT_RIG").is_some() {
+        use spritebit_core::rig::{Part, Role};
+        let a = h.state_mut();
+        a.dock.focus = Some(crate::dock_ui::PanelId::Layers);
+        a.zoom = 6.0;
+        let sp = a.project.sprite_mut();
+        // Von vorn anfangen: die Ebenen der Grundeinstellung wegräumen.
+        while sp.layers.len() > 1 {
+            sp.delete_layer(0);
+        }
+        *sp.cel_mut(0, 0) = spritebit_core::image::Image::new(sp.width, sp.height);
+        // Rumpf auf die unterste Ebene, darüber je eine Ebene pro Teil.
+        let parts: [(Role, u32, u32, u32, u32, u16); 4] =
+            [(Role::Torso, 24, 18, 39, 40, 5), (Role::Head, 26, 6, 37, 17, 3), (Role::ArmFront, 40, 20, 44, 36, 7), (Role::LegFront, 28, 41, 34, 56, 9)];
+        for (k, &(role, x0, y0, x1, y1, col)) in parts.iter().enumerate() {
+            if k == 0 {
+                sp.layers[0].name = "Rumpf".into();
+            } else {
+                sp.add_layer(k, crate::rig_ui::role_name(role).to_string());
+            }
+            sp.layer = k;
+            let img = sp.active();
+            for y in y0..=y1 {
+                for x in x0..=x1 {
+                    img.set(x, y, col);
+                }
+            }
+            let pivot = spritebit_core::rig::auto_pivot(sp.cel(sp.frame, k), role).unwrap_or((0.0, 0.0));
+            sp.layers[k].part = Some(Part { role, pivot });
+        }
+        sp.layer = 1;
+        // Zeichenfläche und Vorschaubilder hängen am Zähler `version` — ohne
+        // ihn bliebe das alte Bild stehen.
+        a.changed();
+        h.run();
+        h.run();
+        if std::env::var_os("SPRITEBIT_SHOT_RIGWIN").is_some() {
+            h.state_mut().rig_dialog = Some(crate::rig_ui::RigDialog::for_shot());
+            // step statt run: die Vorschau im Fenster läuft weiter und
+            // bestellt endlos neue Bilder — run() wartet darauf, dass Ruhe
+            // einkehrt, und gäbe auf.
+            for _ in 0..4 {
+                h.step();
+            }
+        }
+    }
     // SPRITEBIT_SHOT_SELOP=1: Auswahl-Werkzeug mit Knöpfen Neu/+/−, Auswahl mit Loch.
     if std::env::var_os("SPRITEBIT_SHOT_SELOP").is_some() {
         use spritebit_core::selection::{combine, SelOp, Selection};

@@ -20,6 +20,7 @@ mod layers_ui;
 mod palette_ui;
 mod preview_ui;
 mod projects_ui;
+mod rig_ui;
 mod selection_ui;
 mod selfupdate;
 mod settings_ui;
@@ -158,6 +159,11 @@ struct SpritebitApp {
     stroke_last: Option<(i64, i64)>,
     hover: Option<(i64, i64)>,
     sprite_dialog: Option<sprites_ui::SpriteDialog>,
+    /// Gelenk setzen (spritebit_core::rig): der nächste Klick auf die Fläche
+    /// legt das Gelenk der aktiven Ebene fest, statt zu malen.
+    pivot_pick: bool,
+    /// „Bewegung erzeugen“ — offen oder nicht (rig_ui.rs).
+    rig_dialog: Option<rig_ui::RigDialog>,
     about_open: bool,
     /// Fehlermeldung, die als Fenster angezeigt wird.
     error: Option<String>,
@@ -315,6 +321,8 @@ impl SpritebitApp {
         SpritebitApp {
             tabs: (0..project.sprites.len()).collect(),
             update: update::UpdateState::default(),
+            pivot_pick: false,
+            rig_dialog: None,
             project,
             histories,
             path: None,
@@ -1063,7 +1071,8 @@ impl SpritebitApp {
         // Umschalt+Alt gehört der Schablone, im Hilfslinien-Modus gehört
         // der Zeiger den Linien.
         // Alt + rechte Maustaste ziehen: Größe verstellen statt radieren.
-        if !self.size_drag_pointer(pointer, &p, secondary_pressed)
+        if !self.pivot_pointer(pointer, pressed, p.over, origin, zoom)
+            && !self.size_drag_pointer(pointer, &p, secondary_pressed)
             && !self.template_pointer(pointer, pressed, released, p.over, origin, zoom)
             && !self.guide_pointer(pointer, pressed, released, p.over, origin, zoom)
         {
@@ -1225,6 +1234,7 @@ impl SpritebitApp {
             painter.line_segment([Pos2::new(origin.x, y), Pos2::new(origin.x + sw as f32 * zoom, y)], axis);
         }
         self.draw_guides(&painter, origin, zoom);
+        self.draw_pivots(&painter, origin, zoom);
         self.draw_tiles(&painter.with_clip_rect(area), origin, zoom);
         // Form, die gerade aufgezogen wird, und der Rahmen der Auswahl.
         self.shape_preview(&painter, origin, zoom);
@@ -1258,6 +1268,7 @@ impl SpritebitApp {
     fn dialogs(&mut self, ctx: &egui::Context) {
         self.sprite_dialogs(ctx);
         self.palette_dialogs(ctx);
+        self.rig_window(ctx);
         self.settings_window(ctx);
         if self.about_open {
             egui::Window::new(tr("Über spritebit")).collapsible(false).resizable(false).open(&mut self.about_open).show(ctx, |ui| {

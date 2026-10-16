@@ -89,6 +89,11 @@ fn layer_json(l: &Layer, px: &dyn Fn(Px) -> Value) -> Value {
     if let Some(ts) = &l.tileset {
         v["tileset"] = ts.to_json(px);
     }
+    // Körperteil (crate::rig) — nur, wenn es eins gibt: Dateien von Sprites
+    // ohne Figur bleiben so Zeichen für Zeichen die alten.
+    if let Some(p) = &l.part {
+        v["part"] = json!({ "role": p.role.key(), "pivot": { "x": p.pivot.0, "y": p.pivot.1 } });
+    }
     v
 }
 
@@ -118,8 +123,29 @@ fn parse_layer(v: Option<&Value>, n: usize) -> Layer {
         l.opacity = v.get("opacity").and_then(Value::as_f64).map_or(1.0, |o| o.clamp(0.0, 1.0) as f32);
         l.continuous = v.get("continuous").and_then(Value::as_bool).unwrap_or(false);
         l.fx = v.get("fx").and_then(crate::light::LayerFx::from_json);
+        // Rohe Werte — gegen die Größe begrenzt wird nach parse_layer
+        // (read_parts), die kennt der Sprite hier noch nicht.
+        l.part = v.get("part").and_then(parse_part);
     }
     l
+}
+
+/// Rolle und Gelenk aus dem Speicherstand. Unbekannte Rolle oder fehlendes
+/// Gelenk → `None`, die Ebene ist dann einfach kein Körperteil.
+fn parse_part(v: &Value) -> Option<crate::rig::Part> {
+    let role = crate::rig::Role::from_key(v.get("role")?.as_str()?)?;
+    let pivot = v.get("pivot")?;
+    let (x, y) = (pivot.get("x")?.as_f64()?, pivot.get("y")?.as_f64()?);
+    (x.is_finite() && y.is_finite()).then_some(crate::rig::Part { role, pivot: (x, y) })
+}
+
+/// Gelenke auf die Zeichenfläche begrenzen — braucht die Größe, darum
+/// nach parse_layer.
+fn clamp_parts(sp: &mut Sprite) {
+    let (w, h) = (sp.width, sp.height);
+    for l in &mut sp.layers {
+        l.part = l.part.map(|p| p.clamped(w, h));
+    }
 }
 
 /// Masken brauchen die Größe des Sprites — darum nach parse_layer.
@@ -334,6 +360,7 @@ pub fn load_native(bytes: &[u8]) -> Result<Project, IoError> {
         let layers = s["layers"].as_array().ok_or_else(|| IoError::Corrupt("keine Ebenen".into()))?;
         sp.layers = layers.iter().enumerate().map(|(i, l)| parse_layer(Some(l), i + 1)).collect();
         read_masks(&mut sp, Some(layers));
+        clamp_parts(&mut sp);
         read_tilesets(&mut sp, Some(layers), false);
         sp.free = s["free"].as_array().map_or_else(Vec::new, |f| f.iter().map(|h| h.as_str().and_then(parse_hex).unwrap_or([0, 0, 0])).collect());
         let n_images = s["images"].as_u64().unwrap_or(0) as usize;
@@ -429,6 +456,7 @@ pub fn import_web(text: &str) -> Result<Project, IoError> {
         let layer_list = s.get("layers").and_then(Value::as_array);
         sp.layers = (0..n_layers).map(|i| parse_layer(layer_list.and_then(|l| l.get(i)), i + 1)).collect();
         read_masks(&mut sp, layer_list);
+        clamp_parts(&mut sp);
         read_tilesets(&mut sp, layer_list, true);
         sp.frames.clear();
         sp.images.clear();

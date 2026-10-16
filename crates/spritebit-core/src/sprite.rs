@@ -29,11 +29,14 @@ pub struct Layer {
     pub mask: Option<crate::mask::Mask>,
     /// Tilemap-Ebene: Kachelsatz (siehe [`crate::tilemap`]); `None` = normale Ebene.
     pub tileset: Option<crate::tilemap::Tileset>,
+    /// Körperteil einer Figur: Rolle und Gelenk (siehe [`crate::rig`]);
+    /// `None` = gewöhnliche Ebene.
+    pub part: Option<crate::rig::Part>,
 }
 
 impl Layer {
     pub fn new(name: impl Into<String>) -> Self {
-        Layer { name: name.into(), visible: true, locked: false, opacity: 1.0, continuous: false, fx: None, mask: None, tileset: None }
+        Layer { name: name.into(), visible: true, locked: false, opacity: 1.0, continuous: false, fx: None, mask: None, tileset: None, part: None }
     }
 }
 

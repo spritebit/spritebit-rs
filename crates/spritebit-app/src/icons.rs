@@ -9,6 +9,7 @@
 
 use eframe::egui::{self, include_image, Color32, ImageSource, Response, Ui, Vec2};
 
+pub const BACK_LIMB: ImageSource<'static> = include_image!("../assets/icons/backLimb.svg");
 pub const BRUSH: ImageSource<'static> = include_image!("../assets/icons/brush.svg");
 pub const CIRCLE: ImageSource<'static> = include_image!("../assets/icons/circle.svg");
 pub const CLEANUP: ImageSource<'static> = include_image!("../assets/icons/cleanup.svg");
@@ -65,7 +66,9 @@ pub const PENCIL: ImageSource<'static> = include_image!("../assets/icons/pencil.
 pub const PICKER: ImageSource<'static> = include_image!("../assets/icons/picker.svg");
 pub const PIN: ImageSource<'static> = include_image!("../assets/icons/pin.svg");
 pub const PLAY: ImageSource<'static> = include_image!("../assets/icons/play.svg");
+pub const PIVOT: ImageSource<'static> = include_image!("../assets/icons/pivot.svg");
 pub const PLUS: ImageSource<'static> = include_image!("../assets/icons/plus.svg");
+pub const RUN: ImageSource<'static> = include_image!("../assets/icons/run.svg");
 pub const PREV: ImageSource<'static> = include_image!("../assets/icons/prev.svg");
 pub const PREVIEW: ImageSource<'static> = include_image!("../assets/icons/preview.svg");
 pub const RECT: ImageSource<'static> = include_image!("../assets/icons/rect.svg");

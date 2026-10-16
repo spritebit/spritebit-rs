@@ -15,6 +15,7 @@
 use std::path::PathBuf;
 
 use serde_json::Value;
+use spritebit_core::rig::{Part, Role};
 use spritebit_core::{export_sprite, import_web, load_native, save_native, Direction, Palette, Project, Sprite, Tag, FREE_BASE};
 
 fn dir() -> PathBuf {
@@ -135,4 +136,53 @@ fn desktop_liest_die_eigene_sb_beispieldatei_wieder() {
 fn desktop_liest_die_sb_projektdatei_der_web_version() {
     let bytes = std::fs::read(dir().join("web-project.sb")).expect("tests/interop/web-project.sb");
     expect_sample(&load_native(&bytes).expect("Web-Datei lesbar"));
+}
+
+// ── Körperteile ──────────────────────────────────────────────────────
+// Die Figur (crate::rig) hängt als `part` an jeder Ebene. Die Beispieldateien
+// oben kennen sie nicht — sie sollen Zeichen für Zeichen die alten bleiben,
+// solange ein Sprite keine Figur hat. Geprüft wird darum hier, an einem
+// eigenen Sprite: einmal durch unsere Dateien und einmal gegen die Form, die
+// die Web-Version schreibt.
+
+fn rigged() -> Project {
+    let mut p = sample();
+    let sp = &mut p.sprites[0];
+    sp.layers[0].part = Some(Part { role: Role::Torso, pivot: (3.0, 2.5) });
+    sp.layers[1].part = Some(Part { role: Role::ArmFront, pivot: (0.0, 2.0) });
+    p
+}
+
+fn parts_of(p: &Project) -> Vec<Option<Part>> {
+    p.sprites[0].layers.iter().map(|l| l.part).collect()
+}
+
+#[test]
+fn koerperteile_ueberleben_die_eigene_datei() {
+    let want = parts_of(&rigged());
+    assert_eq!(parts_of(&import_web(&export_sprite(&rigged(), 0)).expect("lesbar")), want, ".bitty");
+    assert_eq!(parts_of(&load_native(&save_native(&rigged())).expect("lesbar")), want, ".sb");
+}
+
+#[test]
+fn koerperteile_werden_in_der_form_der_web_version_geschrieben() {
+    let v: Value = serde_json::from_str(&export_sprite(&rigged(), 0)).unwrap();
+    let layers = v["sprites"].as_object().unwrap().values().next().unwrap()["layers"].as_array().unwrap();
+    assert_eq!(layers[0]["part"], serde_json::json!({ "role": "torso", "pivot": { "x": 3.0, "y": 2.5 } }));
+    // Ohne Figur steht der Schlüssel gar nicht erst drin.
+    let plain: Value = serde_json::from_str(&export_sprite(&sample(), 0)).unwrap();
+    let ls = plain["sprites"].as_object().unwrap().values().next().unwrap()["layers"].as_array().unwrap();
+    assert!(ls.iter().all(|l| l.get("part").is_none()), "part darf ohne Figur nicht auftauchen");
+}
+
+#[test]
+fn eine_unbekannte_rolle_macht_aus_der_ebene_einfach_eine_gewoehnliche() {
+    let mut v: Value = serde_json::from_str(&export_sprite(&rigged(), 0)).unwrap();
+    let id = v["sprites"].as_object().unwrap().keys().next().unwrap().clone();
+    v["sprites"][&id]["layers"][0]["part"]["role"] = Value::String("nase".into());
+    // Gelenk weit außerhalb: wird auf die Zeichenfläche gezogen, nicht verworfen.
+    v["sprites"][&id]["layers"][1]["part"]["pivot"]["y"] = serde_json::json!(999);
+    let got = parts_of(&import_web(&v.to_string()).expect("lesbar"));
+    assert_eq!(got[0], None);
+    assert_eq!(got[1], Some(Part { role: Role::ArmFront, pivot: (0.0, 4.0) }));
 }

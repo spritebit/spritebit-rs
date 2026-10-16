@@ -20,6 +20,7 @@
 //! * [`cels`] — Zellen-Bereiche der Timeline: verschieben, kopieren, verknüpfen
 //! * [`cleanup`] — Hintergrund entfernen, glätten, Outline, Median-Cut
 //! * [`light`] — Lichtquelle: Kantenlicht und Schlagschatten
+//! * [`rig`] — Körperteile einer Figur und Vorlagen, die daraus eine Bewegung rechnen
 //! * [`shade`] — Schattieren: ein Stift, der mit jedem Strich dunkler wird
 //! * [`mask`] — Ebenenmasken: Teile einer Ebene ausblenden, ohne sie zu löschen
 //! * [`export`] — PNG, GIF, Spritesheet mit JSON-Atlas
@@ -48,6 +49,7 @@ pub mod palfile;
 pub mod palops;
 pub mod project;
 pub mod recolor;
+pub mod rig;
 pub mod selection;
 pub mod shade;
 pub mod sprite;
